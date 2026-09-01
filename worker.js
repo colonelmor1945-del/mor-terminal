@@ -676,6 +676,120 @@ async function edgarJob(env) {
   return { n: r.n, nuevos: nuevos.length };
 }
 
+/* ---------- VIGILANTE DE LITIGIOS (CourtListener) ----------
+   Un pleito es material y es publico el dia que se presenta. Para una small cap de
+   50-500 M$ una demanda de valores mueve la cotizacion sola, y nadie la esta
+   cruzando contra un universo de defensa.
+   Clave: buscar por PARTE, no a texto libre. "Astronics" en texto libre da 825
+   resultados (aparece en cualquier documento); party:"Astronics" da 35 y todos son
+   realmente sobre la empresa.
+   Solo cotizadas en EE.UU.: una empresa australiana o india no litiga en tribunal
+   federal estadounidense, asi que consultarlas es gastar peticiones para nada.    */
+
+const CL_UA = "MOR Terminal - contacto colonelmor1945@gmail.com";
+
+/* Codigo "nature of suit" -> que significa y si es material para la cotizacion. */
+const CL_NAT = {
+  "850": ["Valores y materias primas", 3],
+  "830": ["Patentes", 3],
+  "820": ["Derechos de autor", 2],
+  "840": ["Marcas", 2],
+  "190": ["Contrato: otros", 2],
+  "195": ["Contrato: responsabilidad de producto", 3],
+  "196": ["Franquicia", 1],
+  "710": ["Salarios y jornada", 1],
+  "442": ["Empleo", 1],
+  "790": ["Otros laborales", 1],
+  "890": ["Otras acciones legales", 1],
+  "422": ["Concurso de acreedores", 3],
+  "423": ["Concurso: retirada", 3],
+  "440": ["Otros derechos civiles", 1],
+  "360": ["Danos personales", 1],
+  "896": ["Arbitraje", 2]
+};
+
+function clNat(s) {
+  const c = String(s || "").match(/^(\d{3})/);
+  const k = c ? c[1] : "";
+  const v = CL_NAT[k];
+  const libre = String(s || "").replace(/^\d+\s*/, "").trim();
+  return { cod: k, txt: v ? v[0] : (libre || "sin clasificar"),
+           peso: v ? v[1] : (libre ? 1 : 0) };
+}
+
+/* Buscar por parte casa apellidos: party:"Ducommun" devuelve a "Joel Edward
+   Ducommun", una persona, no la empresa. Se exige que alguna parte lleve marca
+   societaria; las personas fisicas no la llevan.                                 */
+const CL_SOC = /(?:^|[^a-zA-Z])(inc|corp|corporation|company|co|llc|ltd|limited|holdings|technologies|systems|group|plc|lp|industries|international|solutions)(?:[^a-zA-Z]|$)/i;
+
+function clEsEmpresa(partes, nombre) {
+  const tok = String(nombre).split(/\s+/)[0].toLowerCase();
+  for (const p of (partes || [])) {
+    const t = String(p);
+    if (t.toLowerCase().indexOf(tok) >= 0 && CL_SOC.test(t)) return true;
+  }
+  return false;
+}
+
+async function clBuscar(parte, desde) {
+  const u = "https://www.courtlistener.com/api/rest/v4/search/?type=r&order_by=dateFiled%20desc" +
+            "&q=" + encodeURIComponent('party:"' + parte + '"') +
+            "&filed_after=" + desde;
+  const r = await fetch(u, { headers: { "User-Agent": CL_UA, "Accept": "application/json" } });
+  // 429: CourtListener estrangula el uso anonimo. Nueve consultas seguidas lo
+  // disparan. Con token gratuito el limite sube bastante (cabecera Authorization).
+  if (r.status === 429) throw new Error("limite de peticiones (429)");
+  if (!r.ok) throw new Error("CourtListener HTTP " + r.status);
+  return await r.json();
+}
+
+async function fetchLitigios(dias) {
+  const d = Math.max(7, Math.min(730, dias || 365));
+  const desde = new Date(Date.now() - d * 864e5).toISOString().slice(0, 10);
+
+  // Mercados estadounidenses: son las unicas que pueden aparecer en PACER.
+  const US = ["NASDAQ", "NYSE", "AMEX"];
+  const objetivo = SC.filter(s => US.indexOf(String(s.tk).split(":")[0]) >= 0);
+
+  const casos = [];
+  const errores = [];
+  for (const s of objetivo) {
+    // El nombre se recorta a las dos primeras palabras: "Ondas Holdings", no
+    // "Ondas Holdings Inc.", que no casa con como lo escriben los tribunales.
+    const parte = s.name.split(/\s+/).slice(0, 2).join(" ");
+    let j = null;
+    try { j = await clBuscar(parte, desde); }
+    catch (e) { errores.push(s.name + ": " + (e.message || e)); continue; }
+    // Ritmo entre consultas: sin esto se agota el cupo anonimo a mitad de lista.
+    await new Promise(r => setTimeout(r, 1200));
+    for (const x of (j.results || [])) {
+      if (!clEsEmpresa(x.party, parte)) continue;   // descarta homonimos personales
+      const nat = clNat(x.suitNature);
+      casos.push({
+        empresa: s.name, tk: s.tk, nicho: s.niche,
+        caso: x.caseName || "—",
+        fecha: x.dateFiled || "",
+        cerrado: x.dateTerminated || null,
+        tribunal: x.court_citation_string || x.court || "",
+        num: x.docketNumber || "",
+        causa: x.cause || "",
+        natCod: nat.cod, natTxt: nat.txt, peso: nat.peso,
+        // Contra el Estado: puede ser una disputa por el propio contrato.
+        contraEstado: /United States|Department of|Secretary of|Army|Navy|Air Force/i.test(x.caseName || ""),
+        url: "https://www.courtlistener.com" + (x.docket_absolute_url || "")
+      });
+    }
+  }
+
+  casos.sort((a, b) => {
+    if (a.peso !== b.peso) return b.peso - a.peso;
+    return a.fecha < b.fecha ? 1 : -1;
+  });
+  const materiales = casos.filter(c => c.peso >= 3);
+  return { desde: desde, consultadas: objetivo.length, n: casos.length,
+           materiales: materiales.length, errores: errores, casos: casos.slice(0, 120) };
+}
+
 /* ---------- MOTOR DE PAPEL ----------
    Existe porque el backtest sobre mercados cerrados tiene sesgo de seleccion: se
    piden ordenados por volumen, asi que la muestra son los mercados famosos. Aqui
@@ -2788,6 +2902,7 @@ export default {
       if (p === "/api/news") return json(await fetchNews(url.searchParams.get("region") || "Pentágono"));
       if (p === "/api/pmq") return json(await fetchPMQ(Number(url.searchParams.get("pages")) || 3));
       if (p === "/api/pmh") return json(await fetchPMHist(url.searchParams.get("t"), url.searchParams.get("i")));
+      if (p === "/api/litigios") return json(await fetchLitigios(Number(url.searchParams.get("d")) || 365));
       if (p === "/api/edgar") return json(await fetchEdgar(Number(url.searchParams.get("d")) || 30));
       if (p === "/api/paper") return json(await paperState(env));
       if (p === "/api/paper/snap") return json(await paperSnap(env));
