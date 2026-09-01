@@ -104,6 +104,40 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 .chips button.on{border-color:var(--cy);color:var(--cy);background:rgba(34,211,238,.08)}
 .chips button:hover{color:var(--txt)}
 .str{cursor:pointer;color:#2b3a4d;font-size:13px}
+/* ---- panel de detalle de mercado ---- */
+#dt{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:60;display:none}
+#dt.on{display:flex;align-items:center;justify-content:center}
+#dtb{width:min(1400px,95vw);height:min(900px,93vh);background:var(--pane);border:1px solid var(--line);
+ border-top:2px solid var(--am);display:flex;flex-direction:column;min-height:0}
+#dth{display:flex;align-items:flex-start;gap:12px;padding:10px 13px;border-bottom:1px solid var(--line);flex:0 0 auto}
+#dth h2{font-size:13px;font-weight:600;color:var(--txt);line-height:1.35}
+#dth .sub{font-size:10px;color:var(--dim);margin-top:3px}
+#dtx{margin-left:auto;background:#0b1119;border:1px solid var(--line);color:var(--dim);
+ padding:4px 10px;font:inherit;font-size:11px;cursor:pointer;flex:0 0 auto}
+#dtx:hover{color:var(--rd);border-color:var(--rd)}
+#dtc{flex:1;overflow:auto;padding:10px 13px;display:grid;gap:9px;
+ grid-template-columns:1.35fr 1fr;grid-auto-rows:min-content}
+#dtc .full{grid-column:1/-1}
+.dp{background:var(--pane2);border:1px solid var(--line2);display:flex;flex-direction:column;min-height:0}
+.dp>h4{font-size:9.5px;letter-spacing:.09em;color:var(--dim);padding:6px 9px;border-bottom:1px solid var(--line2);text-transform:uppercase}
+.dp>.c{padding:8px 9px;min-height:0}
+.mg{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:7px}
+.mg div{background:#0a0f16;border:1px solid var(--line2);padding:6px 8px}
+.mg .l{font-size:9px;color:var(--dim);letter-spacing:.05em}
+.mg .v{font-size:14px;margin-top:2px;font-variant-numeric:tabular-nums}
+.lg{display:flex;flex-direction:column;gap:3px;max-height:230px;overflow:auto}
+.lg .r{display:grid;grid-template-columns:1fr 54px 44px;gap:7px;align-items:center;font-size:10.5px}
+.lg .bar{position:relative;background:#0a0f16;height:16px;overflow:hidden}
+.lg .bar i{position:absolute;inset:0 auto 0 0;background:rgba(255,159,26,.24);display:block}
+.lg .bar span{position:relative;padding-left:6px;line-height:16px;color:var(--txt)}
+.lg .pv{text-align:right;font-variant-numeric:tabular-nums;color:var(--txt)}
+.lg .sp{text-align:right;font-variant-numeric:tabular-nums;color:var(--dim);font-size:9.5px}
+.dom{display:grid;grid-template-columns:1fr 1fr;gap:9px;font-size:10.5px}
+.dom .side{display:flex;flex-direction:column;gap:2px}
+.dom .row{position:relative;display:flex;justify-content:space-between;padding:2px 6px;background:#0a0f16}
+.dom .row i{position:absolute;top:0;bottom:0;left:0;display:block}
+.dom .row b,.dom .row em{position:relative;font-style:normal;font-variant-numeric:tabular-nums}
+.dom .bid i{background:rgba(0,224,138,.18)} .dom .ask i{background:rgba(255,77,94,.16)}
 .str.on{color:var(--am);text-shadow:0 0 7px rgba(255,159,26,.6)}
 .view{display:none}.view.on{display:block}
 .ftr{flex:0 0 auto;padding:5px 12px;border-top:1px solid var(--line);color:var(--dim2);font-size:9.5px;background:#05080c;display:flex;gap:14px;flex-wrap:wrap}
@@ -134,6 +168,8 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   <button data-v="pm">F4 POLYMARKET</button>
   <button data-v="news">F5 NOTICIAS</button>
   <button data-v="quant">F6 QUANT</button>
+  <button data-v="brain">F7 CEREBRO</button>
+  <button data-v="sim">F8 SIMULADOR</button>
   <div class="sp"></div>
   <div class="meta" id="meta"></div>
 </div>
@@ -234,7 +270,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   </div>
   <div class="p" style="height:calc(100vh - 470px);min-height:280px">
     <h3>TABLA QUANT · SMALL CAPS DEFENSA <span id="q-cnt"></span></h3>
-    <div class="chips"><button id="qload">⟳ Cargar / actualizar precios</button><span class="st" id="q-st">Los precios pasan por tu Worker (Stooq bloquea al navegador por CORS).</span></div>
+    <div class="chips"><button id="qload">⟳ Cargar / actualizar precios</button><span class="st" id="q-st">Los precios pasan por tu Worker (Yahoo Finance; el navegador no puede por CORS).</span></div>
     <div class="bd"><table><thead><tr>
       <th data-k="name" style="width:17%">Empresa</th><th style="width:9%">Precio</th>
       <th data-k="r1" style="width:7%">1M</th><th data-k="r3" style="width:7%">3M</th><th data-k="r6" style="width:7%">6M</th>
@@ -244,10 +280,120 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="st">Z-score = media de los z de los retornos 1M/3M/6M (momentum compuesto transversal). Vol. anual = desviación típica de retornos diarios × √252. Max DD = mayor caída desde máximo. Informativo, no es recomendación.</div>
   </div>
 </div>
+
+<div class="view" id="v-brain">
+  <div class="grid g4" style="margin-bottom:8px">
+    <div class="kpi"><div class="k">MERCADOS ANALIZADOS</div><div class="v" id="b1">—</div><div class="s" id="b1s">de eventos activos</div></div>
+    <div class="kpi c2"><div class="k">GRUPOS CON VENTAJA</div><div class="v" id="b2">—</div><div class="s" id="b2s">neta tras costes</div></div>
+    <div class="kpi c3"><div class="k">MEJOR VENTAJA NETA</div><div class="v" id="b3">—</div><div class="s" id="b3s">—</div></div>
+    <div class="kpi c4"><div class="k">SESGO FAVORITO-LONGSHOT</div><div class="v" id="b4">—</div><div class="s" id="b4s">λ de Wang (mediana)</div></div>
+  </div>
+
+  <div class="grid g2" style="margin-bottom:8px">
+    <div class="p" style="height:290px">
+      <h3>ARBITRAJE ESTRUCTURAL · GRUPOS EXCLUYENTES <span id="b-acnt"></span></h3>
+      <div class="bd"><table><thead><tr>
+        <th style="width:38%">Evento</th><th style="width:9%">Salidas</th><th style="width:11%">Σ probs</th>
+        <th style="width:10%">Desvío</th><th style="width:10%">Coste</th><th style="width:11%">Neto</th><th style="width:11%">Lado</th>
+      </tr></thead><tbody id="b-arb"></tbody></table></div>
+      <div class="st">Σ de las patas cotizadas de un grupo mutuamente excluyente. Debe valer 1. Coste = medio spread por pata. Las patas de relleno (libro vacío) se excluyen.</div>
+    </div>
+    <div class="p" style="height:290px">
+      <h3>DISTORSIÓN DE WANG · PRECIO vs PROBABILIDAD REAL</h3>
+      <div class="bd" id="b-wang"></div>
+    </div>
+  </div>
+
+  <div class="p" style="margin-bottom:8px">
+    <h3>CALCULADORA DE VENTAJA Y KELLY</h3>
+    <div class="chips" style="align-items:center;flex-wrap:wrap;gap:10px">
+      <label class="st">Mercado <select id="b-kmkt" style="max-width:340px"></select></label>
+      <label class="st">Tu probabilidad <input id="b-kp" type="number" min="0.1" max="99.9" step="0.1" value="50" style="width:70px"> %</label>
+      <label class="st">Fracción Kelly <select id="b-kf"><option value="0.25">¼ (prudente)</option><option value="0.5">½</option><option value="1">completo</option></select></label>
+      <span class="st" id="b-kout">—</span>
+    </div>
+    <div class="st">Kelly: f* = (p·b − q)/b con b = (1−precio)/precio. La probabilidad la pones tú: el terminal no la estima. Kelly completo maximiza crecimiento a largo plazo pero asume probabilidad exacta y tolera caídas muy grandes; por eso el uso habitual es fraccional. <b>Informativo. No es recomendación de inversión ni de apuesta.</b></div>
+  </div>
+
+  <div class="p" style="height:calc(100vh - 640px);min-height:260px">
+    <h3>TABLA DE MERCADOS <span id="b-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— clic en una fila para el desglose completo</span></h3>
+    <div class="chips">
+      <button id="bload">⟳ Cargar / actualizar cerebro</button>
+      <button id="bvol">σ Calcular volatilidad realizada (top 20)</button>
+      <span class="st" id="b-st">Necesita los endpoints /api/pmq y /api/pmh en tu Worker.</span>
+    </div>
+    <div class="bd"><table><thead><tr>
+      <th data-k="q" style="width:26%">Mercado</th><th data-k="p" style="width:7%">Precio</th>
+      <th data-k="fair" style="width:8%">Justo (Wang)</th><th data-k="edge" style="width:7%">Sesgo</th>
+      <th data-k="spreadRel" style="width:8%">Spread rel.</th><th data-k="turn" style="width:7%">Rotación</th>
+      <th data-k="snorm" style="width:8%">σ norm.</th><th data-k="urg" style="width:7%">Urgencia</th>
+      <th data-k="days" style="width:7%">Días</th><th data-k="z" style="width:7%">Z mom.</th><th style="width:8%">Señal</th>
+    </tr></thead><tbody id="b-rows"></tbody></table></div>
+    <div class="st">Justo (Wang) = g⁻¹(precio) = Φ(Φ⁻¹(p) − λ), la probabilidad sin la prima de riesgo que el mercado incorpora. Sesgo = precio − justo: positivo significa longshot caro. σ norm. = volatilidad realizada ÷ √(p(1−p)), comparable entre niveles de precio. Urgencia = 2p(1−p)/√días. Informativo, no es recomendación.</div>
+  </div>
+</div>
+
+<div class="view" id="v-sim">
+  <div class="grid g4" style="margin-bottom:8px">
+    <div class="kpi"><div class="k">MERCADOS RESUELTOS</div><div class="v" id="s1">—</div><div class="s" id="s1s">muestra del backtest</div></div>
+    <div class="kpi c2"><div class="k">BRIER SCORE</div><div class="v" id="s2">—</div><div class="s" id="s2s">0 = perfecto · 0.25 = moneda</div></div>
+    <div class="kpi c3"><div class="k">λ EMPÍRICA</div><div class="v" id="s3">—</div><div class="s" id="s3s">sesgo medido, no teórico</div></div>
+    <div class="kpi c4"><div class="k">MEJOR ESTRATEGIA</div><div class="v" id="s4">—</div><div class="s" id="s4s">—</div></div>
+  </div>
+
+  <div class="p" style="margin-bottom:8px">
+    <h3>CONFIGURACIÓN DEL BACKTEST</h3>
+    <div class="chips" style="align-items:center;flex-wrap:wrap;gap:10px">
+      <label class="st">Mercados <select id="s-n"><option value="120">120</option><option value="250" selected>250</option><option value="400">400</option></select></label>
+      <label class="st">Entrada a <select id="s-h"><option value="1">1 día</option><option value="7" selected>7 días</option><option value="30">30 días</option></select> del cierre</label>
+      <label class="st">Volumen mínimo <select id="s-v"><option value="10000">10 mil $</option><option value="100000" selected>100 mil $</option><option value="1000000">1 M$</option></select></label>
+      <button id="srun">▶ Ejecutar simulación</button>
+      <span class="st" id="s-st">Descarga histórico real del CLOB de mercados ya resueltos. Tarda 1–3 min.</span>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-bottom:8px">
+    <div class="p" style="height:300px">
+      <h3>CALIBRACIÓN · LO QUE EL MERCADO DICE vs LO QUE PASA</h3>
+      <div class="bd" id="s-cal"></div>
+    </div>
+    <div class="p" style="height:300px">
+      <h3>CURVA DE CAPITAL · MEJOR ESTRATEGIA</h3>
+      <div class="bd" id="s-eq"></div>
+    </div>
+  </div>
+
+  <div class="p" style="height:calc(100vh - 620px);min-height:250px">
+    <h3>ESTRATEGIAS SIMULADAS <span id="s-cnt"></span></h3>
+    <div class="bd"><table><thead><tr>
+      <th style="width:24%">Estrategia</th><th style="width:7%">Apuestas</th><th style="width:8%">Acierto</th>
+      <th style="width:10%">Medio</th><th style="width:9%">Mediana</th><th style="width:10%">Total</th><th style="width:9%">Max DD</th>
+      <th style="width:9%">t-stat</th><th style="width:18%">¿Significativo?</th>
+    </tr></thead><tbody id="s-rows"></tbody></table></div>
+    <div class="st">Media y mediana divergen mucho a propósito: un longshot acertado a 0.02 paga 50× y arrastra la media él solo, así que la mediana dice mejor qué pasa en la apuesta típica. Retorno por unidad arriesgada: comprar SÍ a precio p paga (desenlace − p)/p. t-stat = media ÷ (desviación/√n): por encima de 2 el resultado difícilmente es azar. <b>Rentabilidad pasada simulada sobre datos históricos; no predice resultados futuros y no descuenta el impacto de mercado. Informativo, no es recomendación de inversión ni de apuesta.</b></div>
+  </div>
+</div>
 </main>
+
+<div id="dt"><div id="dtb">
+  <div id="dth">
+    <div style="min-width:0">
+      <h2 id="dt-q">—</h2>
+      <div class="sub" id="dt-sub">—</div>
+    </div>
+    <button id="dtx">✕ CERRAR · Esc</button>
+  </div>
+  <div id="dtc">
+    <div class="dp full"><h4>Métricas</h4><div class="c"><div class="mg" id="dt-met"></div></div></div>
+    <div class="dp" style="height:280px"><h4>Histórico y niveles de Fibonacci</h4><div class="c" style="flex:1" id="dt-fib"></div></div>
+    <div class="dp" style="height:280px"><h4 id="dt-gh">Todas las probabilidades del grupo</h4><div class="c" style="flex:1;overflow:auto"><div class="lg" id="dt-grp"></div></div></div>
+    <div class="dp" style="height:250px"><h4>Matrix · profundidad del libro</h4><div class="c" style="flex:1;overflow:auto" id="dt-dom"></div></div>
+    <div class="dp" style="height:250px"><h4>Delta · flujo de órdenes (CVD)</h4><div class="c" style="flex:1" id="dt-del"></div></div>
+  </div>
+</div></div>
 <div class="ftr">
-  <span><kbd>F1-F5</kbd> vistas</span><span><kbd>/</kbd> buscar</span>
-  <span>Comandos: CON · SC · PM · NEWS · DASH · REFRESH</span>
+  <span><kbd>F1-F8</kbd> vistas</span><span><kbd>/</kbd> buscar</span>
+  <span>Comandos: CON · SC · PM · NEWS · DASH · CEREBRO · SIM · REFRESH</span>
   <span style="margin-left:auto">USAspending · Polymarket · war.gov · Google News — informativo, no es recomendación de inversión</span>
 </div>
 </div>
@@ -311,6 +457,7 @@ function f$(n){return n>=1e9?"$"+(n/1e9).toFixed(2)+"B":n>=1e6?"$"+(n/1e6).toFix
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;")}
 function lt(id,st,tx){var e=$(id);if(!e)return;e.className="lt "+st;if(tx)e.lastElementChild.textContent=tx}
 function sk(n){var o="";for(var i=0;i<(n||4);i++)o+="<div class='sk' style='width:"+(92-i*11)+"%'></div>";return o}
+function fn(n){n=+n||0;return n>=1e6?(n/1e6).toFixed(2)+"M":n>=1e3?(n/1e3).toFixed(1)+"K":Math.round(n).toString()}
 function emp(ic,m){return "<div class='emp'><b>"+ic+"</b>"+m+"</div>"}
 function tick(){var d=new Date();$("clk").textContent=d.toLocaleDateString("es-ES")+"  "+d.toLocaleTimeString("es-ES")}
 setInterval(tick,1000);tick();
@@ -574,6 +721,8 @@ function render(){
    :"<tr><td colspan='7'>"+(PM.length?emp("🔍","Ningún mercado con esos filtros"):(ERR.pm?emp("⚠","Polymarket no responde"):sk(5)))+"</td></tr>"}
 
  if(VIEW==="quant"){renderQuant()}
+ if(VIEW==="brain"){renderBrain()}
+ if(VIEW==="sim"){renderSim()}
  if(VIEW==="news"){
   $("n-chips").innerHTML=Object.keys(NQ).map(function(r){return "<button data-n='"+r+"' class='"+(r===NR?"on":"")+"'>"+r+"</button>"}).join("")+
    "<button data-nf='1' style='border-color:#4a3410;color:var(--am)'>⟳ reintentar</button>";
@@ -592,11 +741,18 @@ function render(){
 /* ================= CAPA QUANT ================= */
 var PX={},QUANT=[],QLOAD=false;
 /* mapa a códigos Stooq (los que no existen quedan sin datos) */
-var SMAP={"NASDAQ:ONDS":"onds.us","NASDAQ:BYRN":"byrn.us","NYSE:CDRE":"cdre.us","NYSE:DCO":"dco.us",
-"NASDAQ:ATRO":"atro.us","AMEX:CVU":"cvu.us","AMEX:ESP":"esp.us","NASDAQ:CMTL":"cmtl.us","NYSE:KRMN":"krmn.us",
-"LSE:CHRT":"chrt.uk","LSE:AVON":"avon.uk","GPW:LBW":"lbw.pl","ASX:DRO":"dro.au","ASX:EOS":"eos.au",
-"ASX:XTE":"xte.au","ASX:ASB":"asb.au","TSE:6203":"6203.jp","TSE:6208":"6208.jp",
-"EURONEXT:EXA":"exa.fr","EURONEXT:THEON":"theon.nl","OMXSTO:MILDEF":"mildef.se","OMXSTO:IVSO":"ivso.se","OMXSTO:W5":"w5.se"};
+/* Ticker TradingView -> símbolo Yahoo Finance (lo que consume /api/px).
+   Verificado 31/08/2026: los 32 devuelven serie diaria de 2 años.
+   ASX:XTE (XTEK) no está: deslistada de la ASX, sin símbolo en Yahoo. */
+var SMAP={"NASDAQ:ONDS":"ONDS","NASDAQ:BYRN":"BYRN","NYSE:CDRE":"CDRE","NYSE:DCO":"DCO",
+"NASDAQ:ATRO":"ATRO","AMEX:CVU":"CVU","AMEX:ESP":"ESP","NASDAQ:CMTL":"CMTL","NYSE:KRMN":"KRMN",
+"EURONEXT:THEON":"THEON.AS","EURONEXT:EXA":"EXA.PA","LSE:CHRT":"CHRT.L","LSE:AVON":"AVON.L",
+"OMXSTO:MILDEF":"MILDEF.ST","OMXSTO:IVSO":"IVSO.ST","OMXSTO:W5":"W5.ST","GPW:LBW":"LBW.WA",
+"BIST:KATMR":"KATMR.IS","TASE:NXSN":"NXSN.TA",
+"NSE:PARAS":"PARAS.NS","NSE:DATAPATTNS":"DATAPATTNS.NS","NSE:IDEAFORGE":"IDEAFORGE.NS",
+"NSE:MTARTECH":"MTARTECH.NS","NSE:ASTRAMICRO":"ASTRAMICRO.NS",
+"KRX:065450":"065450.KQ","KRX:010820":"010820.KS","TSE:6203":"6203.T","TSE:6208":"6208.T",
+"ASX:DRO":"DRO.AX","ASX:EOS":"EOS.AX","ASX:ASB":"ASB.AX","BMFBOVESPA:TASA4":"TASA4.SA"};
 
 function mean(a){return a.reduce(function(x,y){return x+y},0)/(a.length||1)}
 function sd(a){if(a.length<2)return 0;var m=mean(a);return Math.sqrt(a.reduce(function(x,y){return x+(y-m)*(y-m)},0)/(a.length-1))}
@@ -690,29 +846,614 @@ function renderQuant(){
 }
 
 /* ---------- EVENTOS ---------- */
+/* ================= CEREBRO QUANT DE PREDICCIÓN =================
+   Normal CDF (Abramowitz & Stegun 26.2.17) y cuantil normal (Beasley-Springer-Moro),
+   portados de oracle3/pricing/distortion.py (Apache-2.0) para no depender de nada.
+   Error ~1e-7: de sobra para señales, no para publicar p-valores.               */
+function nCdf(x){
+ var a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,pp=0.3275911;
+ var sg=x>=0?1:-1;x=Math.abs(x)/Math.SQRT2;
+ var t=1/(1+pp*x);
+ var y=1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+ return 0.5*(1+sg*y)}
+function nPpf(p){
+ p=Math.max(1e-10,Math.min(1-1e-10,p));
+ var a=[-3.969683028665376e1,2.209460984245205e2,-2.759285104469687e2,1.383577518672690e2,-3.066479806614716e1,2.506628277459239e0],
+     b=[-5.447609879822406e1,1.615858368580409e2,-1.556989798598866e2,6.680131188771972e1,-1.328068155288572e1],
+     c=[-7.784894002430293e-3,-3.223964580411365e-1,-2.400758277161838e0,-2.549732539343734e0,4.374664141464968e0,2.938163982698783e0],
+     d=[7.784695709041462e-3,3.224671290700398e-1,2.445134137142996e0,3.754408661907416e0],q,r;
+ if(p<0.02425){q=Math.sqrt(-2*Math.log(p));
+  return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
+ if(p<=0.97575){q=p-0.5;r=q*q;
+  return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)}
+ q=Math.sqrt(-2*Math.log(1-p));
+ return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
+
+/* Transformada de Wang (2000): p_mercado = Φ(Φ⁻¹(p_real) + λ).
+   λ>0 genera el sesgo favorito-longshot como TEOREMA, no como anomalía empírica:
+   el ratio g(p)/p decrece con p, así que los longshots salen sistemáticamente caros. */
+function wangFwd(p,l){return nCdf(nPpf(p)+l)}
+function wangInv(p,l){return nCdf(nPpf(p)-l)}
+
+/* λ implícita de un grupo excluyente: la que hace que las probabilidades sin prima
+   de riesgo sumen exactamente 1. Σ wangInv(pᵢ,λ) decrece con λ → bisección. */
+function fitLambda(ps){
+ if(!ps||ps.length<2)return null;
+ var f=function(l){var s=0;for(var i=0;i<ps.length;i++)s+=wangInv(ps[i],l);return s-1};
+ var lo=-3,hi=3;
+ if(f(lo)<0||f(hi)>0)return null;
+ for(var i=0;i<60;i++){var m=(lo+hi)/2;if(f(m)>0)lo=m;else hi=m}
+ return (lo+hi)/2}
+
+var BQ=null,BVOL={},BLOAD=false,BSORT={k:"vol24",d:-1},BLAM=0,BNLAM=0;
+
+function loadBrain(force){
+ if(BLOAD)return; if(BQ&&!force){render();return}
+ BLOAD=true;$("b-st").textContent="Analizando eventos de Polymarket…";
+ fetch("/api/pmq?pages=3",{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){
+   if(j.error)throw new Error(j.error);
+   BQ=j;computeBrain();
+   $("b-st").textContent=j.markets.length+" mercados · "+j.nEvents+" eventos · "+j.groups.length+" grupos excluyentes · "+new Date(j.ts).toLocaleTimeString()}
+  )
+  .catch(function(e){BQ=null;$("b-st").textContent="Error: "+(e.message||e)+" — ¿está desplegado /api/pmq en tu Worker?"})
+  .then(function(){BLOAD=false;render()})}
+
+function computeBrain(){
+ if(!BQ)return;
+ // λ por grupo completo -> mediana como prima de riesgo del mercado en su conjunto.
+ var ls=[];
+ BQ.groups.forEach(function(g){
+  if(!g.completo)return;
+  var l=fitLambda(g.legs.map(function(x){return x.p}));
+  g.lam=l; if(l!==null&&isFinite(l))ls.push(l)});
+ ls.sort(function(a,b){return a-b});
+ BLAM=ls.length?(ls.length%2?ls[(ls.length-1)/2]:(ls[ls.length/2-1]+ls[ls.length/2])/2):0;
+ BNLAM=ls.length;
+
+ BQ.markets.forEach(function(m){
+  m.fair=wangInv(m.p,BLAM);
+  m.edge=m.p-m.fair;                       // >0: longshot caro
+  var v=BVOL[m.id];
+  m.snorm=(v&&m.varT>0)?v/Math.sqrt(m.varT):null;
+  var sg=[];
+  if(m.spreadRel!==null&&m.spreadRel>0.10)sg.push(["CARO","t4"]);
+  if(m.turn!==null&&m.turn<0.02)sg.push(["SECO","t4"]);
+  if(m.urg!==null&&m.urg>0.25)sg.push(["URGE","t1"]);
+  if(Math.abs(m.z)>1.2)sg.push([m.z>0?"SUBE":"BAJA","t5"]);
+  if(m.snorm!==null&&m.snorm>1.5)sg.push(["NERVIOSO","t3"]);
+  m.sg=sg});
+ fillKellySelect()}
+
+function loadBVol(){
+ if(!BQ){$("b-st").textContent="Carga el cerebro primero.";return}
+ var top=BQ.markets.filter(function(m){return m.tok}).slice(0,20);
+ if(!top.length){$("b-st").textContent="Sin tokens CLOB disponibles.";return}
+ var done=0;$("b-st").textContent="Descargando históricos… 0/"+top.length;
+ top.forEach(function(m){
+  fetch("/api/pmh?t="+encodeURIComponent(m.tok)+"&i=1m",{cache:"no-store"})
+   .then(function(r){return r.json()})
+   .then(function(j){
+    var p=(j&&j.p)||[];
+    if(p.length<20)return;
+    // Volatilidad realizada del PRECIO (no del log): un binario vive en [0,1].
+    var d=[];for(var i=1;i<p.length;i++)d.push(p[i]-p[i-1]);
+    BVOL[m.id]=sd(d)*Math.sqrt(365*24);   // series horarias -> anualizada
+   })
+   .catch(function(){})
+   .then(function(){done++;$("b-st").textContent="Descargando históricos… "+done+"/"+top.length;
+    if(done===top.length){computeBrain();$("b-st").textContent="σ calculada en "+Object.keys(BVOL).length+" mercados.";render()}})})}
+
+function fillKellySelect(){
+ var s=$("b-kmkt");if(!s||!BQ)return;
+ var cur=s.value;
+ s.innerHTML=BQ.markets.slice(0,120).map(function(m){
+  return "<option value='"+m.id+"'>"+esc(m.q.slice(0,70))+" — "+(m.p*100).toFixed(1)+"%</option>"}).join("");
+ if(cur)s.value=cur;
+ syncKellyP();kellyCalc()}
+
+function syncKellyP(){
+ var s=$("b-kmkt");if(!s||!BQ)return;
+ for(var i=0;i<BQ.markets.length;i++)if(String(BQ.markets[i].id)===String(s.value)){
+  $("b-kp").value=(BQ.markets[i].p*100).toFixed(1);return}}
+
+function kellyCalc(){
+ var s=$("b-kmkt"),out=$("b-kout");if(!s||!BQ||!out)return;
+ var m=null,id=s.value;
+ for(var i=0;i<BQ.markets.length;i++)if(String(BQ.markets[i].id)===String(id)){m=BQ.markets[i];break}
+ if(!m){out.textContent="—";return}
+ var p=Math.max(0.01,Math.min(0.99,(parseFloat($("b-kp").value)||50)/100));
+ var frac=parseFloat($("b-kf").value)||0.25;
+ var price=m.p,q=1-p;
+ var b=(1-price)/price;                       // cuota neta: gana b por cada 1 arriesgado
+ var evv=p*b-q;                               // valor esperado por unidad apostada
+ var f=b>0?evv/b:0;                           // Kelly completo
+ var fa=Math.max(0,f)*frac;
+ var cls=evv>0?"up":"dn";
+ out.innerHTML="Precio <b>"+(price*100).toFixed(1)+"%</b> · cuota <b>"+(1/price).toFixed(2)+"×</b> · "+
+  "ventaja <b class='"+cls+"'>"+(evv>=0?"+":"")+(evv*100).toFixed(1)+"%</b> · "+
+  "Kelly completo <b>"+(f*100).toFixed(1)+"%</b> · <b class='"+cls+"'>tamaño sugerido "+(fa*100).toFixed(1)+"% del banco</b>"+
+  (evv<=0?" — sin ventaja: Kelly dice no entrar":"")}
+
+function bfmt(x,d){return (x===null||x===undefined||!isFinite(x))?"—":(x*100).toFixed(d===undefined?1:d)+"%"}
+
+function wangCurve(){
+ var W=460,H=200,pad=34;
+ var l=BLAM;
+ var pts=[],pts2=[];
+ for(var i=1;i<100;i++){var p=i/100;
+  pts.push([pad+(W-pad-10)*p, H-pad-(H-pad-14)*wangFwd(p,l)]);
+  pts2.push([pad+(W-pad-10)*p, H-pad-(H-pad-14)*p])}
+ var path=function(a){return a.map(function(q,i){return (i?"L":"M")+q[0].toFixed(1)+","+q[1].toFixed(1)}).join("")};
+ return "<svg viewBox='0 0 "+W+" "+H+"' style='width:100%;height:100%'>"+
+  "<line x1='"+pad+"' y1='"+(H-pad)+"' x2='"+(W-10)+"' y2='"+(H-pad)+"' stroke='var(--border)'/>"+
+  "<line x1='"+pad+"' y1='14' x2='"+pad+"' y2='"+(H-pad)+"' stroke='var(--border)'/>"+
+  "<path d='"+path(pts2)+"' fill='none' stroke='var(--dim)' stroke-dasharray='3 3'/>"+
+  "<path d='"+path(pts)+"' fill='none' stroke='var(--amber)' stroke-width='2'/>"+
+  "<text x='"+pad+"' y='10' fill='var(--dim)' font-size='9'>probabilidad real →  precio de mercado</text>"+
+  "<text x='"+(W-10)+"' y='"+(H-pad+12)+"' fill='var(--dim)' font-size='9' text-anchor='end'>p real</text>"+
+  "<text x='"+(pad+6)+"' y='"+(H-pad+12)+"' fill='var(--dim)' font-size='9'>0</text>"+
+  "<text x='"+(W/2)+"' y='"+(H-8)+"' fill='var(--dim)' font-size='10' text-anchor='middle'>"+
+   "λ = "+l.toFixed(3)+(l>0.02?" · longshots caros, favoritos baratos":(l<-0.02?" · sesgo invertido":" · sin sesgo apreciable"))+"</text>"+
+  "</svg>"}
+
+function renderBrain(){
+ if(!BQ){
+  var msg=emp("🧠","Pulsa ⟳ Cargar cerebro.<br>Necesita /api/pmq en tu Worker.");
+  $("b-rows").innerHTML="<tr><td colspan='11'>"+msg+"</td></tr>";
+  $("b-arb").innerHTML="<tr><td colspan='7'>"+msg+"</td></tr>";
+  $("b-wang").innerHTML=msg;return}
+
+ var gs=BQ.groups,ms=BQ.markets;
+ var conV=gs.filter(function(g){return g.net>0});
+ $("b1").textContent=ms.length;$("b1s").textContent="de "+BQ.nEvents+" eventos activos";
+ $("b2").textContent=conV.length;$("b2s").textContent="de "+gs.length+" grupos excluyentes";
+ $("b3").textContent=conV.length?bfmt(conV[0].net,2):"—";
+ $("b3s").textContent=conV.length?conV[0].ev.slice(0,42):"ninguno cubre costes";
+ $("b4").textContent=BLAM.toFixed(3);
+ $("b4s").textContent=(BNLAM<3?"muestra insuficiente ("+BNLAM+" grupos)":
+   (BLAM>0.02?"longshots caros · "+BNLAM+" grupos":(BLAM<-0.02?"sesgo invertido · "+BNLAM+" grupos":"sin sesgo apreciable · "+BNLAM+" grupos")));
+
+ $("b-acnt").textContent="("+gs.length+")";
+ $("b-arb").innerHTML=gs.slice(0,40).map(function(g){
+  var pos=g.net>0;
+  return "<tr>"+
+   "<td title='"+esc(g.ev)+"'><a href='https://polymarket.com/event/"+esc(g.slug)+"' target='_blank' rel='noopener'>"+esc(g.ev.slice(0,52))+"</a></td>"+
+   "<td>"+g.n+(g.completo?"":" <span class='t4' title='hay patas sin libro; solo vale el lado vendedor'>de "+g.nTotal+"</span>")+"</td>"+
+   "<td class='"+(g.dev>0?"up":"dn")+"'>"+g.sum.toFixed(4)+"</td>"+
+   "<td class='"+(g.dev>0?"up":"dn")+"'>"+bfmt(g.dev,2)+"</td>"+
+   "<td class='dim'>"+bfmt(g.cost,2)+"</td>"+
+   "<td><b class='"+(pos?"up":"dn")+"'>"+bfmt(g.net,2)+"</b></td>"+
+   "<td>"+(pos?"<span class='t3'>"+g.side+"</span>":"<span class='dim'>no cubre</span>")+"</td>"+
+  "</tr>"}).join("")||"<tr><td colspan='7'>"+emp("∑","Ningún grupo excluyente completo ahora mismo.")+"</td></tr>";
+
+ $("b-wang").innerHTML=wangCurve();
+
+ var Q=qv().toLowerCase();
+ var rows=ms.filter(function(m){return !Q||m.q.toLowerCase().indexOf(Q)>=0||(m.ev||"").toLowerCase().indexOf(Q)>=0});
+ rows.sort(function(a,b){var k=BSORT.k,x=a[k],y=b[k];
+  if(typeof x==="string")return BSORT.d*x.localeCompare(y);
+  return BSORT.d*(((y===null||!isFinite(y))?-1e9:y)-((x===null||!isFinite(x))?-1e9:x))});
+ $("b-cnt").textContent="("+rows.length+")";
+ $("b-rows").innerHTML=rows.slice(0,150).map(function(m){
+  return "<tr data-mid='"+m.id+"' style='cursor:pointer'>"+
+   "<td title='"+esc(m.q)+"'>"+esc(m.q.slice(0,58))+
+     (m.leg?" <span class='dim'>· "+esc(m.leg.slice(0,20))+"</span>":"")+"</td>"+
+   "<td><b>"+bfmt(m.p,1)+"</b></td>"+
+   "<td class='dim'>"+bfmt(m.fair,1)+"</td>"+
+   "<td class='"+(m.edge>0?"dn":"up")+"'>"+(m.edge>=0?"+":"")+(m.edge*100).toFixed(1)+"</td>"+
+   "<td class='"+(m.spreadRel>0.1?"dn":"")+"'>"+bfmt(m.spreadRel,1)+"</td>"+
+   "<td class='"+(m.turn!==null&&m.turn<0.02?"dn":"")+"'>"+(m.turn===null?"—":m.turn.toFixed(2))+"</td>"+
+   "<td>"+(m.snorm===null?"<span class='dim'>—</span>":m.snorm.toFixed(2))+"</td>"+
+   "<td>"+(m.urg===null?"—":m.urg.toFixed(3))+"</td>"+
+   "<td class='dim'>"+(m.days===null?"—":Math.round(m.days))+"</td>"+
+   "<td class='"+(m.z>0?"up":"dn")+"'>"+m.z.toFixed(2)+"</td>"+
+   "<td>"+m.sg.map(function(s){return "<span class='"+s[1]+"'>"+s[0]+"</span>"}).join(" ")+"</td>"+
+  "</tr>"}).join("")||"<tr><td colspan='11'>"+emp("🔍","Sin resultados para ese filtro.")+"</td></tr>"}
+
+/* ================= SIMULADOR DE ESTRATEGIAS =================
+   Corre en el NAVEGADOR a propósito: gamma-api y clob.polymarket.com sirven ambos
+   con Access-Control-Allow-Origin *, y un backtest necesita cientos de peticiones,
+   muy por encima del límite de 50 subpeticiones por request del plan gratuito de
+   Cloudflare. Mismo patrón que ya se usa con USAspending.                        */
+var BT=null,BTLOAD=false;
+
+function pool(items,work,conc,prog){
+ return new Promise(function(res){
+  var i=0,done=0,out=new Array(items.length);
+  function next(){
+   if(i>=items.length)return;
+   var k=i++;
+   work(items[k],k).then(function(v){out[k]=v},function(){out[k]=null})
+    .then(function(){done++;if(prog)prog(done,items.length);
+     if(done===items.length)res(out);else next()})}
+  for(var j=0;j<Math.min(conc,items.length);j++)next();
+  if(!items.length)res(out)})}
+
+function btOutcome(m){
+ try{var a=JSON.parse(m.outcomePrices||"[]");
+  var y=parseFloat(a[0]),n=parseFloat(a[1]);
+  if(y===1&&n===0)return 1; if(y===0&&n===1)return 0; return null}catch(e){return null}}
+
+function btPriceAt(h,ts){
+ // punto de histórico más cercano a ts, exigiendo que sea ANTERIOR al cierre
+ var best=null,bd=Infinity;
+ for(var i=0;i<h.length;i++){var d=Math.abs(h[i].t-ts);
+  if(d<bd){bd=d;best=h[i]}}
+ return (best&&bd<86400*3)?best.p:null}   // tolerancia 3 días
+
+function btRun(){
+ if(BTLOAD)return;BTLOAD=true;
+ var N=+$("s-n").value,H=+$("s-h").value,MV=+$("s-v").value;
+ $("s-st").textContent="Buscando mercados resueltos…";
+ var want=Math.ceil(N/100)*100,pages=[],k;
+ for(k=0;k<want/100;k++)pages.push(k);
+
+ pool(pages,function(pg){
+  return fetch("https://gamma-api.polymarket.com/markets?closed=true&limit=100&offset="+(pg*100)+
+               "&order=volumeNum&ascending=false").then(function(r){return r.json()})},4)
+ .then(function(chunks){
+  var all=[];chunks.forEach(function(c){if(c&&c.length)all=all.concat(c)});
+  var cand=all.filter(function(m){
+   var o=btOutcome(m);
+   if(o===null)return false;
+   if((parseFloat(m.volumeNum||m.volume||0)||0)<MV)return false;
+   if(!m.endDate)return false;
+   try{if(!JSON.parse(m.clobTokenIds||"[]")[0])return false}catch(e){return false}
+   return true}).slice(0,N);
+  if(!cand.length)throw new Error("ningún mercado resuelto cumple el filtro");
+  $("s-st").textContent="Descargando históricos… 0/"+cand.length;
+
+  return pool(cand,function(m){
+   var tok=JSON.parse(m.clobTokenIds)[0];
+   return fetch("https://clob.polymarket.com/prices-history?market="+tok+"&interval=max&fidelity=1440")
+    .then(function(r){return r.json()})
+    .then(function(j){
+     var h=(j&&j.history)||[];
+     if(h.length<8)return null;
+     var end=h[h.length-1].t;                  // cierre efectivo = último dato real
+     var pe=btPriceAt(h,end-H*86400);          // precio de entrada
+     var pp=btPriceAt(h,end-(H+14)*86400);     // 14 días antes -> momentum
+     if(pe===null||pe<0.005||pe>0.99)return null;
+     return {q:m.question||"—",p:pe,prev:pp,o:btOutcome(m),
+             end:m.endDate,vol:parseFloat(m.volumeNum||m.volume||0)||0}})
+    .catch(function(){return null})},8,
+   function(d,t){$("s-st").textContent="Descargando históricos… "+d+"/"+t})})
+ .then(function(rows){
+  var S=rows.filter(Boolean);
+  if(S.length<20)throw new Error("muestra demasiado pequeña ("+S.length+")");
+  S.sort(function(a,b){return new Date(a.end)-new Date(b.end)});
+  BT=btMetrics(S,H);
+  $("s-st").textContent=S.length+" mercados resueltos · entrada a "+H+" días del cierre · "+new Date().toLocaleTimeString()})
+ .catch(function(e){BT=null;$("s-st").textContent="Error: "+(e.message||e)})
+ .then(function(){BTLOAD=false;render()})}
+
+function btStats(name,trades){
+ if(!trades.length)return {name:name,n:0};
+ var r=trades.map(function(t){return t.r});
+ var m=mean(r),s=sd(r),n=r.length;
+ var wins=trades.filter(function(t){return t.r>0}).length;
+ var sorted=r.slice().sort(function(a,b){return a-b});
+ var med=sorted.length%2?sorted[(sorted.length-1)/2]:(sorted[sorted.length/2-1]+sorted[sorted.length/2])/2;
+ var eq=[],c=0,pk=0,dd=0;
+ for(var i=0;i<r.length;i++){c+=r[i];eq.push(c);if(c>pk)pk=c;if(pk-c>dd)dd=pk-c}
+ var t=s>0?m/(s/Math.sqrt(n)):0;
+ return {name:name,n:n,win:wins/n,mean:m,med:med,total:c,dd:dd,t:t,eq:eq}}
+
+function btMetrics(S,H){
+ // Brier: media de (p - desenlace)². 0.25 es lanzar una moneda.
+ var brier=mean(S.map(function(x){return (x.p-x.o)*(x.p-x.o)}));
+ var base=mean(S.map(function(x){return x.o}));
+ var brierBase=mean(S.map(function(x){return (base-x.o)*(base-x.o)}));
+
+ // λ empírica: la que hace que las probabilidades sin prima sumen los aciertos reales.
+ var sumO=S.reduce(function(a,x){return a+x.o},0);
+ var f=function(l){var s=0;for(var i=0;i<S.length;i++)s+=wangInv(S[i].p,l);return s-sumO};
+ var lam=null;
+ if(f(-3)>0&&f(3)<0){var lo=-3,hi=3;
+  for(var i=0;i<60;i++){var mm=(lo+hi)/2;if(f(mm)>0)lo=mm;else hi=mm}lam=(lo+hi)/2}
+
+ // Calibración en 10 tramos
+ var cal=[];
+ for(var b=0;b<10;b++){
+  var lo2=b/10,hi2=(b+1)/10;
+  var g=S.filter(function(x){return x.p>=lo2&&x.p<(b===9?1.01:hi2)});
+  if(g.length>=5)cal.push({lo:lo2,hi:hi2,n:g.length,
+   pm:mean(g.map(function(x){return x.p})),fr:mean(g.map(function(x){return x.o}))})}
+
+ var yes=function(x){return (x.o-x.p)/x.p};          // comprar SÍ
+ var no=function(x){return ((1-x.o)-(1-x.p))/(1-x.p)}; // comprar NO
+ var mk=function(arr,fn){return arr.map(function(x){return {r:fn(x),end:x.end}})};
+
+ var ls=S.filter(function(x){return x.p<=0.10}),
+     fav=S.filter(function(x){return x.p>=0.90}),
+     mid=S.filter(function(x){return x.p>0.10&&x.p<0.90}),
+     up=S.filter(function(x){return x.prev!==null&&x.p-x.prev>=0.05}),
+     dn=S.filter(function(x){return x.prev!==null&&x.p-x.prev<=-0.05});
+
+ var strats=[
+  btStats("Comprar longshots (p≤10%)",mk(ls,yes)),
+  btStats("VENDER longshots (comprar NO)",mk(ls,no)),
+  btStats("Comprar favoritos (p≥90%)",mk(fav,yes)),
+  btStats("Vender favoritos (comprar NO)",mk(fav,no)),
+  btStats("Momentum alcista (+5% en 14d)",mk(up,yes)),
+  btStats("Momentum bajista (−5% en 14d)",mk(dn,no)),
+  btStats("Comprar todo (referencia)",mk(S,yes)),
+  btStats("Zona media 10–90% (SÍ)",mk(mid,yes))
+ ].filter(function(x){return x.n>=10});
+ strats.sort(function(a,b){return b.t-a.t});
+
+ return {S:S,H:H,brier:brier,brierBase:brierBase,base:base,lam:lam,cal:cal,strats:strats}}
+
+function calChart(cal){
+ if(!cal.length)return emp("📐","Muestra insuficiente para calibrar.");
+ var W=440,H=210,pad=32,w=W-pad-12,h=H-pad-20;
+ var X=function(p){return pad+w*p},Y=function(p){return H-pad-h*p};
+ var pts=cal.map(function(c){return [X(c.pm),Y(c.fr)]});
+ return "<svg viewBox='0 0 "+W+" "+H+"' style='width:100%;height:100%'>"+
+  "<line x1='"+X(0)+"' y1='"+Y(0)+"' x2='"+X(1)+"' y2='"+Y(1)+"' stroke='var(--dim)' stroke-dasharray='3 3'/>"+
+  "<line x1='"+pad+"' y1='"+Y(0)+"' x2='"+(W-12)+"' y2='"+Y(0)+"' stroke='var(--border)'/>"+
+  "<line x1='"+pad+"' y1='"+Y(1)+"' x2='"+pad+"' y2='"+Y(0)+"' stroke='var(--border)'/>"+
+  pts.map(function(q,i){return "<circle cx='"+q[0].toFixed(1)+"' cy='"+q[1].toFixed(1)+"' r='"+
+    Math.min(9,3+Math.sqrt(cal[i].n)/2).toFixed(1)+"' fill='var(--amber)' opacity='.75'/>"}).join("")+
+  "<polyline points='"+pts.map(function(q){return q[0].toFixed(1)+","+q[1].toFixed(1)}).join(" ")+
+    "' fill='none' stroke='var(--cyan)' stroke-width='1.5'/>"+
+  "<text x='"+pad+"' y='12' fill='var(--dim)' font-size='9'>frecuencia real ↑ · precio del mercado →</text>"+
+  "<text x='"+(W/2)+"' y='"+(H-4)+"' fill='var(--dim)' font-size='9' text-anchor='middle'>"+
+   "sobre la diagonal = el mercado se queda corto · por debajo = pide de más</text></svg>"}
+
+function eqChart(s){
+ if(!s||!s.eq||s.eq.length<3)return emp("📈","Sin curva.");
+ var W=440,H=210,pad=32,w=W-pad-12,h=H-pad-24;
+ var lo=Math.min.apply(null,s.eq.concat([0])),hi=Math.max.apply(null,s.eq.concat([0]));
+ var rg=(hi-lo)||1;
+ var pts=s.eq.map(function(v,i){
+  return [pad+w*(i/(s.eq.length-1)),H-pad-h*((v-lo)/rg)]});
+ var zero=H-pad-h*((0-lo)/rg);
+ return "<svg viewBox='0 0 "+W+" "+H+"' style='width:100%;height:100%'>"+
+  "<line x1='"+pad+"' y1='"+zero.toFixed(1)+"' x2='"+(W-12)+"' y2='"+zero.toFixed(1)+"' stroke='var(--dim)' stroke-dasharray='3 3'/>"+
+  "<polyline points='"+pts.map(function(q){return q[0].toFixed(1)+","+q[1].toFixed(1)}).join(" ")+
+   "' fill='none' stroke='"+(s.total>=0?"var(--green)":"var(--red)")+"' stroke-width='1.8'/>"+
+  "<text x='"+pad+"' y='12' fill='var(--dim)' font-size='9'>"+esc(s.name)+" · "+s.n+" apuestas</text>"+
+  "<text x='"+(W-12)+"' y='12' fill='"+(s.total>=0?"var(--green)":"var(--red)")+"' font-size='11' text-anchor='end'>"+
+   (s.total>=0?"+":"")+s.total.toFixed(1)+"u</text></svg>"}
+
+function renderSim(){
+ if(!BT){
+  var msg=emp("🧪","Pulsa ▶ Ejecutar simulación.<br>Descarga histórico real de mercados ya resueltos.");
+  $("s-rows").innerHTML="<tr><td colspan='9'>"+msg+"</td></tr>";
+  $("s-cal").innerHTML=msg;$("s-eq").innerHTML=msg;return}
+ var b=BT,best=b.strats[0];
+ $("s1").textContent=b.S.length;$("s1s").textContent="entrada a "+b.H+" días del cierre";
+ $("s2").textContent=b.brier.toFixed(4);
+ $("s2s").textContent=(b.brier<b.brierBase?"mejor":"peor")+" que la tasa base ("+b.brierBase.toFixed(4)+")";
+ $("s3").textContent=b.lam===null?"—":b.lam.toFixed(3);
+ $("s3s").textContent=b.lam===null?"no converge":(b.lam>0.02?"longshots caros de verdad":(b.lam<-0.02?"sesgo invertido":"sin sesgo medible"));
+ $("s4").textContent=best?((best.total>=0?"+":"")+best.total.toFixed(1)+"u"):"—";
+ $("s4s").textContent=best?best.name:"—";
+ $("s-cal").innerHTML=calChart(b.cal);
+ $("s-eq").innerHTML=eqChart(best);
+ $("s-cnt").textContent="("+b.strats.length+")";
+ $("s-rows").innerHTML=b.strats.map(function(s){
+  var sig=Math.abs(s.t)>=2.6?["sí, fuerte","t3"]:(Math.abs(s.t)>=2?["sí","t5"]:(Math.abs(s.t)>=1?["débil","t2"]:["no, es ruido","t4"]));
+  return "<tr>"+
+   "<td>"+esc(s.name)+"</td><td>"+s.n+"</td>"+
+   "<td>"+(s.win*100).toFixed(0)+"%</td>"+
+   "<td class='"+(s.mean>=0?"up":"dn")+"'>"+(s.mean>=0?"+":"")+(s.mean*100).toFixed(1)+"%</td>"+
+   "<td class='"+(s.med>=0?"up":"dn")+"'>"+(s.med>=0?"+":"")+(s.med*100).toFixed(1)+"%</td>"+
+   "<td class='"+(s.total>=0?"up":"dn")+"'><b>"+(s.total>=0?"+":"")+s.total.toFixed(1)+"u</b></td>"+
+   "<td class='dn'>−"+s.dd.toFixed(1)+"u</td>"+
+   "<td>"+s.t.toFixed(2)+"</td>"+
+   "<td><span class='"+sig[1]+"'>"+sig[0]+"</span></td></tr>"}).join("")}
+
+/* ================= DETALLE DE MERCADO =================
+   Todo se pide directo desde el navegador: gamma-api, clob y data-api sirven con
+   Access-Control-Allow-Origin *, así que no hace falta pasar por el Worker.       */
+var DT=null;
+
+function dtOpen(id){
+ var m=null;
+ if(BQ)for(var i=0;i<BQ.markets.length;i++)if(String(BQ.markets[i].id)===String(id)){m=BQ.markets[i];break}
+ if(!m)return;
+ DT=m;$("dt").classList.add("on");
+ $("dt-q").textContent=m.q;
+ $("dt-sub").innerHTML=(m.ev?esc(m.ev)+" · ":"")+
+   "<a href='"+esc(m.url)+"' target='_blank' rel='noopener'>abrir en Polymarket ↗</a>"+
+   (m.days!==null?" · cierra en "+Math.round(m.days)+" días":"");
+ dtMetrics(m);
+ ["dt-fib","dt-grp","dt-dom","dt-del"].forEach(function(k){$(k).innerHTML=emp("⏳","Cargando…")});
+
+ // Histórico -> Fibonacci
+ fetch("https://clob.polymarket.com/prices-history?market="+encodeURIComponent(m.tok)+"&interval=1m&fidelity=60")
+  .then(function(r){return r.json()})
+  .then(function(j){var h=(j&&j.history)||[];
+   $("dt-fib").innerHTML=h.length>5?fibChart(h):emp("📉","Sin histórico suficiente.")})
+  .catch(function(){$("dt-fib").innerHTML=emp("⚠️","No se pudo cargar el histórico.")});
+
+ // Grupo completo: se pide el evento entero, no las patas que hubiera en memoria.
+ if(m.evSlug){
+  fetch("https://gamma-api.polymarket.com/events?slug="+encodeURIComponent(m.evSlug))
+   .then(function(r){return r.json()})
+   .then(function(l){
+    var ev=l&&l[0];if(!ev)throw 0;
+    var legs=(ev.markets||[]).map(function(x){
+     var p=null;try{p=parseFloat(JSON.parse(x.outcomePrices||"[]")[0])}catch(e){}
+     var bid=parseFloat(x.bestBid),ask=parseFloat(x.bestAsk);
+     var viva=isFinite(bid)&&isFinite(ask)&&bid>0&&ask<1&&(parseFloat(x.volumeNum||x.volume||0)||0)>0;
+     return {n:x.groupItemTitle||x.question||"—",p:p,sp:x.spread||0,viva:viva,
+             yo:String(x.id)===String(m.id)}})
+     .filter(function(x){return x.p!==null&&isFinite(x.p)})
+     .sort(function(a,b){return b.p-a.p});
+    $("dt-gh").textContent="Todas las probabilidades del grupo ("+legs.length+" salidas)";
+    dtGroup(legs,!!ev.negRisk)})
+   .catch(function(){$("dt-grp").innerHTML=emp("—","Este mercado no pertenece a un grupo.")})}
+ else $("dt-grp").innerHTML=emp("—","Sin grupo asociado.");
+
+ // Libro de órdenes -> matrix / profundidad
+ fetch("https://clob.polymarket.com/book?token_id="+encodeURIComponent(m.tok))
+  .then(function(r){return r.json()})
+  .then(function(b){dtDom(b)})
+  .catch(function(){$("dt-dom").innerHTML=emp("⚠️","Libro no disponible.")});
+
+ // Trades -> delta y CVD
+ if(m.cid){
+  fetch("https://data-api.polymarket.com/trades?market="+encodeURIComponent(m.cid)+"&limit=250")
+   .then(function(r){return r.json()})
+   .then(function(t){dtDelta(t)})
+   .catch(function(){$("dt-del").innerHTML=emp("⚠️","Flujo no disponible.")})}
+ else $("dt-del").innerHTML=emp("—","Sin identificador de mercado.")}
+
+function dtClose(){$("dt").classList.remove("on");DT=null}
+
+function dtMetrics(m){
+ var k=function(l,v,c){return "<div><div class='l'>"+l+"</div><div class='v "+(c||"")+"'>"+v+"</div></div>"};
+ var b=(1-m.p)/m.p;
+ $("dt-met").innerHTML=
+  k("PRECIO",bfmt(m.p,1))+
+  k("CUOTA",(1/m.p).toFixed(2)+"×")+
+  k("JUSTO (WANG)",bfmt(m.fair,1))+
+  k("SESGO",(m.edge>=0?"+":"")+(m.edge*100).toFixed(1),m.edge>0?"dn":"up")+
+  k("SPREAD REL.",bfmt(m.spreadRel,1),m.spreadRel>0.1?"dn":"")+
+  k("LIQUIDEZ",f$(m.liq))+
+  k("VOL. 24H",f$(m.vol24))+
+  k("ROTACIÓN",m.turn===null?"—":m.turn.toFixed(2),m.turn!==null&&m.turn<0.02?"dn":"")+
+  k("σ NORMALIZ.",m.snorm===null?"—":m.snorm.toFixed(2))+
+  k("URGENCIA",m.urg===null?"—":m.urg.toFixed(3))+
+  k("Z MOMENTUM",m.z.toFixed(2),m.z>0?"up":"dn")+
+  k("DÍAS",m.days===null?"—":Math.round(m.days))}
+
+function dtGroup(legs,neg){
+ var vivas=legs.filter(function(x){return x.viva});
+ var s=vivas.reduce(function(a,x){return a+x.p},0);
+ var mx=Math.max.apply(null,legs.map(function(x){return x.p}))||1;
+ var cab="<div class='r' style='color:var(--dim);font-size:9px;letter-spacing:.05em'>"+
+   "<div>SALIDA</div><div class='pv'>PROB.</div><div class='sp'>SPREAD</div></div>";
+ var filas=legs.map(function(x){
+  return "<div class='r'>"+
+   "<div class='bar'><i style='width:"+(100*x.p/mx).toFixed(1)+"%"+
+     (x.yo?";background:rgba(34,211,238,.34)":(x.viva?"":";background:rgba(95,113,134,.15)"))+"'></i>"+
+     "<span"+(x.yo?" style='color:var(--cy)'":(x.viva?"":" style='color:var(--dim2)'"))+">"+
+     esc(x.n.slice(0,42))+(x.viva?"":" · sin libro")+"</span></div>"+
+   "<div class='pv'>"+(x.p*100).toFixed(1)+"%</div>"+
+   "<div class='sp'>"+(x.sp?(x.sp*100).toFixed(1):"—")+"</div></div>"}).join("");
+ var pie=neg?
+  ("<div class='st' style='margin-top:6px'>Suma de las "+vivas.length+" patas cotizadas: <b class='"+
+   (Math.abs(s-1)<0.005?"":(s>1?"up":"dn"))+"'>"+s.toFixed(4)+"</b> — "+
+   (s>1?("sobre-redondeo de +"+((s-1)*100).toFixed(2)+"%: el conjunto cotiza caro"):
+    (s<1?("descuento de "+((s-1)*100).toFixed(2)+"%"+(vivas.length<legs.length?" (poco fiable: hay patas sin libro que se quedan la probabilidad que falta)":"")):"suma exacta"))+
+   "</div>"):
+  "<div class='st' style='margin-top:6px'>Este evento <b>no</b> es mutuamente excluyente, así que sumar sus probabilidades no significa nada.</div>";
+ $("dt-grp").innerHTML=cab+filas+pie}
+
+/* Fibonacci sobre el rango del periodo. En un binario los niveles se recortan a [0,1]:
+   un retroceso que caiga fuera no existe como precio posible.                        */
+function fibChart(h){
+ var W=560,H=230,pad=34,w=W-pad-46,ht=H-pad-18;
+ var ps=h.map(function(x){return x.p});
+ var lo=Math.min.apply(null,ps),hi=Math.max.apply(null,ps),rg=(hi-lo)||1;
+ var Y=function(p){return H-pad-ht*((p-lo)/rg)};
+ var X=function(i){return pad+w*(i/(ps.length-1))};
+ var niveles=[[0,"0%"],[0.236,"23.6%"],[0.382,"38.2%"],[0.5,"50%"],[0.618,"61.8%"],[0.786,"78.6%"],[1,"100%"]];
+ var lineas=niveles.map(function(n){
+  var p=hi-(hi-lo)*n[0];
+  if(p<0||p>1)return "";
+  var y=Y(p);
+  return "<line x1='"+pad+"' y1='"+y.toFixed(1)+"' x2='"+(pad+w)+"' y2='"+y.toFixed(1)+
+   "' stroke='"+(n[0]===0.618||n[0]===0.382?"var(--am)":"var(--line)")+"' stroke-width='1' opacity='"+
+   (n[0]===0.618||n[0]===0.382?".7":".45")+"' stroke-dasharray='4 4'/>"+
+   "<text x='"+(pad+w+4)+"' y='"+(y+3).toFixed(1)+"' fill='var(--dim)' font-size='8.5'>"+n[1]+" · "+(p*100).toFixed(1)+"%</text>"}).join("");
+ var linea="<polyline points='"+ps.map(function(p,i){return X(i).toFixed(1)+","+Y(p).toFixed(1)}).join(" ")+
+   "' fill='none' stroke='var(--cy)' stroke-width='1.6'/>";
+ return "<svg viewBox='0 0 "+W+" "+H+"' style='width:100%;height:100%'>"+lineas+linea+
+  "<text x='"+pad+"' y='11' fill='var(--dim)' font-size='9'>máx "+(hi*100).toFixed(1)+"% · mín "+(lo*100).toFixed(1)+
+   "% · "+ps.length+" puntos horarios</text></svg>"}
+
+function dtDom(b){
+ var bids=(b&&b.bids)||[],asks=(b&&b.asks)||[];
+ if(!bids.length&&!asks.length){$("dt-dom").innerHTML=emp("—","Libro vacío.");return}
+ // La API los da de peor a mejor: se invierten para que el mejor quede arriba.
+ var B=bids.slice().sort(function(x,y){return y.price-x.price}).slice(0,12);
+ var A=asks.slice().sort(function(x,y){return x.price-y.price}).slice(0,12);
+ var mx=Math.max.apply(null,B.concat(A).map(function(x){return +x.size}))||1;
+ var lado=function(arr,cls){return "<div class='side'>"+arr.map(function(x){
+  return "<div class='row "+cls+"'><i style='width:"+(100*(+x.size)/mx).toFixed(1)+"%'></i>"+
+   "<b>"+(+x.price*100).toFixed(1)+"%</b><em>"+fn(+x.size)+"</em></div>"}).join("")+"</div>"};
+ var tb=B.reduce(function(a,x){return a+(+x.size)},0),ta=A.reduce(function(a,x){return a+(+x.size)},0);
+ var des=tb+ta>0?(tb-ta)/(tb+ta):0;
+ $("dt-dom").innerHTML=
+  "<div class='dom'><div><div class='st' style='color:var(--gr);margin-bottom:3px'>COMPRA "+fn(tb)+"</div>"+lado(B,"bid")+"</div>"+
+  "<div><div class='st' style='color:var(--rd);margin-bottom:3px'>VENTA "+fn(ta)+"</div>"+lado(A,"ask")+"</div></div>"+
+  "<div class='st' style='margin-top:6px'>Desequilibrio del libro: <b class='"+(des>0?"up":"dn")+"'>"+
+   (des>=0?"+":"")+(des*100).toFixed(1)+"%</b> — "+(des>0?"más profundidad comprando":"más profundidad vendiendo")+
+   ". Es la foto actual, no histórico.</div>"}
+
+function dtDelta(t){
+ if(!t||!t.length){$("dt-del").innerHTML=emp("—","Sin operaciones recientes.");return}
+ /* Normalización imprescindible: comprar "No" es económicamente vender "Yes".
+    Sin esto el delta sale con el signo cambiado en la mitad de las operaciones. */
+ var tr=t.map(function(x){
+  var esYes=String(x.outcome||"").toLowerCase()==="yes";
+  var comp=String(x.side||"").toUpperCase()==="BUY";
+  var sgn=(esYes===comp)?1:-1;
+  return {t:+x.timestamp,s:sgn*Math.abs(parseFloat(x.size)||0)}})
+  .sort(function(a,b){return a.t-b.t});
+ var cvd=[],c=0,cb=0,cs=0;
+ tr.forEach(function(x){c+=x.s;cvd.push(c);if(x.s>0)cb+=x.s;else cs-=x.s});
+ var W=560,H=200,pad=34,w=W-pad-12,ht=H-pad-20;
+ var lo=Math.min.apply(null,cvd.concat([0])),hi=Math.max.apply(null,cvd.concat([0])),rg=(hi-lo)||1;
+ var Y=function(v){return H-pad-ht*((v-lo)/rg)};
+ var pts=cvd.map(function(v,i){return (pad+w*(i/((cvd.length-1)||1))).toFixed(1)+","+Y(v).toFixed(1)}).join(" ");
+ $("dt-del").innerHTML=
+  "<svg viewBox='0 0 "+W+" "+H+"' style='width:100%;height:calc(100% - 22px)'>"+
+   "<line x1='"+pad+"' y1='"+Y(0).toFixed(1)+"' x2='"+(pad+w)+"' y2='"+Y(0).toFixed(1)+"' stroke='var(--dim)' stroke-dasharray='3 3'/>"+
+   "<polyline points='"+pts+"' fill='none' stroke='"+(c>=0?"var(--gr)":"var(--rd)")+"' stroke-width='1.7'/>"+
+   "<text x='"+pad+"' y='11' fill='var(--dim)' font-size='9'>delta acumulado · "+tr.length+" operaciones</text>"+
+   "<text x='"+(pad+w)+"' y='11' fill='"+(c>=0?"var(--gr)":"var(--rd)")+"' font-size='11' text-anchor='end'>"+
+    (c>=0?"+":"−")+fn(Math.abs(c))+"</text></svg>"+
+  "<div class='st'>Compras "+fn(cb)+" · ventas "+fn(cs)+" · presión neta <b class='"+(c>=0?"up":"dn")+"'>"+
+   (c>=0?"compradora":"vendedora")+"</b>. Comprar «No» cuenta como vender «Sí».</div>"}
+
 function go(v){VIEW=v;
- ["dash","con","sc","pm","news","quant"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
+ ["dash","con","sc","pm","news","quant","brain","sim"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
  [].forEach.call($("nav").querySelectorAll("button"),function(b){b.classList.toggle("on",b.dataset.v===v)});
- if(v==="news")loadNews(NR);render()}
+ if(v==="news")loadNews(NR);
+ if(v==="brain"&&!BQ&&!BLOAD)loadBrain();
+ render()}
 [].forEach.call($("nav").querySelectorAll("button"),function(b){b.onclick=function(){go(b.dataset.v)}});
 $("cmd").addEventListener("input",function(e){e.target.dataset.q=e.target.value;render()});
 $("cmd").addEventListener("keydown",function(e){
  if(e.key!=="Enter")return;
  var c=e.target.value.trim().toUpperCase();
- var m={CON:"con",CONTRATOS:"con",SC:"sc",SMALLCAPS:"sc",PM:"pm",POLYMARKET:"pm",NEWS:"news",NOTICIAS:"news",DASH:"dash",F1:"dash",QUANT:"quant",Q:"quant"};
+ var m={CON:"con",CONTRATOS:"con",SC:"sc",SMALLCAPS:"sc",PM:"pm",POLYMARKET:"pm",NEWS:"news",NOTICIAS:"news",DASH:"dash",F1:"dash",QUANT:"quant",Q:"quant",BRAIN:"brain",CEREBRO:"brain",PQ:"brain",SIM:"sim",SIMULADOR:"sim",BT:"sim"};
  if(m[c]){e.target.value="";e.target.dataset.q="";go(m[c])}
  else if(c==="REFRESH"||c==="RELOAD"){e.target.value="";e.target.dataset.q="";refresh()}});
 document.addEventListener("keydown",function(e){
+ if(e.key==="Escape"&&DT){dtClose();return}
  if(e.key==="/"&&document.activeElement!==$("cmd")){e.preventDefault();$("cmd").focus();return}
- var m={F1:"dash",F2:"con",F3:"sc",F4:"pm",F5:"news",F6:"quant"};
+ var m={F1:"dash",F2:"con",F3:"sc",F4:"pm",F5:"news",F6:"quant",F7:"brain",F8:"sim"};
  if(m[e.key]){e.preventDefault();go(m[e.key])}});
 document.addEventListener("click",function(e){var t=e.target;
  if(t.classList.contains("str")){W[t.dataset.tk]=!W[t.dataset.tk];sw();render()}
  if(t.dataset&&t.dataset.r){RG=t.dataset.r;render()}
  if(t.dataset&&t.dataset.n){NR=t.dataset.n;loadNews(NR);render()}
- if(t.dataset&&t.dataset.nf){loadNews(NR,true)}});
+ if(t.dataset&&t.dataset.nf){loadNews(NR,true)}
+ if(t.closest){var tr=t.closest("tr[data-mid]");
+  if(tr&&t.tagName!=="A"){dtOpen(tr.dataset.mid)}}});
 [].forEach.call(document.querySelectorAll("th[data-k]"),function(th){
- th.onclick=function(){var k=th.dataset.k;SORT=SORT.k===k?{k:k,d:-SORT.d}:{k:k,d:1};render()}});
+ var enBrain=!!(th.closest&&th.closest("#v-brain"));
+ th.onclick=function(){var k=th.dataset.k;
+  if(enBrain){BSORT=BSORT.k===k?{k:k,d:-BSORT.d}:{k:k,d:1}}
+  else{SORT=SORT.k===k?{k:k,d:-SORT.d}:{k:k,d:1}}
+  render()}});
+$("bload").onclick=function(){loadBrain(true)};
+$("srun").onclick=btRun;
+$("dtx").onclick=dtClose;
+$("dt").addEventListener("click",function(e){if(e.target.id==="dt")dtClose()});
+$("bvol").onclick=loadBVol;
+$("b-kmkt").onchange=function(){syncKellyP();kellyCalc()};
+$("b-kp").oninput=kellyCalc;
+$("b-kf").onchange=kellyCalc;
 $("fa").onclick=function(){FP="all";$("fa").classList.add("on");$("fr").classList.remove("on");render()};
 $("fr").onclick=function(){FP="r";$("fr").classList.add("on");$("fa").classList.remove("on");render()};
 $("fm").onchange=render;

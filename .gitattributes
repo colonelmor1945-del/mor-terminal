@@ -1,0 +1,3 @@
+# Finales de linea estables: worker.js embebe index.html y el vaiven CRLF/LF
+# ensuciaba el diff entero en cada commit.
+* text=auto eol=lf
