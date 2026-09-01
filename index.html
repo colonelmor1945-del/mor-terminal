@@ -291,12 +291,13 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 
   <div class="grid g2" style="margin-bottom:8px">
     <div class="p" style="height:290px">
-      <h3>ARBITRAJE ESTRUCTURAL · GRUPOS EXCLUYENTES <span id="b-acnt"></span></h3>
+      <h3>ARBITRAJE ESTRUCTURAL <span id="b-acnt"></span></h3>
       <div class="bd"><table><thead><tr>
-        <th style="width:38%">Evento</th><th style="width:9%">Salidas</th><th style="width:11%">Σ probs</th>
-        <th style="width:10%">Desvío</th><th style="width:10%">Coste</th><th style="width:11%">Neto</th><th style="width:11%">Lado</th>
+        <th style="width:34%">Evento</th><th style="width:11%">Tipo</th><th style="width:8%">Salidas</th>
+        <th style="width:10%">Medida</th><th style="width:9%">Bruto</th><th style="width:9%">Coste</th>
+        <th style="width:9%">Neto</th><th style="width:10%">Acción</th>
       </tr></thead><tbody id="b-arb"></tbody></table></div>
-      <div class="st">Σ de las patas cotizadas de un grupo mutuamente excluyente. Debe valer 1. Coste = medio spread por pata. Las patas de relleno (libro vacío) se excluyen.</div>
+      <div class="st"><b>Σ excluyente</b>: las patas de un grupo mutuamente excluyente deben sumar 1. <b>Monotonía</b>: si A implica B, p(A) ≤ p(B) siempre — «BTC cae a 15.000» implica «BTC cae a 20.000», así que la primera no puede cotizar más cara. Ambas son aritmética verificable, sin riesgo de modelo. Coste = medio spread por pata.</div>
     </div>
     <div class="p" style="height:290px">
       <h3>DISTORSIÓN DE WANG · PRECIO vs PROBABILIDAD REAL</h3>
@@ -1002,31 +1003,44 @@ function renderBrain(){
  if(!BQ){
   var msg=emp("🧠","Pulsa ⟳ Cargar cerebro.<br>Necesita /api/pmq en tu Worker.");
   $("b-rows").innerHTML="<tr><td colspan='11'>"+msg+"</td></tr>";
-  $("b-arb").innerHTML="<tr><td colspan='7'>"+msg+"</td></tr>";
+  $("b-arb").innerHTML="<tr><td colspan='8'>"+msg+"</td></tr>";
   $("b-wang").innerHTML=msg;return}
 
  var gs=BQ.groups,ms=BQ.markets;
- var conV=gs.filter(function(g){return g.net>0});
+ var conV=gs.filter(function(g){return g.net>0}).concat(BQ.mono||[]);
  $("b1").textContent=ms.length;$("b1s").textContent="de "+BQ.nEvents+" eventos activos";
  $("b2").textContent=conV.length;$("b2s").textContent="de "+gs.length+" grupos excluyentes";
- $("b3").textContent=conV.length?bfmt(conV[0].net,2):"—";
- $("b3s").textContent=conV.length?conV[0].ev.slice(0,42):"ninguno cubre costes";
+ var mej=conV.slice().sort(function(a,b){return (b.net||b.neto)-(a.net||a.neto)})[0];
+ $("b3").textContent=mej?bfmt(mej.net!==undefined?mej.net:mej.neto,2):"—";
+ $("b3s").textContent=mej?mej.ev.slice(0,42):"ninguno cubre costes";
  $("b4").textContent=BLAM.toFixed(3);
  $("b4s").textContent=(BNLAM<3?"muestra insuficiente ("+BNLAM+" grupos)":
    (BLAM>0.02?"longshots caros · "+BNLAM+" grupos":(BLAM<-0.02?"sesgo invertido · "+BNLAM+" grupos":"sin sesgo apreciable · "+BNLAM+" grupos")));
 
- $("b-acnt").textContent="("+gs.length+")";
- $("b-arb").innerHTML=gs.slice(0,40).map(function(g){
-  var pos=g.net>0;
+ // Las dos familias de restricción en una sola lista, ordenada por ventaja neta.
+ var opor=gs.map(function(g){return {
+   k:"suma",ev:g.ev,slug:g.slug,n:g.n+(g.completo?"":"/"+g.nTotal),
+   med:g.sum.toFixed(4),bruto:Math.abs(g.dev),coste:g.cost,neto:g.net,
+   acc:g.net>0?g.side:null,det:"Σ debe ser 1"}})
+  .concat((BQ.mono||[]).map(function(g){return {
+   k:"mono",ev:g.ev,slug:g.slug,n:String(g.n),
+   med:(g.pBarato*100).toFixed(1)+"% < "+(g.pCaro*100).toFixed(1)+"%",
+   bruto:g.bruto,coste:g.coste,neto:g.neto,acc:"vender la cara",
+   det:g.caro+" no puede superar a "+g.barato}}))
+  .sort(function(a,b){return b.neto-a.neto});
+ $("b-acnt").textContent="("+opor.length+")";
+ $("b-arb").innerHTML=opor.slice(0,40).map(function(g){
+  var pos=g.neto>0;
   return "<tr>"+
-   "<td title='"+esc(g.ev)+"'><a href='https://polymarket.com/event/"+esc(g.slug)+"' target='_blank' rel='noopener'>"+esc(g.ev.slice(0,52))+"</a></td>"+
-   "<td>"+g.n+(g.completo?"":" <span class='t4' title='hay patas sin libro; solo vale el lado vendedor'>de "+g.nTotal+"</span>")+"</td>"+
-   "<td class='"+(g.dev>0?"up":"dn")+"'>"+g.sum.toFixed(4)+"</td>"+
-   "<td class='"+(g.dev>0?"up":"dn")+"'>"+bfmt(g.dev,2)+"</td>"+
-   "<td class='dim'>"+bfmt(g.cost,2)+"</td>"+
-   "<td><b class='"+(pos?"up":"dn")+"'>"+bfmt(g.net,2)+"</b></td>"+
-   "<td>"+(pos?"<span class='t3'>"+g.side+"</span>":"<span class='dim'>no cubre</span>")+"</td>"+
-  "</tr>"}).join("")||"<tr><td colspan='7'>"+emp("∑","Ningún grupo excluyente completo ahora mismo.")+"</td></tr>";
+   "<td title='"+esc(g.ev)+"'><a href='https://polymarket.com/event/"+esc(g.slug)+"' target='_blank' rel='noopener'>"+esc(g.ev.slice(0,48))+"</a></td>"+
+   "<td><span class='"+(g.k==="mono"?"t5":"t2")+"' title='"+esc(g.det)+"'>"+(g.k==="mono"?"monotonía":"Σ excluyente")+"</span></td>"+
+   "<td>"+g.n+"</td>"+
+   "<td class='dim' style='font-size:10px'>"+esc(g.med)+"</td>"+
+   "<td>"+bfmt(g.bruto,2)+"</td>"+
+   "<td class='dim'>"+bfmt(g.coste,2)+"</td>"+
+   "<td><b class='"+(pos?"up":"dn")+"'>"+bfmt(g.neto,2)+"</b></td>"+
+   "<td>"+(pos?"<span class='t3'>"+g.acc+"</span>":"<span class='dim'>no cubre</span>")+"</td>"+
+  "</tr>"}).join("")||"<tr><td colspan='8'>"+emp("∑","Sin restricciones violadas ahora mismo.")+"</td></tr>";
 
  $("b-wang").innerHTML=wangCurve();
 

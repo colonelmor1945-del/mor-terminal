@@ -326,6 +326,106 @@ function pmEnrich(m, ev) {
   };
 }
 
+/* ---------- ARBITRAJE POR MONOTONÍA (implicación lógica) ----------
+   Idea tomada de `implication_arb_strategy` de oracle3 (Apache-2.0): si A implica B,
+   entonces p(A) ≤ p(B) SIEMPRE, y violarlo es arbitraje sin riesgo de modelo. Allí el
+   par lo indica un humano; aquí se detecta solo en la familia donde es mecánico: los
+   mercados de umbral de un mismo evento.
+     "BTC > 70k" ⟸ "BTC > 72k"  →  p debe decrecer al subir el umbral.
+     "tregua sigue hasta el 1-ago" ⟸ "...hasta el 30-sep" → decrece con la fecha.
+   Rescata justo los eventos que NO son negRisk y donde sumar probabilidades no vale.  */
+
+const MESES = { january:1,february:2,march:3,april:4,may:5,june:6,july:7,
+                august:8,september:9,october:10,november:11,december:12 };
+
+/* Clave de orden. Devuelve {k, tipo, cadena} o null.
+   - Fechas y números NO se mezclan: sacar el "7" de "September 7" pondría julio
+     junto a diciembre.
+   - Las flechas ↑/↓ marcan cadenas OPUESTAS ("¿hasta dónde sube?" frente a "¿hasta
+     dónde baja?"). Van en `cadena` y cada una se evalúa por separado; mezclarlas
+     produciría infracciones inventadas.                                          */
+function pmKey(t) {
+  let s = String(t || "").trim();
+  let cadena = "";
+  const fl = s.match(/^([↑↓⬆⬇])\s*/);
+  if (fl) { cadena = (fl[1] === "↑" || fl[1] === "⬆") ? "sube" : "baja"; s = s.slice(fl[0].length).trim(); }
+
+  const md = s.toLowerCase().match(/^([a-z]+)\s+(\d{1,2})$/);
+  if (md && MESES[md[1]]) return { k: MESES[md[1]] * 100 + Number(md[2]), tipo: "fecha", cadena: cadena };
+
+  const nm = s.replace(/[$,\s]/g, "").match(/^[<>≥≤]?=?(-?\d+(?:\.\d+)?)([kKmM])?$/);
+  if (nm) {
+    let v = parseFloat(nm[1]);
+    if (nm[2]) v *= (nm[2].toLowerCase() === "k" ? 1e3 : 1e6);
+    return { k: v, tipo: "numero", cadena: cadena };
+  }
+  return null;
+}
+
+function pmMonotone(ev, ms) {
+  const live = ms.filter(m => m.live && m.leg);
+  if (live.length < 3) return null;
+
+  const claves = live.map(m => pmKey(m.leg));
+  if (claves.some(c => !c)) return null;
+  const tipo = claves[0].tipo;
+  if (claves.some(c => c.tipo !== tipo)) return null;          // no mezclar fecha y número
+
+  // Cada cadena (↑ / ↓ / sin flecha) es una relación de implicación distinta.
+  const porCadena = {};
+  live.forEach((m, i) => {
+    const c = claves[i].cadena;
+    (porCadena[c] = porCadena[c] || []).push({ leg: m.leg, k: claves[i].k, p: m.p, sp: m.spread });
+  });
+  let mejor = null;
+  for (const c in porCadena) {
+    const r = pmMonoCadena(ev, porCadena[c], tipo, c, live);
+    if (r && (!mejor || r.neto > mejor.neto)) mejor = r;
+  }
+  return mejor;
+}
+
+function pmMonoCadena(ev, arr, tipo, cadena, live) {
+  if (arr.length < 3) return null;
+  const pts = arr.slice().sort((a, b) => a.k - b.k);
+  if (new Set(pts.map(x => x.k)).size !== pts.length) return null;  // claves repetidas
+
+  // La dirección no se adivina por el texto: se mide. Se prueban las dos y gana la
+  // que menos infrinja; si ninguna domina claramente, el evento no es monótono.
+  let vDec = 0, vInc = 0;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const d = pts[i + 1].p - pts[i].p;
+    if (d > 0) vDec += d; else vInc += -d;
+  }
+  const dec = vDec <= vInc;
+  const total = dec ? vDec : vInc, otro = dec ? vInc : vDec;
+  if (otro > 0 && total > otro * 0.5) return null;             // dirección ambigua
+
+  // Mayor infracción entre patas contiguas, neta del spread de ambas.
+  let peor = null;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i], b = pts[i + 1];
+    const v = dec ? (b.p - a.p) : (a.p - b.p);
+    if (v <= 0) continue;
+    const coste = (a.sp + b.sp) / 2;
+    const neto = v - coste;
+    if (!peor || neto > peor.neto)
+      peor = { neto: neto, bruto: v, coste: coste,
+               caro: dec ? b.leg : a.leg, barato: dec ? a.leg : b.leg,
+               pCaro: dec ? b.p : a.p, pBarato: dec ? a.p : b.p };
+  }
+  if (!peor || peor.neto <= 0) return null;
+
+  return {
+    ev: ev.title || "—", slug: ev.slug || "", n: pts.length, tipo: tipo,
+    cadena: cadena, dir: dec ? "decreciente" : "creciente",
+    neto: peor.neto, bruto: peor.bruto, coste: peor.coste,
+    caro: peor.caro, barato: peor.barato, pCaro: peor.pCaro, pBarato: peor.pBarato,
+    liq: live.reduce((a, m) => a + m.liq, 0),
+    legs: pts.map(x => ({ leg: x.leg, p: x.p }))
+  };
+}
+
 async function fetchPMQ(pages = 3) {
   const evs = [];
   for (let i = 0; i < pages; i++) {
@@ -338,15 +438,16 @@ async function fetchPMQ(pages = 3) {
     evs.push.apply(evs, l);
   }
 
-  const markets = [], groups = [];
+  const markets = [], groups = [], mono = [];
 
   for (const ev of evs) {
     const ms = (ev.markets || []).map(m => pmEnrich(m, ev)).filter(Boolean);
     if (!ms.length) continue;
     markets.push.apply(markets, ms);
 
-    // Sobre-redondeo: SOLO en grupos excluyentes (negRisk) y con patas realmente cotizadas.
-    if (!ev.negRisk || ms.length < 2) continue;
+    // Los eventos NO excluyentes pueden seguir teniendo restricción de monotonía.
+    if (!ev.negRisk) { const mo = pmMonotone(ev, ms); if (mo) mono.push(mo); continue; }
+    if (ms.length < 2) continue;
 
     const todas = (ev.markets || []).length;
     const live = ms.filter(m => m.live);
@@ -391,6 +492,7 @@ async function fetchPMQ(pages = 3) {
   markets.forEach(m => { m.z = (m.zc1d + m.zc1w + m.zc1m) / 3; });
 
   groups.sort((a, b) => b.net - a.net);
+  mono.sort((a, b) => b.neto - a.neto);
   markets.sort((a, b) => (b.vol24 || 0) - (a.vol24 || 0));
 
   return {
@@ -398,7 +500,8 @@ async function fetchPMQ(pages = 3) {
     fee: PM_FEE,
     nEvents: evs.length,
     markets: markets.slice(0, 400),
-    groups: groups
+    groups: groups,
+    mono: mono
   };
 }
 
@@ -709,12 +812,13 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 
   <div class="grid g2" style="margin-bottom:8px">
     <div class="p" style="height:290px">
-      <h3>ARBITRAJE ESTRUCTURAL · GRUPOS EXCLUYENTES <span id="b-acnt"></span></h3>
+      <h3>ARBITRAJE ESTRUCTURAL <span id="b-acnt"></span></h3>
       <div class="bd"><table><thead><tr>
-        <th style="width:38%">Evento</th><th style="width:9%">Salidas</th><th style="width:11%">Σ probs</th>
-        <th style="width:10%">Desvío</th><th style="width:10%">Coste</th><th style="width:11%">Neto</th><th style="width:11%">Lado</th>
+        <th style="width:34%">Evento</th><th style="width:11%">Tipo</th><th style="width:8%">Salidas</th>
+        <th style="width:10%">Medida</th><th style="width:9%">Bruto</th><th style="width:9%">Coste</th>
+        <th style="width:9%">Neto</th><th style="width:10%">Acción</th>
       </tr></thead><tbody id="b-arb"></tbody></table></div>
-      <div class="st">Σ de las patas cotizadas de un grupo mutuamente excluyente. Debe valer 1. Coste = medio spread por pata. Las patas de relleno (libro vacío) se excluyen.</div>
+      <div class="st"><b>Σ excluyente</b>: las patas de un grupo mutuamente excluyente deben sumar 1. <b>Monotonía</b>: si A implica B, p(A) ≤ p(B) siempre — «BTC cae a 15.000» implica «BTC cae a 20.000», así que la primera no puede cotizar más cara. Ambas son aritmética verificable, sin riesgo de modelo. Coste = medio spread por pata.</div>
     </div>
     <div class="p" style="height:290px">
       <h3>DISTORSIÓN DE WANG · PRECIO vs PROBABILIDAD REAL</h3>
@@ -1420,31 +1524,44 @@ function renderBrain(){
  if(!BQ){
   var msg=emp("🧠","Pulsa ⟳ Cargar cerebro.<br>Necesita /api/pmq en tu Worker.");
   $("b-rows").innerHTML="<tr><td colspan='11'>"+msg+"</td></tr>";
-  $("b-arb").innerHTML="<tr><td colspan='7'>"+msg+"</td></tr>";
+  $("b-arb").innerHTML="<tr><td colspan='8'>"+msg+"</td></tr>";
   $("b-wang").innerHTML=msg;return}
 
  var gs=BQ.groups,ms=BQ.markets;
- var conV=gs.filter(function(g){return g.net>0});
+ var conV=gs.filter(function(g){return g.net>0}).concat(BQ.mono||[]);
  $("b1").textContent=ms.length;$("b1s").textContent="de "+BQ.nEvents+" eventos activos";
  $("b2").textContent=conV.length;$("b2s").textContent="de "+gs.length+" grupos excluyentes";
- $("b3").textContent=conV.length?bfmt(conV[0].net,2):"—";
- $("b3s").textContent=conV.length?conV[0].ev.slice(0,42):"ninguno cubre costes";
+ var mej=conV.slice().sort(function(a,b){return (b.net||b.neto)-(a.net||a.neto)})[0];
+ $("b3").textContent=mej?bfmt(mej.net!==undefined?mej.net:mej.neto,2):"—";
+ $("b3s").textContent=mej?mej.ev.slice(0,42):"ninguno cubre costes";
  $("b4").textContent=BLAM.toFixed(3);
  $("b4s").textContent=(BNLAM<3?"muestra insuficiente ("+BNLAM+" grupos)":
    (BLAM>0.02?"longshots caros · "+BNLAM+" grupos":(BLAM<-0.02?"sesgo invertido · "+BNLAM+" grupos":"sin sesgo apreciable · "+BNLAM+" grupos")));
 
- $("b-acnt").textContent="("+gs.length+")";
- $("b-arb").innerHTML=gs.slice(0,40).map(function(g){
-  var pos=g.net>0;
+ // Las dos familias de restricción en una sola lista, ordenada por ventaja neta.
+ var opor=gs.map(function(g){return {
+   k:"suma",ev:g.ev,slug:g.slug,n:g.n+(g.completo?"":"/"+g.nTotal),
+   med:g.sum.toFixed(4),bruto:Math.abs(g.dev),coste:g.cost,neto:g.net,
+   acc:g.net>0?g.side:null,det:"Σ debe ser 1"}})
+  .concat((BQ.mono||[]).map(function(g){return {
+   k:"mono",ev:g.ev,slug:g.slug,n:String(g.n),
+   med:(g.pBarato*100).toFixed(1)+"% < "+(g.pCaro*100).toFixed(1)+"%",
+   bruto:g.bruto,coste:g.coste,neto:g.neto,acc:"vender la cara",
+   det:g.caro+" no puede superar a "+g.barato}}))
+  .sort(function(a,b){return b.neto-a.neto});
+ $("b-acnt").textContent="("+opor.length+")";
+ $("b-arb").innerHTML=opor.slice(0,40).map(function(g){
+  var pos=g.neto>0;
   return "<tr>"+
-   "<td title='"+esc(g.ev)+"'><a href='https://polymarket.com/event/"+esc(g.slug)+"' target='_blank' rel='noopener'>"+esc(g.ev.slice(0,52))+"</a></td>"+
-   "<td>"+g.n+(g.completo?"":" <span class='t4' title='hay patas sin libro; solo vale el lado vendedor'>de "+g.nTotal+"</span>")+"</td>"+
-   "<td class='"+(g.dev>0?"up":"dn")+"'>"+g.sum.toFixed(4)+"</td>"+
-   "<td class='"+(g.dev>0?"up":"dn")+"'>"+bfmt(g.dev,2)+"</td>"+
-   "<td class='dim'>"+bfmt(g.cost,2)+"</td>"+
-   "<td><b class='"+(pos?"up":"dn")+"'>"+bfmt(g.net,2)+"</b></td>"+
-   "<td>"+(pos?"<span class='t3'>"+g.side+"</span>":"<span class='dim'>no cubre</span>")+"</td>"+
-  "</tr>"}).join("")||"<tr><td colspan='7'>"+emp("∑","Ningún grupo excluyente completo ahora mismo.")+"</td></tr>";
+   "<td title='"+esc(g.ev)+"'><a href='https://polymarket.com/event/"+esc(g.slug)+"' target='_blank' rel='noopener'>"+esc(g.ev.slice(0,48))+"</a></td>"+
+   "<td><span class='"+(g.k==="mono"?"t5":"t2")+"' title='"+esc(g.det)+"'>"+(g.k==="mono"?"monotonía":"Σ excluyente")+"</span></td>"+
+   "<td>"+g.n+"</td>"+
+   "<td class='dim' style='font-size:10px'>"+esc(g.med)+"</td>"+
+   "<td>"+bfmt(g.bruto,2)+"</td>"+
+   "<td class='dim'>"+bfmt(g.coste,2)+"</td>"+
+   "<td><b class='"+(pos?"up":"dn")+"'>"+bfmt(g.neto,2)+"</b></td>"+
+   "<td>"+(pos?"<span class='t3'>"+g.acc+"</span>":"<span class='dim'>no cubre</span>")+"</td>"+
+  "</tr>"}).join("")||"<tr><td colspan='8'>"+emp("∑","Sin restricciones violadas ahora mismo.")+"</td></tr>";
 
  $("b-wang").innerHTML=wangCurve();
 
