@@ -874,6 +874,30 @@ const CHAT_MODELOS = [
   "@cf/mistral/mistral-7b-instruct-v0.2"
 ];
 
+/* Acciones que el asistente puede pedirle a la interfaz. Se le da una lista cerrada
+   y tiene que responder con una linea ACCION: exacta. No se le deja ejecutar codigo
+   ni inventarse acciones: si pide una que no esta en la lista, se ignora.        */
+const CHAT_ACCIONES = [
+  ["ver_inicio",     "ir a la portada"],
+  ["ver_contratos",  "ir a contratos del Pentagono y avisos 8-K"],
+  ["ver_empresas",   "ir al listado de las 33 empresas"],
+  ["ver_apuestas",   "ir a los mercados de Polymarket"],
+  ["ver_noticias",   "ir a noticias"],
+  ["ver_analisis",   "ir al analisis quant de empresas"],
+  ["ver_oportunidades", "ir a arbitraje y oportunidades"],
+  ["ver_simulador",  "ir al simulador de estrategias"],
+  ["ver_cartera",    "ir a la calculadora de cuanto apostar"],
+  ["ver_metodos",    "ir a la biblioteca de metodos"],
+  ["ficha:TICKER",   "abrir la ficha de una empresa, p.ej. ficha:NASDAQ:BYRN"],
+  ["cargar_precios", "descargar los precios de las 33 empresas"],
+  ["simular",        "lanzar el backtest sobre Polymarket (tarda 1-3 min)"],
+  ["simular_divisas","lanzar el backtest sobre divisas"],
+  ["prueba_choque",  "lanzar el Monte Carlo contra el azar"],
+  ["anotar_papel",   "anotar las senales de hoy en el registro en papel"]
+];
+
+const BR = String.fromCharCode(10);
+
 const CHAT_SISTEMA =
   "Eres el asistente de MOR TERMINAL, un terminal de inteligencia financiera sobre " +
   "contratos de defensa de EE.UU., small caps de defensa y mercados de prediccion.\n\n" +
@@ -889,7 +913,13 @@ const CHAT_SISTEMA =
   "5. Los cruces por nombre son coincidencias, no hechos: di siempre que hay que " +
   "verificarlos a mano.\n" +
   "6. Responde en espanol llano, breve, sin jerga. Maximo 5 frases salvo que te " +
-  "pidan detalle.";
+  "pidan detalle." + BR + BR +
+  "PUEDES MANEJAR EL TERMINAL. Si lo que piden se hace en una pantalla concreta o " +
+  "requiere lanzar algo, termina tu respuesta con una linea suelta asi:" + BR +
+  "ACCION: nombre_de_la_accion" + BR +
+  "Usa SOLO estas acciones, ninguna inventada:" + BR +
+  CHAT_ACCIONES.map(function(a){return "  " + a[0] + " = " + a[1]}).join(BR) + BR +
+  "Una sola ACCION por respuesta, y solo si aporta. Avisa si lo que lanzas tarda.";
 
 /* Reune el contexto con lo que ya calcula el terminal. Se recorta a proposito: los
    modelos gratuitos tienen ventana corta y un contexto enorme empeora la respuesta. */
@@ -971,13 +1001,25 @@ async function chatResponder(env, pregunta) {
                              "\n\nPREGUNTA: " + p }
   ];
 
+  const validas = CHAT_ACCIONES.map(a => a[0]);
   let ultimo = "";
   for (const modelo of CHAT_MODELOS) {
     try {
       const r = await env.AI.run(modelo, { messages: mensajes, max_tokens: 420 });
-      const txt = (r && (r.response || r.result || "")) + "";
-      if (txt.trim()) return { respuesta: txt.trim(), modelo: modelo, contexto: ctx };
-      ultimo = "respuesta vacia";
+      let txt = ((r && (r.response || r.result || "")) + "").trim();
+      if (!txt) { ultimo = "respuesta vacia"; continue; }
+
+      // Se extrae la accion y se VALIDA contra la lista cerrada. Si el modelo se
+      // inventa una, se descarta en silencio: la respuesta sigue siendo util.
+      let accion = null;
+      const m = txt.match(/^ACCION:\s*(\S+)\s*$/mi);
+      if (m) {
+        const a = m[1].trim();
+        const base = a.split(":")[0];
+        if (validas.indexOf(a) >= 0 || (base === "ficha" && a.length > 6)) accion = a;
+        txt = txt.replace(m[0], "").trim();
+      }
+      return { respuesta: txt, accion: accion, modelo: modelo, contexto: ctx };
     } catch (e) { ultimo = String(e && e.message || e); }
   }
   return { error: "Ningun modelo respondio (" + ultimo + ")", contexto: ctx };
@@ -1275,6 +1317,9 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
  padding:7px 9px;font:inherit;font-size:12px}
 #iag{background:#0b1119;border:1px solid var(--am);color:var(--am);padding:7px 13px;
  font:inherit;font-size:11px;cursor:pointer}
+#iamic{background:#0b1119;border:1px solid var(--line);color:var(--dim);padding:7px 10px;
+ font:inherit;font-size:13px;cursor:pointer;line-height:1}
+#iamic:hover{border-color:var(--am);color:var(--am)}
 .iaeg{display:flex;flex-wrap:wrap;gap:5px;padding:0 11px 9px}
 .iaeg button{background:#0b1119;border:1px solid var(--line2);color:var(--dim);
  padding:4px 8px;font:inherit;font-size:10px;cursor:pointer}
@@ -1353,7 +1398,15 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   <div id="iah"><b>ASISTENTE</b><span class="st">responde solo con tus datos</span><button id="iax">✕</button></div>
   <div id="iam"></div>
   <div class="iaeg" id="iaeg"></div>
-  <div id="iaf"><input id="iaq" placeholder="¿Qué merece la pena hoy?" autocomplete="off"><button id="iag">Enviar</button></div>
+  <div id="iaf">
+   <button id="iamic" title="Hablar">🎤</button>
+   <input id="iaq" placeholder="Pregunta o pulsa el micrófono" autocomplete="off">
+   <button id="iag">Enviar</button>
+ </div>
+ <div class="st" style="padding:0 11px 8px;display:flex;align-items:center;gap:8px">
+   <label style="cursor:pointer"><input type="checkbox" id="iavoz"> leer en voz alta</label>
+   <span style="margin-left:auto">puede moverse por el terminal y lanzar simulaciones</span>
+ </div>
 </div>
 <div class="hdr">
   <div class="brand"><em></em>MOR TERMINAL</div>
@@ -3610,6 +3663,56 @@ function iaMsg(txt,clase){
  $("iam").scrollTop=$("iam").scrollHeight;
  return d}
 
+/* Ejecuta lo que pide el asistente. Lista CERRADA: si llega algo que no esta aqui
+   no pasa nada. El worker ya valida, esto es la segunda barrera.                 */
+function iaEjecutar(a){
+ if(!a)return null;
+ var V={ver_inicio:["ini","a la portada"],ver_contratos:["con","a contratos y avisos 8-K"],
+  ver_empresas:["sc","al listado de empresas"],ver_apuestas:["pm","a los mercados"],
+  ver_noticias:["news","a las noticias"],ver_analisis:["quant","al análisis de empresas"],
+  ver_oportunidades:["brain","a las oportunidades"],ver_simulador:["sim","al simulador"],
+  ver_cartera:["cart","a la calculadora"],ver_metodos:["lib","a los métodos"]};
+ if(V[a]){go(V[a][0]);return "Te he llevado "+V[a][1]+"."}
+ if(a.indexOf("ficha:")===0){
+  var tk=a.slice(6);
+  for(var i=0;i<SC.length;i++)if(SC[i].tk===tk){feAbrir(tk);return "Te abro la ficha de "+SC[i].name+"."}
+  return null}
+ if(a==="cargar_precios"){go("quant");if(!QLOAD)loadPx();return "Descargando precios, tarda unos segundos."}
+ if(a==="simular"){go("sim");setUniv("pm");btRun();return "Simulación lanzada. Tarda 1–3 minutos."}
+ if(a==="simular_divisas"){go("sim");setUniv("fx");fxRun();return "Simulando divisas."}
+ if(a==="prueba_choque"){go("sim");if(BT&&!BT.fx){mcRun();return "Prueba de choque lanzada."}
+  return "Antes hay que ejecutar la simulación de Polymarket."}
+ if(a==="anotar_papel"){loadPaper("snap");return "Señales de hoy anotadas."}
+ return null}
+
+/* ---- voz ---- */
+var VOZ=null,VOZON=false,HABLAR=false;
+function vozIniciar(){
+ var R=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!R)return false;
+ VOZ=new R();VOZ.lang="es-ES";VOZ.continuous=false;VOZ.interimResults=false;
+ VOZ.onresult=function(e){
+  var t=e.results[0][0].transcript;
+  $("iaq").value=t;iaPreguntar(t)};
+ VOZ.onend=function(){VOZON=false;$("iamic").textContent="🎤";$("iamic").style.color=""};
+ VOZ.onerror=function(){VOZON=false;$("iamic").textContent="🎤";$("iamic").style.color=""};
+ return true}
+
+function vozAlternar(){
+ if(!VOZ&&!vozIniciar()){
+  iaMsg("Tu navegador no reconoce voz. En Chrome funciona; en otros puede que no.","err");return}
+ if(VOZON){VOZ.stop();return}
+ try{VOZ.start();VOZON=true;$("iamic").textContent="●";$("iamic").style.color="var(--rd)"}
+ catch(e){iaMsg("No pude activar el micrófono: "+(e.message||e),"err")}}
+
+function decir(txt){
+ if(!HABLAR||!window.speechSynthesis)return;
+ try{
+  speechSynthesis.cancel();
+  var u=new SpeechSynthesisUtterance(String(txt).slice(0,600));
+  u.lang="es-ES";u.rate=1.05;
+  speechSynthesis.speak(u)}catch(e){}}
+
 function iaPreguntar(q){
  q=(q||$("iaq").value||"").trim();
  if(!q||IABUSY)return;
@@ -3620,7 +3723,10 @@ function iaPreguntar(q){
   .then(function(r){return r.json()})
   .then(function(j){
    if(j.error){esp.className="iab err";esp.textContent=j.error;return}
-   esp.textContent=j.respuesta})
+   esp.textContent=j.respuesta;
+   decir(j.respuesta);
+   var hecho=iaEjecutar(j.accion);
+   if(hecho){var d=iaMsg("▸ "+hecho,"ia");d.style.borderLeftColor="var(--cy)";d.style.background="rgba(34,211,238,.07)"}})
   .catch(function(e){esp.className="iab err";esp.textContent="No se pudo consultar: "+(e.message||e)})
   .then(function(){IABUSY=false;$("iaq").focus()})}
 
@@ -3797,6 +3903,9 @@ $("i-keyok").onclick=function(){
 $("iabtn").onclick=function(){iaAbrir(true)};
 $("iax").onclick=function(){iaAbrir(false)};
 $("iag").onclick=function(){iaPreguntar()};
+$("iamic").onclick=vozAlternar;
+$("iavoz").onchange=function(){HABLAR=this.checked;
+ if(HABLAR)decir("Voz activada. Te leeré las respuestas.")};
 $("iaq").addEventListener("keydown",function(e){if(e.key==="Enter")iaPreguntar()});
 $("iaeg").addEventListener("click",function(e){
  if(e.target.dataset&&e.target.dataset.ia)iaPreguntar(e.target.dataset.ia)});
