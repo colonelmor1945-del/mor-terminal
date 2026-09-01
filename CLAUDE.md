@@ -119,6 +119,32 @@ No disponibles: **GDELT** (agotó el tiempo 3 veces desde aquí, sin confirmar),
 **SAM.gov** (licitaciones PRE-adjudicación — necesita clave gratuita, pedirla),
 **OpenCorporates** (401, clave gratuita).
 
+## Acceso, claves y qué protege realmente
+La interfaz es HTML que el navegador descarga: **es copiable, siempre**. Ofuscarla
+solo encarece copiarla. Lo que sí protege es que el cálculo valioso viva en el
+Worker y solo responda con clave — si alguien clona la interfaz, se queda sin datos.
+
+- `EXIGIR_CLAVE=1` activa el control. Sin esa variable todo queda abierto, para que
+  el desarrollo local no se rompa.
+- `ADMIN_TOKEN` es secreto de Cloudflare, **nunca en el repositorio**. Da de alta
+  claves en `/api/admin/clave?plan=libre|pro`.
+- Las claves se guardan **hasheadas (SHA-256)**, nunca en claro. Se devuelven una
+  sola vez y no se pueden recuperar.
+- Planes: `libre` 50 llamadas/día sin EDGAR ni litigios; `pro` 5.000 y todo.
+  Cupo diario con reinicio automático y cabecera `x-cuota-restante`.
+- El cliente manda la clave en `Authorization`, nunca en la URL: las direcciones
+  quedan en historiales y registros de servidor.
+
+**Qué se movió al servidor:** el motor de Wang (CDF normal, cuantil, ajuste de λ por
+bisección), el valor justo, el sesgo y la curva de distorsión. `/api/pmq` los
+devuelve ya calculados.
+
+**Qué NO se puede mover, y por qué:** el backtest y el Monte Carlo necesitan cientos
+de peticiones y Cloudflare gratis corta en 50 subpeticiones por request. Corren en
+el navegador por obligación, y llevan la matemática normal estándar — que es de
+libro de texto y no protege nada. Lo propietario es la aplicación sobre TUS grupos,
+no la fórmula.
+
 ## Roadmap (siguiente)
 1. ~~Subir `index.html` al Worker~~ hecho (31/08/2026, vía `sync.mjs`). Falta desplegar.
 2. Mover el universo `SC` a Google Sheets o KV para editarlo sin redesplegar. ← prioridad

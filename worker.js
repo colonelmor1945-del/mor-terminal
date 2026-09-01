@@ -260,6 +260,53 @@ async function fetchPx(sym) {
 
 const PM_FEE = 0.05;   // comisión taker de Polymarket (feeSchedule.rate)
 
+/* ---------- DISTORSIÓN DE WANG (server-side) ----------
+   Vivía en el cliente, donde cualquiera lo leía abriendo el inspector. Aquí no.
+   Normal CDF (Abramowitz & Stegun 26.2.17) y cuantil normal (Beasley-Springer-Moro),
+   portados de oracle3/pricing/distortion.py (Apache-2.0). Error ~1e-7.            */
+function nCdf(x) {
+  const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741,
+        a4 = -1.453152027, a5 = 1.061405429, pp = 0.3275911;
+  const sg = x >= 0 ? 1 : -1;
+  x = Math.abs(x) / Math.SQRT2;
+  const t = 1 / (1 + pp * x);
+  const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+  return 0.5 * (1 + sg * y);
+}
+function nPpf(p) {
+  p = Math.max(1e-10, Math.min(1 - 1e-10, p));
+  const a = [-3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2,
+             1.383577518672690e2, -3.066479806614716e1, 2.506628277459239e0],
+        b = [-5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2,
+             6.680131188771972e1, -1.328068155288572e1],
+        c = [-7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838e0,
+             -2.549732539343734e0, 4.374664141464968e0, 2.938163982698783e0],
+        d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996e0, 3.754408661907416e0];
+  let q, r;
+  if (p < 0.02425) {
+    q = Math.sqrt(-2 * Math.log(p));
+    return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+  }
+  if (p <= 0.97575) {
+    q = p - 0.5; r = q * q;
+    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q / (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);
+  }
+  q = Math.sqrt(-2 * Math.log(1 - p));
+  return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+}
+const wangInv = (p, l) => nCdf(nPpf(p) - l);
+
+/* λ implícita de un grupo excluyente: la que hace que las probabilidades sin prima
+   de riesgo sumen 1. Σ wangInv decrece con λ, así que bisección.                  */
+function fitLambda(ps) {
+  if (!ps || ps.length < 2) return null;
+  const f = l => ps.reduce((a, p) => a + wangInv(p, l), 0) - 1;
+  let lo = -3, hi = 3;
+  if (f(lo) < 0 || f(hi) > 0) return null;
+  for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (f(m) > 0) lo = m; else hi = m; }
+  return (lo + hi) / 2;
+}
+
 function pmPrice(m) {
   try { const a = JSON.parse(m.outcomePrices || "[]"); const p = parseFloat(a[0]); return isFinite(p) ? p : null; }
   catch (e) { return null; }
@@ -482,6 +529,21 @@ async function fetchPMQ(pages = 3) {
     });
   }
 
+  // λ de Wang: se ajusta AQUI, no en el cliente. Solo los grupos completos sirven.
+  const lams = [];
+  groups.forEach(g => {
+    if (!g.completo) return;
+    const l = fitLambda(g.legs.map(x => x.p));
+    g.lam = l;
+    if (l !== null && isFinite(l)) lams.push(l);
+  });
+  lams.sort((a, b) => a - b);
+  const lam = lams.length
+    ? (lams.length % 2 ? lams[(lams.length - 1) / 2] : (lams[lams.length / 2 - 1] + lams[lams.length / 2]) / 2)
+    : 0;
+  // Valor justo y sesgo ya calculados: el cliente solo pinta.
+  markets.forEach(m => { m.fair = wangInv(m.p, lam); m.edge = m.p - m.fair; });
+
   // z-scores de momentum a 3 horizontes (mismo motor que la vista QUANT de acciones).
   ["c1d", "c1w", "c1m"].forEach(k => {
     const v = markets.map(m => m[k]).filter(x => isFinite(x));
@@ -499,6 +561,9 @@ async function fetchPMQ(pages = 3) {
     ts: new Date().toISOString(),
     fee: PM_FEE,
     nEvents: evs.length,
+    lam: lam, nLam: lams.length,
+    // Curva de distorsion lista para pintar: el cliente no recalcula nada.
+    curva: (function () { const c = []; for (let i = 1; i < 100; i++) { const p = i / 100; c.push([p, nCdf(nPpf(p) + lam)]); } return c; })(),
     markets: markets.slice(0, 400),
     groups: groups,
     mono: mono
@@ -1448,6 +1513,16 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     </div>
   </div>
 
+  <div class="p" style="padding:13px 16px;margin-bottom:9px">
+    <div class="chips" style="align-items:center;gap:9px;flex-wrap:wrap">
+      <span class="st">Clave de acceso</span>
+      <input id="i-key" type="password" placeholder="mor_…" style="width:230px" autocomplete="off">
+      <button id="i-keyok">Guardar</button>
+      <span class="st" id="i-keyst"></span>
+    </div>
+    <div class="st">Se guarda solo en este navegador y viaja cifrada en la cabecera, nunca en la dirección. Si el terminal funciona sin clave es que el acceso está abierto.</div>
+  </div>
+
   <div class="p" style="padding:13px 16px">
     <div class="expl" style="color:var(--dim);font-size:11.5px">
       <b style="color:var(--rd)">Lo que este terminal NO hace:</b> no te dice dónde invertir ni predice precios.
@@ -1576,6 +1651,19 @@ var W={};try{W=JSON.parse(localStorage.getItem("mor_w")||"{}")}catch(e){W={}}
 function sw(){try{localStorage.setItem("mor_w",JSON.stringify(W))}catch(e){}}
 function $(i){return document.getElementById(i)}
 function f$(n){return n>=1e9?"$"+(n/1e9).toFixed(2)+"B":n>=1e6?"$"+(n/1e6).toFixed(1)+"M":n>=1e3?"$"+Math.round(n/1e3)+"K":"$"+Math.round(n)}
+/* Clave de acceso del usuario. Se guarda solo en su navegador y viaja en la
+   cabecera Authorization, no en la URL: las URLs quedan en historiales y registros. */
+function morKey(){try{return localStorage.getItem("mor_key")||""}catch(e){return ""}}
+function setKey(k){try{k?localStorage.setItem("mor_key",k):localStorage.removeItem("mor_key")}catch(e){}}
+function api(ruta,opt){
+ opt=opt||{};var k=morKey();
+ if(k){opt.headers=opt.headers||{};opt.headers.authorization="Bearer "+k}
+ return fetch(ruta,opt).then(function(r){
+  if(r.status===401||r.status===403||r.status===429){
+   return r.json().catch(function(){return{}}).then(function(j){
+    throw new Error(j.error||("acceso denegado ("+r.status+")"))})}
+  return r})}
+
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;")}
 function lt(id,st,tx){var e=$(id);if(!e)return;e.className="lt "+st;if(tx)e.lastElementChild.textContent=tx}
 function sk(n){var o="";for(var i=0;i<(n||4);i++)o+="<div class='sk' style='width:"+(92-i*11)+"%'></div>";return o}
@@ -1893,7 +1981,7 @@ function loadPx(){
  var list=SC.filter(function(s){return SMAP[s.tk]});
  var done=0;
  list.forEach(function(s){
-  fetch("/api/px?s="+encodeURIComponent(SMAP[s.tk]),{cache:"no-store"})
+  api("/api/px?s="+encodeURIComponent(SMAP[s.tk]),{cache:"no-store"})
    .then(function(r){return r.json()})
    .then(function(j){if(j&&j.c&&j.c.length>30)PX[s.tk]={c:j.c,d:j.d}})
    .catch(function(){})
@@ -1973,50 +2061,17 @@ function renderQuant(){
 
 /* ---------- EVENTOS ---------- */
 /* ================= CEREBRO QUANT DE PREDICCIÓN =================
-   Normal CDF (Abramowitz & Stegun 26.2.17) y cuantil normal (Beasley-Springer-Moro),
-   portados de oracle3/pricing/distortion.py (Apache-2.0) para no depender de nada.
-   Error ~1e-7: de sobra para señales, no para publicar p-valores.               */
-function nCdf(x){
- var a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,pp=0.3275911;
- var sg=x>=0?1:-1;x=Math.abs(x)/Math.SQRT2;
- var t=1/(1+pp*x);
- var y=1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
- return 0.5*(1+sg*y)}
-function nPpf(p){
- p=Math.max(1e-10,Math.min(1-1e-10,p));
- var a=[-3.969683028665376e1,2.209460984245205e2,-2.759285104469687e2,1.383577518672690e2,-3.066479806614716e1,2.506628277459239e0],
-     b=[-5.447609879822406e1,1.615858368580409e2,-1.556989798598866e2,6.680131188771972e1,-1.328068155288572e1],
-     c=[-7.784894002430293e-3,-3.223964580411365e-1,-2.400758277161838e0,-2.549732539343734e0,4.374664141464968e0,2.938163982698783e0],
-     d=[7.784695709041462e-3,3.224671290700398e-1,2.445134137142996e0,3.754408661907416e0],q,r;
- if(p<0.02425){q=Math.sqrt(-2*Math.log(p));
-  return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
- if(p<=0.97575){q=p-0.5;r=q*q;
-  return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)}
- q=Math.sqrt(-2*Math.log(1-p));
- return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
-
-/* Transformada de Wang (2000): p_mercado = Φ(Φ⁻¹(p_real) + λ).
-   λ>0 genera el sesgo favorito-longshot como TEOREMA, no como anomalía empírica:
-   el ratio g(p)/p decrece con p, así que los longshots salen sistemáticamente caros. */
-function wangFwd(p,l){return nCdf(nPpf(p)+l)}
-function wangInv(p,l){return nCdf(nPpf(p)-l)}
-
-/* λ implícita de un grupo excluyente: la que hace que las probabilidades sin prima
-   de riesgo sumen exactamente 1. Σ wangInv(pᵢ,λ) decrece con λ → bisección. */
-function fitLambda(ps){
- if(!ps||ps.length<2)return null;
- var f=function(l){var s=0;for(var i=0;i<ps.length;i++)s+=wangInv(ps[i],l);return s-1};
- var lo=-3,hi=3;
- if(f(lo)<0||f(hi)>0)return null;
- for(var i=0;i<60;i++){var m=(lo+hi)/2;if(f(m)>0)lo=m;else hi=m}
- return (lo+hi)/2}
+   El motor de Wang (normal CDF, cuantil normal y ajuste de λ por bisección) vivía
+   aquí, donde cualquiera lo leía abriendo el inspector. Se movió al Worker: ahora
+   /api/pmq devuelve ya calculados \`fair\`, \`edge\` y \`lam\`. El cliente solo pinta.
+   La curva de distorsión se dibuja con la λ que manda el servidor.               */
 
 var BQ=null,BVOL={},BLOAD=false,BSORT={k:"vol24",d:-1},BLAM=0,BNLAM=0;
 
 function loadBrain(force){
  if(BLOAD)return; if(BQ&&!force){render();return}
  BLOAD=true;$("b-st").textContent="Analizando eventos de Polymarket…";
- fetch("/api/pmq?pages=3",{cache:"no-store"})
+ api("/api/pmq?pages=3",{cache:"no-store"})
   .then(function(r){return r.json()})
   .then(function(j){
    if(j.error)throw new Error(j.error);
@@ -2028,19 +2083,11 @@ function loadBrain(force){
 
 function computeBrain(){
  if(!BQ)return;
- // λ por grupo completo -> mediana como prima de riesgo del mercado en su conjunto.
- var ls=[];
- BQ.groups.forEach(function(g){
-  if(!g.completo)return;
-  var l=fitLambda(g.legs.map(function(x){return x.p}));
-  g.lam=l; if(l!==null&&isFinite(l))ls.push(l)});
- ls.sort(function(a,b){return a-b});
- BLAM=ls.length?(ls.length%2?ls[(ls.length-1)/2]:(ls[ls.length/2-1]+ls[ls.length/2])/2):0;
- BNLAM=ls.length;
+ // λ, valor justo y sesgo vienen ya calculados del Worker: aquí solo se pinta.
+ BLAM=isFinite(BQ.lam)?BQ.lam:0;
+ BNLAM=BQ.nLam||0;
 
  BQ.markets.forEach(function(m){
-  m.fair=wangInv(m.p,BLAM);
-  m.edge=m.p-m.fair;                       // >0: longshot caro
   var v=BVOL[m.id];
   m.snorm=(v&&m.varT>0)?v/Math.sqrt(m.varT):null;
   var sg=[];
@@ -2058,7 +2105,7 @@ function loadBVol(){
  if(!top.length){$("b-st").textContent="Sin tokens CLOB disponibles.";return}
  var done=0;$("b-st").textContent="Descargando históricos… 0/"+top.length;
  top.forEach(function(m){
-  fetch("/api/pmh?t="+encodeURIComponent(m.tok)+"&i=1m",{cache:"no-store"})
+  api("/api/pmh?t="+encodeURIComponent(m.tok)+"&i=1m",{cache:"no-store"})
    .then(function(r){return r.json()})
    .then(function(j){
     var p=(j&&j.p)||[];
@@ -2107,9 +2154,11 @@ function bfmt(x,d){return (x===null||x===undefined||!isFinite(x))?"—":(x*100).
 function wangCurve(){
  var W=460,H=200,pad=34;
  var l=BLAM;
+ var cv=(BQ&&BQ.curva)||[];
+ if(!cv.length)return emp("📈","Sin curva: recarga el cerebro.");
  var pts=[],pts2=[];
- for(var i=1;i<100;i++){var p=i/100;
-  pts.push([pad+(W-pad-10)*p, H-pad-(H-pad-14)*wangFwd(p,l)]);
+ for(var i=0;i<cv.length;i++){var p=cv[i][0];
+  pts.push([pad+(W-pad-10)*p, H-pad-(H-pad-14)*cv[i][1]]);
   pts2.push([pad+(W-pad-10)*p, H-pad-(H-pad-14)*p])}
  var path=function(a){return a.map(function(q,i){return (i?"L":"M")+q[0].toFixed(1)+","+q[1].toFixed(1)}).join("")};
  return "<svg viewBox='0 0 "+W+" "+H+"' style='width:100%;height:100%'>"+
@@ -2190,6 +2239,31 @@ function renderBrain(){
    "<td class='"+(m.z>0?"up":"dn")+"'>"+m.z.toFixed(2)+"</td>"+
    "<td>"+m.sg.map(function(s){return "<span class='"+s[1]+"'>"+s[0]+"</span>"}).join(" ")+"</td>"+
   "</tr>"}).join("")||"<tr><td colspan='11'>"+emp("🔍","Sin resultados para ese filtro.")+"</td></tr>"}
+
+/* Matematica normal estandar (Abramowitz & Stegun / Beasley-Springer-Moro).
+   Se queda en el cliente A PROPOSITO: el simulador corre aqui por obligacion (el
+   backtest necesita cientos de peticiones y Cloudflare gratis corta en 50), y esto
+   es matematica de libro de texto que no protege nada. Lo propietario -el ajuste de
+   λ sobre tus grupos, la deteccion de arbitraje, los filtros de EDGAR- vive en el
+   Worker y solo responde con clave.                                              */
+function nCdf(x){
+ var a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,pp=0.3275911;
+ var sg=x>=0?1:-1;x=Math.abs(x)/Math.SQRT2;
+ var t=1/(1+pp*x);
+ return 0.5*(1+sg*(1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x)))}
+function nPpf(p){
+ p=Math.max(1e-10,Math.min(1-1e-10,p));
+ var a=[-3.969683028665376e1,2.209460984245205e2,-2.759285104469687e2,1.383577518672690e2,-3.066479806614716e1,2.506628277459239e0],
+     b=[-5.447609879822406e1,1.615858368580409e2,-1.556989798598866e2,6.680131188771972e1,-1.328068155288572e1],
+     c=[-7.784894002430293e-3,-3.223964580411365e-1,-2.400758277161838e0,-2.549732539343734e0,4.374664141464968e0,2.938163982698783e0],
+     d=[7.784695709041462e-3,3.224671290700398e-1,2.445134137142996e0,3.754408661907416e0],q,r;
+ if(p<0.02425){q=Math.sqrt(-2*Math.log(p));
+  return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
+ if(p<=0.97575){q=p-0.5;r=q*q;
+  return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)}
+ q=Math.sqrt(-2*Math.log(1-p));
+ return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
+function wangInv(p,l){return nCdf(nPpf(p)-l)}
 
 /* ================= SIMULADOR DE ESTRATEGIAS =================
    Corre en el NAVEGADOR a propósito: gamma-api y clob.polymarket.com sirven ambos
@@ -2459,7 +2533,7 @@ var PAP=null;
 function loadPaper(accion){
  var u=accion==="snap"?"/api/paper/snap":(accion==="set"?"/api/paper/settle?n=40":"/api/paper");
  $("p-st").textContent="Consultando…";
- fetch(u,{cache:"no-store"}).then(function(r){return r.json()}).then(function(j){
+ api(u,{cache:"no-store"}).then(function(r){return r.json()}).then(function(j){
   if(j.error)throw new Error(j.error);
   if(accion){$("p-st").textContent=JSON.stringify(j);return fetch("/api/paper",{cache:"no-store"}).then(function(r){return r.json()})}
   return j})
@@ -2856,7 +2930,7 @@ var EDG=null,EDGL=false;
 function loadEdgar(){
  if(EDGL)return;EDGL=true;
  $("e-st").textContent="Consultando EDGAR…";
- fetch("/api/edgar?d="+(+$("e-d").value||30),{cache:"no-store"})
+ api("/api/edgar?d="+(+$("e-d").value||30),{cache:"no-store"})
   .then(function(r){return r.json()})
   .then(function(j){
    if(j.error)throw new Error(j.error);
@@ -3010,6 +3084,10 @@ $("bload").onclick=function(){loadBrain(true)};
 $("srun").onclick=btRun;
 [].forEach.call(document.querySelectorAll(".lf"),function(b){b.onclick=function(){
  LF=b.dataset.f;[].forEach.call(document.querySelectorAll(".lf"),function(o){o.classList.toggle("on",o===b)});render()}});
+$("i-keyok").onclick=function(){
+ var v=$("i-key").value.trim();setKey(v);$("i-key").value="";
+ $("i-keyst").textContent=v?"Clave guardada. Recargando…":"Clave borrada. Recargando…";
+ setTimeout(function(){location.reload()},700)};
 $("modo").onclick=function(){MODO=(MODO==="simple"?"pro":"simple");aplicarModo();render()};
 $("e-load").onclick=loadEdgar;
 $("e-d").onchange=loadEdgar;
@@ -3044,6 +3122,10 @@ function refresh(){NEWS={};NSRC={};loadCon();loadPM();loadNews("Pentágono",true
 $("rel").onclick=refresh;
 $("qload").onclick=loadPx;
 aplicarModo();
+api("/api/estado").then(function(r){return r.json()}).then(function(j){
+ $("i-keyst").textContent=j.control==="abierto"?"Acceso abierto: no hace falta clave."
+  :("Acceso controlado · plan "+(j.plan||"?"))}).catch(function(e){
+ $("i-keyst").textContent="Necesitas clave: "+(e.message||e)});
 if(!EDG&&!EDGL)loadEdgar();
 if(!BQ&&!BLOAD)loadBrain();
 refresh();render();
@@ -3054,8 +3136,94 @@ setInterval(function(){loadPM()},120000);
 `;
 // >>> FIN HTML GENERADO
 
-function json(d) {
-  return new Response(JSON.stringify(d), { headers: { "content-type": "application/json;charset=utf-8", "access-control-allow-origin": "*", "cache-control": "no-store" } });
+/* ================= CLAVES DE ACCESO Y CUPOS =================
+   Hay que ser claro con lo que esto protege y lo que no. La interfaz es HTML que
+   el navegador descarga: es copiable, siempre, y ofuscarla solo encarece copiarla.
+   Lo que SI protege es que el calculo valioso viva aqui y solo responda a quien
+   tiene clave. Si alguien clona la interfaz, se queda sin datos.
+
+   La clave nunca se guarda en claro: se guarda su SHA-256. Si alguien accediera al
+   KV no podria usarlas. Y las claves NO estan en el codigo: se crean en caliente
+   con ADMIN_TOKEN, que se pone como variable secreta en Cloudflare.              */
+
+const PLANES = {
+  libre: { cuota: 50,   endpoints: ["pmq", "px", "pm", "contracts", "news", "history"] },
+  pro:   { cuota: 5000, endpoints: "*" }
+};
+
+// Publicos siempre: la portada tiene que cargar aunque no tengas clave.
+const ABIERTOS = ["", "estado"];
+
+async function sha256(txt) {
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+
+function nuevaClave() {
+  const b = new Uint8Array(24);
+  crypto.getRandomValues(b);
+  return "mor_" + [...b].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+
+function leerClave(request, url) {
+  const h = request.headers.get("authorization") || "";
+  const m = h.match(/^Bearer\s+(\S+)$/i);
+  return (m ? m[1] : null) || url.searchParams.get("k") || null;
+}
+
+/* Devuelve {ok, plan, resto, motivo}. El cupo es diario y se reinicia solo:
+   la clave del contador lleva la fecha, con caducidad automatica a 48 h.        */
+async function autorizar(env, request, url, recurso) {
+  if (ABIERTOS.indexOf(recurso) >= 0) return { ok: true, plan: "abierto", resto: null };
+  // Sin KV o sin exigirlo configurado, todo abierto: asi el desarrollo no se rompe.
+  if (!env.RADAR || String(env.EXIGIR_CLAVE || "") !== "1")
+    return { ok: true, plan: "sin_control", resto: null };
+
+  const clave = leerClave(request, url);
+  if (!clave) return { ok: false, cod: 401, motivo: "Falta clave de acceso" };
+
+  const reg = await env.RADAR.get("key:" + (await sha256(clave)), "json");
+  if (!reg || reg.revocada) return { ok: false, cod: 403, motivo: "Clave no valida" };
+
+  const plan = PLANES[reg.plan] || PLANES.libre;
+  if (plan.endpoints !== "*" && plan.endpoints.indexOf(recurso) < 0)
+    return { ok: false, cod: 403, motivo: "Tu plan (" + reg.plan + ") no incluye /" + recurso };
+
+  const dia = new Date().toISOString().slice(0, 10);
+  const kc = "uso:" + reg.id + ":" + dia;
+  const usado = Number(await env.RADAR.get(kc)) || 0;
+  if (usado >= plan.cuota)
+    return { ok: false, cod: 429, motivo: "Cupo diario agotado (" + plan.cuota + ")" };
+  await env.RADAR.put(kc, String(usado + 1), { expirationTtl: 172800 });
+
+  return { ok: true, plan: reg.plan, resto: plan.cuota - usado - 1 };
+}
+
+/* Alta de claves. Exige ADMIN_TOKEN, que se define como secreto en Cloudflare y
+   NUNCA vive en el repositorio. La clave se devuelve una sola vez: no se puede
+   recuperar despues porque solo se guarda su hash.                              */
+async function crearClave(env, request, url) {
+  const tok = leerClave(request, url);
+  if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN)
+    return { error: "no autorizado" };
+  if (!env.RADAR) return { error: "KV no configurado" };
+
+  const plan = PLANES[url.searchParams.get("plan")] ? url.searchParams.get("plan") : "libre";
+  const clave = nuevaClave();
+  const id = (await sha256(clave)).slice(0, 12);
+  await env.RADAR.put("key:" + (await sha256(clave)), JSON.stringify({
+    id: id, plan: plan, creada: new Date().toISOString(),
+    nota: (url.searchParams.get("nota") || "").slice(0, 80)
+  }));
+  return { clave: clave, id: id, plan: plan, cuota: PLANES[plan].cuota,
+           aviso: "Guardala ahora: solo se almacena su hash y no se puede recuperar." };
+}
+
+function json(d, extra) {
+  const h = { "content-type": "application/json;charset=utf-8",
+              "access-control-allow-origin": "*", "cache-control": "no-store" };
+  if (extra) for (const k in extra) h[k] = extra[k];
+  return new Response(JSON.stringify(d), { headers: h });
 }
 
 export default {
@@ -3063,18 +3231,37 @@ export default {
     const url = new URL(request.url);
     const p = url.pathname;
     try {
-      if (p === "/api/contracts") return json(await fetchContracts());
-      if (p === "/api/pm") return json(await fetchPM());
-      if (p === "/api/px") return json(await fetchPx(url.searchParams.get("s") || "ONDS"));
-      if (p === "/api/news") return json(await fetchNews(url.searchParams.get("region") || "Pentágono"));
-      if (p === "/api/pmq") return json(await fetchPMQ(Number(url.searchParams.get("pages")) || 3));
-      if (p === "/api/pmh") return json(await fetchPMHist(url.searchParams.get("t"), url.searchParams.get("i")));
-      if (p === "/api/litigios") return json(await fetchLitigios(Number(url.searchParams.get("d")) || 365));
-      if (p === "/api/edgar") return json(await fetchEdgar(Number(url.searchParams.get("d")) || 30));
-      if (p === "/api/paper") return json(await paperState(env));
+      // Alta de claves antes del control: es la puerta y se protege sola.
+      if (p === "/api/admin/clave") return json(await crearClave(env, request, url));
+
+      // "/api/paper/snap" -> "paper". La familia decide el permiso, no cada ruta.
+      const recurso = p.indexOf("/api/") === 0 ? p.slice(5).split("/")[0] : "";
+      const aut = await autorizar(env, request, url, recurso);
+      if (!aut.ok) {
+        return new Response(JSON.stringify({ error: aut.motivo, recurso: recurso }), {
+          status: aut.cod,
+          headers: { "content-type": "application/json;charset=utf-8",
+                     "access-control-allow-origin": "*", "cache-control": "no-store" }
+        });
+      }
+      const cab = aut.resto === null ? null : { "x-cuota-restante": String(aut.resto) };
+
+      if (p === "/api/estado") return json({ ok: true, plan: aut.plan,
+        control: String(env.EXIGIR_CLAVE || "") === "1" ? "activo" : "abierto",
+        ts: new Date().toISOString() });
+
+      if (p === "/api/contracts") return json(await fetchContracts(), cab);
+      if (p === "/api/pm") return json(await fetchPM(), cab);
+      if (p === "/api/px") return json(await fetchPx(url.searchParams.get("s") || "ONDS"), cab);
+      if (p === "/api/news") return json(await fetchNews(url.searchParams.get("region") || "Pentágono"), cab);
+      if (p === "/api/pmq") return json(await fetchPMQ(Number(url.searchParams.get("pages")) || 3), cab);
+      if (p === "/api/pmh") return json(await fetchPMHist(url.searchParams.get("t"), url.searchParams.get("i")), cab);
+      if (p === "/api/litigios") return json(await fetchLitigios(Number(url.searchParams.get("d")) || 365), cab);
+      if (p === "/api/edgar") return json(await fetchEdgar(Number(url.searchParams.get("d")) || 30), cab);
+      if (p === "/api/paper") return json(await paperState(env), cab);
       if (p === "/api/paper/snap") return json(await paperSnap(env));
       if (p === "/api/paper/settle") return json(await paperSettle(env, Number(url.searchParams.get("n")) || 60));
-      if (p === "/api/history") return json(await getHistory(env));
+      if (p === "/api/history") return json(await getHistory(env), cab);
       if (p === "/api/run") return json(await dailyJob(env));
     } catch (e) {
       return json({ error: String(e && e.message || e) });
