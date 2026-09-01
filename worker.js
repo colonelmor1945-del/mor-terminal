@@ -925,65 +925,78 @@ const CHAT_SISTEMA =
    modelos gratuitos tienen ventana corta y un contexto enorme empeora la respuesta. */
 async function chatContexto(pregunta) {
   const q = String(pregunta || "").toLowerCase();
-  const partes = [];
 
-  // ¿Pregunta por una empresa concreta del universo?
+  /* Todo en PARALELO y con tope de tiempo. En serie tardaba mas de 60 s y la
+     peticion moria: cada fuente esperaba a la anterior sin necesidad.
+     Si una fuente tarda o falla, se sigue sin ella: mas vale contexto parcial
+     que ninguna respuesta.                                                      */
+  const limite = (p, seg, siFalla) =>
+    Promise.race([
+      Promise.resolve(p).catch(() => siFalla),
+      new Promise(r => setTimeout(() => r(siFalla), seg * 1000))
+    ]);
+
   const emp = SC.find(s => {
     const n = s.name.toLowerCase(), t = String(s.tk).split(":").pop().toLowerCase();
     return (n.length > 3 && q.includes(n.split(" ")[0].toLowerCase())) || (t.length > 2 && q.includes(t));
   });
 
+  const [px, lit, pmq, ed, con] = await Promise.all([
+    emp ? limite(fetchPx(emp.tk.split(":").pop()), 6, null) : null,
+    emp ? limite(fetchLitigios(730, emp.tk), 8, null) : null,
+    limite(fetchPMQ(1), 9, null),
+    limite(fetchEdgar(30), 9, null),
+    limite(fetchContracts(30, 100), 8, null)
+  ]);
+
+  const partes = [];
   if (emp) {
-    partes.push("EMPRESA: " + emp.name + " (" + emp.tk + "), " + emp.country +
-                ", " + emp.region + ", nicho: " + emp.niche);
-    try {
-      const px = await fetchPx(emp.tk.split(":").pop());
+    partes.push("EMPRESA: " + emp.name + " (" + emp.tk + "), " + emp.country + ", " +
+                emp.region + ", nicho: " + emp.niche);
+    if (px && px.c && px.c.length) {
       const c = px.c, u = c[c.length - 1];
       const m1 = c.length > 21 ? ((u / c[c.length - 22] - 1) * 100).toFixed(1) : null;
-      partes.push("PRECIO: " + u.toFixed(2) + " " + px.cur +
+      partes.push("PRECIO: " + u.toFixed(2) + " " + (px.cur || "") +
                   (m1 !== null ? ", " + (m1 >= 0 ? "+" : "") + m1 + "% en el ultimo mes" : ""));
-    } catch (e) { partes.push("PRECIO: no disponible ahora mismo"); }
-    try {
-      const lit = await fetchLitigios(730, emp.tk);
+    } else partes.push("PRECIO: no disponible ahora mismo");
+    if (lit && lit.casos) {
       partes.push("PLEITOS (2 anos): " + (lit.casos.length
         ? lit.casos.slice(0, 3).map(c => c.fecha + " " + c.caso + " [" + c.natTxt + "]").join(" | ")
         : "ninguno"));
-    } catch (e) {}
+    }
   }
 
-  // Contexto general del dia
-  try {
-    const pmq = await fetchPMQ(2);
-    const ops = (pmq.groups || []).filter(g => g.net > 0).slice(0, 5);
+  if (pmq) {
+    const ops = (pmq.groups || []).filter(g => g.net > 0).slice(0, 4);
     partes.push("ARBITRAJE HOY (" + ops.length + " con ventaja neta): " + (ops.length
-      ? ops.map(g => g.ev + " suma " + g.sum.toFixed(4) + " (neto " + (g.net * 100).toFixed(2) + "%, " + g.side + ")").join(" | ")
+      ? ops.map(g => g.ev + " suma " + g.sum.toFixed(4) + " (neto " +
+          (g.net * 100).toFixed(2) + "%, " + g.side + ")").join(" | ")
       : "ninguno cubre costes"));
     if ((pmq.mono || []).length)
-      partes.push("MONOTONIA VIOLADA: " + pmq.mono.slice(0, 2)
-        .map(g => g.ev + ": '" + g.caro + "' no puede superar a '" + g.barato + "' (neto " + (g.neto * 100).toFixed(2) + "%)").join(" | "));
-  } catch (e) { partes.push("ARBITRAJE: no se pudo consultar"); }
+      partes.push("MONOTONIA VIOLADA: " + pmq.mono.slice(0, 2).map(g =>
+        g.ev + ":  + g.caro +  no puede superar a  + g.barato + ").join(" | "));
+  } else partes.push("ARBITRAJE: no se pudo consultar ahora mismo");
 
-  try {
-    const ed = await fetchEdgar(30);
+  if (ed) {
     partes.push("AVISOS 8-K (30 dias): " + ed.n + " presentaciones, " + ed.descartadas +
       " descartadas por sector. Cruces con el universo: " + (ed.cruces.length
         ? ed.cruces.map(x => x.universo + " el " + x.fecha).join(", ") : "ninguno") +
       ". Candidatas nuevas: " + (ed.candidatas.length
-        ? ed.candidatas.slice(0, 4).map(x => x.nombre + " (" + x.sector + ")").join(", ") : "ninguna"));
-  } catch (e) {}
+        ? ed.candidatas.slice(0, 3).map(x => x.nombre + " (" + x.sector + ")").join(", ")
+        : "ninguna"));
+  }
 
-  try {
-    const con = await fetchContracts(30, 100);
+  if (con) {
     const radar = con.filter(c => !c.prime);
-    partes.push("CONTRATOS DoD (30 dias): " + con.length + " adjudicados, " +
-      radar.length + " fuera de los gigantes. Mayor fuera de gigantes: " +
+    partes.push("CONTRATOS DoD (30 dias): " + con.length + " adjudicados, " + radar.length +
+      " fuera de los gigantes. Mayor fuera de gigantes: " +
       (radar[0] ? radar[0].name + " " + fmtM(radar[0].amount) : "n/d"));
-  } catch (e) {}
+  }
 
   partes.push("UNIVERSO: " + SC.length + " small caps de defensa seguidas.");
   partes.push("AVISO PERMANENTE: ninguna estrategia direccional del terminal ha " +
               "superado al azar en 4.010 millones de operaciones simuladas.");
-  return partes.join("\n");
+  return partes.join(String.fromCharCode(10));
 }
 
 async function chatResponder(env, pregunta) {
@@ -1005,7 +1018,11 @@ async function chatResponder(env, pregunta) {
   let ultimo = "";
   for (const modelo of CHAT_MODELOS) {
     try {
-      const r = await env.AI.run(modelo, { messages: mensajes, max_tokens: 420 });
+      // Tope por modelo: si uno se atasca se pasa al siguiente en vez de morir.
+      const r = await Promise.race([
+        env.AI.run(modelo, { messages: mensajes, max_tokens: 380 }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("modelo lento")), 15000))
+      ]);
       let txt = ((r && (r.response || r.result || "")) + "").trim();
       if (!txt) { ultimo = "respuesta vacia"; continue; }
 
