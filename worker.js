@@ -691,6 +691,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   <button data-v="quant">F6 QUANT</button>
   <button data-v="brain">F7 CEREBRO</button>
   <button data-v="sim">F8 SIMULADOR</button>
+  <button data-v="cart">F9 CARTERA</button>
   <div class="sp"></div>
   <div class="meta" id="meta"></div>
 </div>
@@ -895,6 +896,50 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="st">Media y mediana divergen mucho a propósito: un longshot acertado a 0.02 paga 50× y arrastra la media él solo, así que la mediana dice mejor qué pasa en la apuesta típica. Retorno por unidad arriesgada: comprar SÍ a precio p paga (desenlace − p)/p. t-stat = media ÷ (desviación/√n): por encima de 2 el resultado difícilmente es azar. <b>Rentabilidad pasada simulada sobre datos históricos; no predice resultados futuros y no descuenta el impacto de mercado. Informativo, no es recomendación de inversión ni de apuesta.</b></div>
   </div>
 </div>
+<div class="view" id="v-cart">
+  <div class="grid g4" style="margin-bottom:8px">
+    <div class="kpi"><div class="k">CAPITAL COMPROMETIDO</div><div class="v" id="c1">—</div><div class="s" id="c1s">de tu capital</div></div>
+    <div class="kpi c2"><div class="k">VALOR ESPERADO</div><div class="v" id="c2">—</div><div class="s" id="c2s">según TUS probabilidades</div></div>
+    <div class="kpi c3"><div class="k">PEOR CASO</div><div class="v" id="c3">—</div><div class="s" id="c3s">si fallan todas</div></div>
+    <div class="kpi c4"><div class="k">ARBITRAJE DISPONIBLE</div><div class="v" id="c4">—</div><div class="s" id="c4s">sin pronosticar nada</div></div>
+  </div>
+
+  <div class="p" style="margin-bottom:8px">
+    <h3>PARÁMETROS</h3>
+    <div class="chips" style="align-items:center;flex-wrap:wrap;gap:10px">
+      <label class="st">Capital <input id="c-cap" type="number" min="10" step="50" value="1000" style="width:96px"> €</label>
+      <label class="st">Fracción Kelly <select id="c-frac"><option value="0.25" selected>¼ (prudente)</option><option value="0.5">½</option><option value="1">completo</option></select></label>
+      <label class="st">Tope por posición <select id="c-mp"><option value="0.05">5%</option><option value="0.1" selected>10%</option><option value="0.2">20%</option></select></label>
+      <label class="st">Tope total <select id="c-mt"><option value="0.3">30%</option><option value="0.5" selected>50%</option><option value="0.8">80%</option></select></label>
+      <span class="st" id="c-st">Añade mercados y pon TU probabilidad. El terminal no la estima.</span>
+    </div>
+  </div>
+
+  <div class="p" style="margin-bottom:8px;min-height:210px">
+    <h3>TUS POSICIONES · REPARTO KELLY</h3>
+    <div class="chips" style="align-items:center;gap:8px">
+      <label class="st">Mercado <select id="c-mkt" style="max-width:420px"></select></label>
+      <label class="st">Tu probabilidad <input id="c-p" type="number" min="0.1" max="99.9" step="0.1" value="50" style="width:74px"> %</label>
+      <button id="c-add">+ Añadir</button><button id="c-clr">Vaciar</button>
+    </div>
+    <div class="bd"><table><thead><tr>
+      <th style="width:28%">Mercado</th><th style="width:7%">Precio</th><th style="width:7%">Tu prob.</th>
+      <th style="width:8%">Ventaja</th><th style="width:8%">Kelly</th><th style="width:9%">Importe</th>
+      <th style="width:8%">Títulos</th><th style="width:9%">Si acierta</th><th style="width:8%">Salida</th><th style="width:8%"></th>
+    </tr></thead><tbody id="c-rows"></tbody></table></div>
+    <div class="st">Kelly para un binario: <b>f* = (p − precio) / (1 − precio)</b>. «Salida» es el precio al que tu ventaja se agota, que es tu propia probabilidad — no es un objetivo de beneficio, es donde deja de haber razón para seguir. El reparto entre varias posiciones se escala proporcionalmente hasta el tope: es una aproximación, el Kelly multi-activo exacto exige la distribución conjunta. <b>Informativo. No es recomendación de inversión ni de apuesta.</b></div>
+  </div>
+
+  <div class="p" style="height:calc(100vh - 620px);min-height:230px">
+    <h3>PLAN DE ARBITRAJE <span id="c-acnt"></span> <span class="st" style="font-weight:400;text-transform:none">— aquí no se pronostica: las patas y las salidas salen de la aritmética</span></h3>
+    <div class="bd"><table><thead><tr>
+      <th style="width:30%">Oportunidad</th><th style="width:10%">Tipo</th><th style="width:10%">Patas</th>
+      <th style="width:12%">Capital a inmovilizar</th><th style="width:10%">Beneficio</th>
+      <th style="width:10%">Retorno s/capital ▼</th><th style="width:18%">Entrada y salida</th>
+    </tr></thead><tbody id="c-arb"></tbody></table></div>
+    <div class="st">Vender las n patas de un grupo excluyente cuesta Σ(1−pᵢ) = n − Σp e ingresa n − 1 con certeza, así que el beneficio es Σp − 1. <b>El retorno sobre capital es mucho menor que el sobre-redondeo</b>: para vender 32 patas hay que inmovilizar casi 31 unidades. Riesgos reales no simulados: el libro puede no tener profundidad para todas las patas al precio mostrado, y el capital queda inmovilizado hasta la resolución.</div>
+  </div>
+</div>
 </main>
 
 <div id="dt"><div id="dtb">
@@ -914,8 +959,8 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   </div>
 </div></div>
 <div class="ftr">
-  <span><kbd>F1-F8</kbd> vistas</span><span><kbd>/</kbd> buscar</span>
-  <span>Comandos: CON · SC · PM · NEWS · DASH · CEREBRO · SIM · REFRESH</span>
+  <span><kbd>F1-F9</kbd> vistas</span><span><kbd>/</kbd> buscar</span>
+  <span>Comandos: CON · SC · PM · NEWS · DASH · CEREBRO · SIM · CARTERA · REFRESH</span>
   <span style="margin-left:auto">USAspending · Polymarket · war.gov · Google News — informativo, no es recomendación de inversión</span>
 </div>
 </div>
@@ -979,6 +1024,7 @@ function f$(n){return n>=1e9?"$"+(n/1e9).toFixed(2)+"B":n>=1e6?"$"+(n/1e6).toFix
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;")}
 function lt(id,st,tx){var e=$(id);if(!e)return;e.className="lt "+st;if(tx)e.lastElementChild.textContent=tx}
 function sk(n){var o="";for(var i=0;i<(n||4);i++)o+="<div class='sk' style='width:"+(92-i*11)+"%'></div>";return o}
+function eur(n){n=+n||0;return (n>=1e4?Math.round(n).toLocaleString("es-ES"):n.toFixed(2))+" €"}
 function fn(n){n=+n||0;return n>=1e6?(n/1e6).toFixed(2)+"M":n>=1e3?(n/1e3).toFixed(1)+"K":Math.round(n).toString()}
 function emp(ic,m){return "<div class='emp'><b>"+ic+"</b>"+m+"</div>"}
 function tick(){var d=new Date();$("clk").textContent=d.toLocaleDateString("es-ES")+"  "+d.toLocaleTimeString("es-ES")}
@@ -1245,6 +1291,7 @@ function render(){
  if(VIEW==="quant"){renderQuant()}
  if(VIEW==="brain"){renderBrain()}
  if(VIEW==="sim"){renderSim()}
+ if(VIEW==="cart"){renderCart()}
  if(VIEW==="news"){
   $("n-chips").innerHTML=Object.keys(NQ).map(function(r){return "<button data-n='"+r+"' class='"+(r===NR?"on":"")+"'>"+r+"</button>"}).join("")+
    "<button data-nf='1' style='border-color:#4a3410;color:var(--am)'>⟳ reintentar</button>";
@@ -1949,30 +1996,154 @@ function dtDelta(t){
   "<div class='st'>Compras "+fn(cb)+" · ventas "+fn(cs)+" · presión neta <b class='"+(c>=0?"up":"dn")+"'>"+
    (c>=0?"compradora":"vendedora")+"</b>. Comprar «No» cuenta como vender «Sí».</div>"}
 
+/* ================= CARTERA =================
+   Dos mitades con naturaleza distinta, y conviene no confundirlas:
+   - Posiciones direccionales: dependen de TU probabilidad. El terminal solo hace
+     la aritmética de Kelly; el pronóstico lo pones tú.
+   - Arbitraje: no depende de ningún pronóstico. Patas, importes y salida se
+     deducen de la aritmética, así que ahí sí cabe un plan mecánico.            */
+var POS=[];
+
+function cCap(){return Math.max(0,parseFloat($("c-cap").value)||0)}
+
+/* Kelly de un contrato binario. Comprando a \`q\` con probabilidad propia \`p\`:
+   b=(1−q)/q  →  f* = (p·b − (1−p))/b = (p − q)/(1 − q).                       */
+function kellyBin(p,q){return q>=1?0:(p-q)/(1-q)}
+
+function cFill(){
+ var s=$("c-mkt");if(!s||!BQ)return;
+ var cur=s.value;
+ s.innerHTML=BQ.markets.slice(0,150).map(function(m){
+  return "<option value='"+m.id+"'>"+esc(m.q.slice(0,74))+" — "+(m.p*100).toFixed(1)+"%</option>"}).join("");
+ if(cur)s.value=cur}
+
+function cAdd(){
+ if(!BQ)return;
+ var id=$("c-mkt").value,p=Math.max(0.001,Math.min(0.999,(parseFloat($("c-p").value)||50)/100));
+ for(var i=0;i<POS.length;i++)if(String(POS[i].id)===String(id)){POS[i].p=p;render();return}
+ POS.push({id:id,p:p});render()}
+
+function cCompute(){
+ if(!BQ)return{filas:[],tot:0,ev:0,peor:0};
+ var frac=parseFloat($("c-frac").value)||0.25,
+     mp=parseFloat($("c-mp").value)||0.1,
+     mt=parseFloat($("c-mt").value)||0.5,
+     cap=cCap();
+ var filas=[];
+ POS.forEach(function(x){
+  var m=null;
+  for(var i=0;i<BQ.markets.length;i++)if(String(BQ.markets[i].id)===String(x.id)){m=BQ.markets[i];break}
+  if(!m)return;
+  var f=kellyBin(x.p,m.p);
+  filas.push({m:m,p:x.p,f:f,fa:Math.max(0,f)*frac})});
+
+ // Tope por posición y, si el conjunto se pasa, escalado proporcional al tope total.
+ filas.forEach(function(r){r.fa=Math.min(r.fa,mp)});
+ var suma=filas.reduce(function(a,r){return a+r.fa},0);
+ var esc2=suma>mt&&suma>0?mt/suma:1;
+ filas.forEach(function(r){
+  r.fa*=esc2;
+  r.imp=cap*r.fa;
+  r.tit=r.m.p>0?r.imp/r.m.p:0;          // títulos comprados
+  r.gana=r.tit-r.imp;                    // beneficio neto si resuelve a favor
+  r.ev=r.p*r.tit-r.imp});                // valor esperado con TU probabilidad
+ var tot=filas.reduce(function(a,r){return a+r.imp},0);
+ var ev=filas.reduce(function(a,r){return a+r.ev},0);
+ // Peor caso: fallan todas. Su probabilidad conjunta solo vale si son independientes.
+ var pFallo=filas.reduce(function(a,r){return a*(1-r.p)},1);
+ return {filas:filas,tot:tot,ev:ev,peor:-tot,pFallo:filas.length?pFallo:0,escalado:esc2<1};
+}
+
+/* Plan mecánico de arbitraje. Aquí el capital importa tanto como el margen:
+   vender las n patas de un grupo cuesta Σ(1−pᵢ)=n−Σp e ingresa n−1 con certeza. */
+function cArb(){
+ if(!BQ)return[];
+ var out=[];
+ (BQ.groups||[]).forEach(function(g){
+  if(g.net<=0||g.dev<=0)return;                 // solo el lado vendedor es solido
+  var coste=g.n-g.sum, ben=g.dev-g.cost;
+  if(coste<=0||ben<=0)return;
+  out.push({k:"Σ excluyente",ev:g.ev,slug:g.slug,n:g.n+" patas",
+   coste:coste,ben:ben,ret:ben/coste,
+   plan:"Comprar el NO de las "+g.n+" patas · salir cuando Σp vuelva a 1 o al vencimiento"})});
+ (BQ.mono||[]).forEach(function(g){
+  var coste=g.pBarato+(1-g.pCaro), ben=g.neto;
+  if(coste<=0||ben<=0)return;
+  out.push({k:"monotonía",ev:g.ev,slug:g.slug,n:"2 patas",
+   coste:coste,ben:ben,ret:ben/coste,
+   plan:"Comprar SÍ de «"+g.barato+"» y NO de «"+g.caro+"» · salir cuando se restablezca el orden"})});
+ out.sort(function(a,b){return b.ret-a.ret});
+ return out}
+
+function renderCart(){
+ if(!BQ){
+  var msg=emp("💼","Carga el cerebro (F7) para tener mercados.");
+  $("c-rows").innerHTML="<tr><td colspan='10'>"+msg+"</td></tr>";
+  $("c-arb").innerHTML="<tr><td colspan='7'>"+msg+"</td></tr>";return}
+ cFill();
+ var r=cCompute(),cap=cCap(),ar=cArb();
+
+ $("c1").textContent=eur(r.tot);
+ $("c1s").textContent=cap>0?((r.tot/cap*100).toFixed(1)+"% de "+eur(cap)+(r.escalado?" · escalado al tope":"")):"pon capital";
+ $("c2").textContent=(r.ev>=0?"+":"−")+eur(Math.abs(r.ev));
+ $("c2").className="v "+(r.ev>=0?"up":"dn");
+ $("c3").textContent=r.tot>0?("−"+eur(r.tot)):eur(0);
+ $("c3s").textContent=r.filas.length?("probabilidad "+(r.pFallo*100).toFixed(1)+"% si son independientes"):"sin posiciones";
+ $("c4").textContent=ar.length?((ar[0].ret*100).toFixed(2)+"%"):"—";
+ $("c4s").textContent=ar.length?(ar.length+" operaciones · mejor retorno s/capital"):"nada cubre costes";
+
+ $("c-rows").innerHTML=r.filas.map(function(x){
+  return "<tr>"+
+   "<td title='"+esc(x.m.q)+"'>"+esc(x.m.q.slice(0,52))+"</td>"+
+   "<td>"+(x.m.p*100).toFixed(1)+"%</td>"+
+   "<td style='color:var(--cy)'>"+(x.p*100).toFixed(1)+"%</td>"+
+   "<td class='"+(x.p>x.m.p?"up":"dn")+"'>"+((x.p-x.m.p)>=0?"+":"")+((x.p-x.m.p)*100).toFixed(1)+"</td>"+
+   "<td>"+(x.f*100).toFixed(1)+"%</td>"+
+   "<td><b>"+x.imp.toFixed(2)+" €</b></td>"+
+   "<td class='dim'>"+x.tit.toFixed(1)+"</td>"+
+   "<td class='up'>+"+x.gana.toFixed(2)+" €</td>"+
+   "<td class='dim'>"+(x.p*100).toFixed(1)+"%</td>"+
+   "<td><button data-del='"+x.m.id+"' style='background:none;border:0;color:var(--dim);cursor:pointer'>✕</button></td>"+
+  "</tr>"}).join("")||"<tr><td colspan='10'>"+emp("➕","Añade un mercado y pon tu probabilidad.")+"</td></tr>";
+
+ $("c-acnt").textContent="("+ar.length+")";
+ $("c-arb").innerHTML=ar.slice(0,25).map(function(a){
+  var esc3=cap>0?Math.min(1,cap/ (a.coste*100) ):0;   // referencia: 100 uds nominales
+  return "<tr>"+
+   "<td title='"+esc(a.ev)+"'><a href='https://polymarket.com/event/"+esc(a.slug)+"' target='_blank' rel='noopener'>"+esc(a.ev.slice(0,44))+"</a></td>"+
+   "<td><span class='"+(a.k==="monotonía"?"t5":"t2")+"'>"+a.k+"</span></td>"+
+   "<td class='dim'>"+a.n+"</td>"+
+   "<td>"+a.coste.toFixed(3)+" u <span class='dim'>por unidad de premio</span></td>"+
+   "<td class='up'>+"+(a.ben*100).toFixed(2)+"%</td>"+
+   "<td><b class='up'>"+(a.ret*100).toFixed(3)+"%</b></td>"+
+   "<td class='dim' style='font-size:10px'>"+esc(a.plan)+"</td>"+
+  "</tr>"}).join("")||"<tr><td colspan='7'>"+emp("⚖️","Ninguna restricción violada cubre costes ahora.")+"</td></tr>"}
+
 function go(v){VIEW=v;
- ["dash","con","sc","pm","news","quant","brain","sim"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
+ ["dash","con","sc","pm","news","quant","brain","sim","cart"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
  [].forEach.call($("nav").querySelectorAll("button"),function(b){b.classList.toggle("on",b.dataset.v===v)});
  if(v==="news")loadNews(NR);
- if(v==="brain"&&!BQ&&!BLOAD)loadBrain();
+ if((v==="brain"||v==="cart")&&!BQ&&!BLOAD)loadBrain();
  render()}
 [].forEach.call($("nav").querySelectorAll("button"),function(b){b.onclick=function(){go(b.dataset.v)}});
 $("cmd").addEventListener("input",function(e){e.target.dataset.q=e.target.value;render()});
 $("cmd").addEventListener("keydown",function(e){
  if(e.key!=="Enter")return;
  var c=e.target.value.trim().toUpperCase();
- var m={CON:"con",CONTRATOS:"con",SC:"sc",SMALLCAPS:"sc",PM:"pm",POLYMARKET:"pm",NEWS:"news",NOTICIAS:"news",DASH:"dash",F1:"dash",QUANT:"quant",Q:"quant",BRAIN:"brain",CEREBRO:"brain",PQ:"brain",SIM:"sim",SIMULADOR:"sim",BT:"sim"};
+ var m={CON:"con",CONTRATOS:"con",SC:"sc",SMALLCAPS:"sc",PM:"pm",POLYMARKET:"pm",NEWS:"news",NOTICIAS:"news",DASH:"dash",F1:"dash",QUANT:"quant",Q:"quant",BRAIN:"brain",CEREBRO:"brain",PQ:"brain",SIM:"sim",SIMULADOR:"sim",BT:"sim",CART:"cart",CARTERA:"cart"};
  if(m[c]){e.target.value="";e.target.dataset.q="";go(m[c])}
  else if(c==="REFRESH"||c==="RELOAD"){e.target.value="";e.target.dataset.q="";refresh()}});
 document.addEventListener("keydown",function(e){
  if(e.key==="Escape"&&DT){dtClose();return}
  if(e.key==="/"&&document.activeElement!==$("cmd")){e.preventDefault();$("cmd").focus();return}
- var m={F1:"dash",F2:"con",F3:"sc",F4:"pm",F5:"news",F6:"quant",F7:"brain",F8:"sim"};
+ var m={F1:"dash",F2:"con",F3:"sc",F4:"pm",F5:"news",F6:"quant",F7:"brain",F8:"sim",F9:"cart"};
  if(m[e.key]){e.preventDefault();go(m[e.key])}});
 document.addEventListener("click",function(e){var t=e.target;
  if(t.classList.contains("str")){W[t.dataset.tk]=!W[t.dataset.tk];sw();render()}
  if(t.dataset&&t.dataset.r){RG=t.dataset.r;render()}
  if(t.dataset&&t.dataset.n){NR=t.dataset.n;loadNews(NR);render()}
  if(t.dataset&&t.dataset.nf){loadNews(NR,true)}
+ if(t.dataset&&t.dataset.del){POS=POS.filter(function(x){return String(x.id)!==String(t.dataset.del)});render();return}
  if(t.closest){var tr=t.closest("tr[data-mid]");
   if(tr&&t.tagName!=="A"){dtOpen(tr.dataset.mid)}}});
 [].forEach.call(document.querySelectorAll("th[data-k]"),function(th){
@@ -1983,6 +2154,13 @@ document.addEventListener("click",function(e){var t=e.target;
   render()}});
 $("bload").onclick=function(){loadBrain(true)};
 $("srun").onclick=btRun;
+$("c-add").onclick=cAdd;
+$("c-clr").onclick=function(){POS=[];render()};
+["c-cap","c-frac","c-mp","c-mt"].forEach(function(k){$(k).oninput=render;$(k).onchange=render});
+$("c-mkt").onchange=function(){
+ // arrancar con la probabilidad implícita: así la ventaja parte de cero
+ if(!BQ)return;for(var i=0;i<BQ.markets.length;i++)
+  if(String(BQ.markets[i].id)===String($("c-mkt").value)){$("c-p").value=(BQ.markets[i].p*100).toFixed(1);break}};
 $("dtx").onclick=dtClose;
 $("dt").addEventListener("click",function(e){if(e.target.id==="dt")dtClose()});
 $("bvol").onclick=loadBVol;
