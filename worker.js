@@ -806,6 +806,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   <button data-v="brain">F7 CEREBRO</button>
   <button data-v="sim">F8 SIMULADOR</button>
   <button data-v="cart">F9 CARTERA</button>
+  <button data-v="lib">F10 BIBLIOTECA</button>
   <div class="sp"></div>
   <div class="meta" id="meta"></div>
 </div>
@@ -1001,6 +1002,25 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   </div>
 
   <div class="p" style="margin-bottom:8px">
+    <h3>PRUEBA DE CHOQUE · MONTE CARLO CONTRA EL AZAR <span id="mc-cnt"></span></h3>
+    <div class="chips" style="align-items:center;gap:9px;flex-wrap:wrap">
+      <label class="st">Repeticiones <select id="mc-n">
+        <option value="100000">100 mil</option>
+        <option value="1000000" selected>1 millón</option>
+        <option value="10000000">10 millones</option>
+      </select></label>
+      <button id="mc-run">▶ Ejecutar prueba de choque</button>
+      <span class="st" id="mc-st">Necesita la simulación ejecutada arriba. Regenera los desenlaces bajo la hipótesis de mercado perfectamente valorado.</span>
+    </div>
+    <div class="bd" style="max-height:210px"><table><thead><tr>
+      <th style="width:26%">Estrategia</th><th style="width:9%">Apuestas</th><th style="width:11%">Observado</th>
+      <th style="width:12%">Azar (media)</th><th style="width:14%">Rango del azar 95%</th>
+      <th style="width:10%">p-valor</th><th style="width:18%">Veredicto</th>
+    </tr></thead><tbody id="mc-rows"></tbody></table></div>
+    <div class="st">Bajo la hipótesis nula el precio <b>es</b> la probabilidad verdadera, así que cada desenlace se regenera como Bernoulli(precio de entrada). El p-valor es la fracción de repeticiones en las que el puro azar iguala o supera lo observado. Un p-valor de 0,30 significa que tres de cada diez universos sin ninguna ventaja dan un resultado igual de bueno. <b>No es una prueba de que la estrategia funcione: es una prueba de que podría no ser suerte.</b></div>
+  </div>
+
+  <div class="p" style="margin-bottom:8px">
     <h3>REGISTRO EN PAPEL <span id="p-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— muestra propia y sin sesgo: la señal se anota al emitirse, sin saber el desenlace</span></h3>
     <div class="chips" style="align-items:center;gap:8px">
       <button id="p-snap">✎ Anotar señales de hoy</button>
@@ -1068,6 +1088,41 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="st">Vender las n patas de un grupo excluyente cuesta Σ(1−pᵢ) = n − Σp e ingresa n − 1 con certeza, así que el beneficio es Σp − 1. <b>El retorno sobre capital es mucho menor que el sobre-redondeo</b>: para vender 32 patas hay que inmovilizar casi 31 unidades. Riesgos reales no simulados: el libro puede no tener profundidad para todas las patas al precio mostrado, y el capital queda inmovilizado hasta la resolución.</div>
   </div>
 </div>
+<div class="view" id="v-lib">
+  <div class="grid g4" style="margin-bottom:8px">
+    <div class="kpi"><div class="k">IMPLEMENTADO</div><div class="v" id="l1">—</div><div class="s">métodos en producción</div></div>
+    <div class="kpi c2"><div class="k">EN COLA</div><div class="v" id="l2">—</div><div class="s">por orden de prioridad</div></div>
+    <div class="kpi c3"><div class="k">DESCARTADO</div><div class="v" id="l3">—</div><div class="s">no aplica a binarios</div></div>
+    <div class="kpi c4"><div class="k">CUELLO DE BOTELLA</div><div class="v" style="font-size:15px">muestra</div><div class="s">no faltan métodos, falta evidencia</div></div>
+  </div>
+
+  <div class="p" style="margin-bottom:8px">
+    <h3>POR QUÉ LA MITAD NO PORTA</h3>
+    <div class="st" style="padding:8px 10px;line-height:1.55">
+      Un binario de predicción <b>no es una serie de precios</b>: es una martingala acotada en [0,1] que termina en 0 o en 1.
+      La varianza terminal está fijada en p(1−p) — es una identidad, no un parámetro que estimar. No hay deriva bajo la medida
+      de mercado, así que una estrategia de tendencia apuesta contra una martingala por construcción. Y el proceso <b>termina</b>:
+      no hay largo plazo donde converger, que es lo que cointegración y reversión a la media necesitan.
+      Lo que sí traslada es la maquinaria de probabilidad (distorsión, calibración, teoría de la información) y la de
+      microestructura, que no depende de la forma del proceso.
+    </div>
+  </div>
+
+  <div class="p" style="height:calc(100vh - 400px);min-height:300px">
+    <h3>BIBLIOTECA QUANT · ESTADO EN EL PROYECTO <span id="l-cnt"></span></h3>
+    <div class="chips">
+      <button class="lf on" data-f="all">Todas</button>
+      <button class="lf" data-f="ok">Implementado</button>
+      <button class="lf" data-f="cola">En cola</button>
+      <button class="lf" data-f="no">Descartado</button>
+    </div>
+    <div class="bd"><table><thead><tr>
+      <th style="width:4%">#</th><th style="width:17%">Familia</th><th style="width:9%">Estado</th>
+      <th style="width:20%">Qué se usa / usaría</th><th style="width:8%">Dónde</th><th style="width:42%">Razón</th>
+    </tr></thead><tbody id="l-rows"></tbody></table></div>
+    <div class="st">Evaluado contra 146 mercados resueltos de Polymarket. El t-stat de la deriva a 7 días pasaba de 5,35 a 0,30 al agrupar por mercado: las ventanas solapadas inflan la significancia. Ese es el criterio con el que está juzgada cada fila.</div>
+  </div>
+</div>
 </main>
 
 <div id="dt"><div id="dtb">
@@ -1087,7 +1142,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   </div>
 </div></div>
 <div class="ftr">
-  <span><kbd>F1-F9</kbd> vistas</span><span><kbd>/</kbd> buscar</span>
+  <span><kbd>F1-F10</kbd> vistas</span><span><kbd>/</kbd> buscar</span>
   <span>Comandos: CON · SC · PM · NEWS · DASH · CEREBRO · SIM · CARTERA · REFRESH</span>
   <span style="margin-left:auto">USAspending · Polymarket · war.gov · Google News — informativo, no es recomendación de inversión</span>
 </div>
@@ -1418,8 +1473,9 @@ function render(){
 
  if(VIEW==="quant"){renderQuant()}
  if(VIEW==="brain"){renderBrain()}
- if(VIEW==="sim"){renderSim();renderPaper()}
+ if(VIEW==="sim"){renderSim();renderMC();renderPaper()}
  if(VIEW==="cart"){renderCart()}
+ if(VIEW==="lib"){renderLib()}
  if(VIEW==="news"){
   $("n-chips").innerHTML=Object.keys(NQ).map(function(r){return "<button data-n='"+r+"' class='"+(r===NR?"on":"")+"'>"+r+"</button>"}).join("")+
    "<button data-nf='1' style='border-color:#4a3410;color:var(--am)'>⟳ reintentar</button>";
@@ -1929,6 +1985,103 @@ function eqChart(s){
   "<text x='"+(W-12)+"' y='12' fill='"+(s.total>=0?"var(--green)":"var(--red)")+"' font-size='11' text-anchor='end'>"+
    (s.total>=0?"+":"")+s.total.toFixed(1)+"u</text></svg>"}
 
+/* ================= PRUEBA DE CHOQUE (MONTE CARLO) =================
+   No existen millones de operaciones REALES: Polymarket tiene unos cientos de
+   mercados resueltos utilizables. Lo que sí se puede es regenerar la muestra real
+   millones de veces bajo la hipótesis nula de que el precio ES la probabilidad
+   verdadera, y medir con qué frecuencia el azar iguala lo observado.
+   Eso convierte "parece que funciona" en un p-valor.                            */
+var MC=null,MCRUN=false;
+
+// Generador rápido y determinista (mulberry32). Math.random no vale: no se puede
+// reproducir una prueba, y aquí la reproducibilidad es parte del resultado.
+function rng32(a){return function(){
+ a|=0;a=a+0x6D2B79F5|0;
+ var t=Math.imul(a^a>>>15,1|a);
+ t=t+Math.imul(t^t>>>7,61|t)^t;
+ return ((t^t>>>14)>>>0)/4294967296}}
+
+function mcStrats(S){
+ // Mismos cortes que la tabla de estrategias, pero sobre indices para ir rápido.
+ return [
+  {n:"Comprar longshots (p≤10%)",  f:function(x){return x.p<=0.10}, lado:1},
+  {n:"VENDER longshots (comprar NO)",f:function(x){return x.p<=0.10}, lado:0},
+  {n:"Comprar favoritos (p≥90%)",  f:function(x){return x.p>=0.90}, lado:1},
+  {n:"Zona media 10–90% (SÍ)",     f:function(x){return x.p>0.10&&x.p<0.90}, lado:1},
+  {n:"Comprar todo (referencia)",  f:function(x){return true}, lado:1}
+ ].map(function(s){
+  var sub=S.filter(s.f);
+  return {nombre:s.n,lado:s.lado,p:Float64Array.from(sub.map(function(x){return x.p})),
+          o:Float64Array.from(sub.map(function(x){return x.o})),n:sub.length}})
+  .filter(function(s){return s.n>=10})}
+
+// Retorno total de una estrategia dados unos desenlaces.
+function mcTotal(p,o,lado,n){
+ var t=0;
+ if(lado===1){for(var i=0;i<n;i++)t+=(o[i]-p[i])/p[i]}
+ else{for(var j=0;j<n;j++)t+=((1-o[j])-(1-p[j]))/(1-p[j])}
+ return t}
+
+function mcRun(){
+ if(MCRUN)return;
+ if(!BT||!BT.S||BT.S.length<20){$("mc-st").textContent="Ejecuta antes la simulación de arriba: hace falta la muestra real.";return}
+ MCRUN=true;
+ var iters=+$("mc-n").value,S=BT.S,ss=mcStrats(S);
+ if(!ss.length){MCRUN=false;$("mc-st").textContent="Muestra insuficiente por estrategia.";return}
+
+ var obs=ss.map(function(s){return mcTotal(s.p,s.o,s.lado,s.n)});
+ var acum=ss.map(function(s){return {suma:0,suma2:0,ge:0,muestras:new Float64Array(Math.min(iters,20000)),k:0}});
+ var rnd=rng32(20260901);
+ var hecho=0,lote=Math.max(2000,Math.floor(iters/200));
+ var opsPorIter=ss.reduce(function(a,s){return a+s.n},0);
+ var t0=Date.now();
+
+ function paso(){
+  var fin=Math.min(hecho+lote,iters);
+  for(var it=hecho;it<fin;it++){
+   for(var k=0;k<ss.length;k++){
+    var s=ss[k],a=acum[k],t=0;
+    // Hipótesis nula: el desenlace se sortea con la probabilidad que marca el precio.
+    if(s.lado===1){for(var i=0;i<s.n;i++){var o=rnd()<s.p[i]?1:0;t+=(o-s.p[i])/s.p[i]}}
+    else{for(var j=0;j<s.n;j++){var o2=rnd()<s.p[j]?1:0;t+=((1-o2)-(1-s.p[j]))/(1-s.p[j])}}
+    a.suma+=t;a.suma2+=t*t;
+    if(t>=obs[k])a.ge++;
+    if(a.k<a.muestras.length)a.muestras[a.k++]=t;
+   }
+  }
+  hecho=fin;
+  $("mc-st").textContent="Simulando… "+(hecho/iters*100).toFixed(0)+"% · "+
+    (hecho*opsPorIter/1e6).toFixed(1)+" M operaciones";
+  if(hecho<iters){setTimeout(paso,0);return}
+
+  MC={iters:iters,ops:iters*opsPorIter,seg:(Date.now()-t0)/1000,
+   filas:ss.map(function(s,k){
+    var a=acum[k],mu=a.suma/iters,va=a.suma2/iters-mu*mu;
+    var m=Array.prototype.slice.call(a.muestras.subarray(0,a.k)).sort(function(x,y){return x-y});
+    var q=function(f){return m.length?m[Math.min(m.length-1,Math.floor(f*m.length))]:0};
+    return {nombre:s.nombre,n:s.n,obs:obs[k],mu:mu,sd:Math.sqrt(Math.max(0,va)),
+            lo:q(0.025),hi:q(0.975),p:a.ge/iters}})};
+  MCRUN=false;
+  $("mc-st").textContent=MC.iters.toLocaleString("es-ES")+" repeticiones · "+
+    (MC.ops/1e6).toFixed(0)+" millones de operaciones simuladas · "+MC.seg.toFixed(1)+" s";
+  render()}
+ setTimeout(paso,0)}
+
+function renderMC(){
+ if(!MC){$("mc-rows").innerHTML="<tr><td colspan='7'>"+emp("🎲","Pulsa «Ejecutar prueba de choque».")+"</td></tr>";return}
+ $("mc-cnt").textContent="("+(MC.ops/1e6).toFixed(0)+" M operaciones)";
+ $("mc-rows").innerHTML=MC.filas.map(function(r){
+  var v=r.p<0.01?["muy improbable por azar","t3"]:
+        (r.p<0.05?["improbable por azar","t5"]:
+        (r.p<0.20?["dudoso","t2"]:["indistinguible del azar","t4"]));
+  return "<tr>"+
+   "<td>"+esc(r.nombre)+"</td><td>"+r.n+"</td>"+
+   "<td class='"+(r.obs>=0?"up":"dn")+"'><b>"+(r.obs>=0?"+":"")+r.obs.toFixed(1)+"u</b></td>"+
+   "<td class='dim'>"+(r.mu>=0?"+":"")+r.mu.toFixed(1)+"u</td>"+
+   "<td class='dim' style='font-size:10.5px'>"+r.lo.toFixed(1)+" a "+r.hi.toFixed(1)+"u</td>"+
+   "<td><b>"+(r.p<0.0001?"&lt;0,0001":r.p.toFixed(4).replace(".",","))+"</b></td>"+
+   "<td><span class='"+v[1]+"'>"+v[0]+"</span></td></tr>"}).join("")}
+
 var PAP=null;
 function loadPaper(accion){
  var u=accion==="snap"?"/api/paper/snap":(accion==="set"?"/api/paper/settle?n=40":"/api/paper");
@@ -2278,8 +2431,55 @@ function renderCart(){
    "<td class='dim' style='font-size:10px'>"+esc(a.plan)+"</td>"+
   "</tr>"}).join("")||"<tr><td colspan='7'>"+emp("⚖️","Ninguna restricción violada cubre costes ahora.")+"</td></tr>"}
 
+/* ================= BIBLIOTECA QUANT =================
+   Las 7 familias de la Quant Master Library evaluadas contra los datos reales del
+   terminal. \`pri\` es el orden de construccion; null = no entra.                  */
+var LIB=[
+ {i:"01",fam:"Matemática financiera",tema:"cálculo estocástico · browniano · Itô",e:"cola",pri:7,
+  usa:"Presupuesto de varianza y volatilidad implícita en escala probit",dnd:"F7",
+  por:"Browniano geométrico es incorrecto: permite precios fuera de [0,1] y supone deriva libre. La reformulación válida es en escala probit, que respeta las fronteras y conecta con la Wang ya implementada. Aprovechable: si la varianza terminal es p(1−p) y quedan T días, hay una σ implícita que consume ese presupuesto; comparada con la realizada dice si la volatilidad está cara."},
+ {i:"02",fam:"Arbitraje estadístico",tema:"cointegración · pares · residuos",e:"ok",pri:null,
+  usa:"Arbitraje por restricción lógica: Σp=1 y monotonía",dnd:"F7",
+  por:"Cointegrar exige series que persistan, y estos mercados resuelven: dos que convergen no revierten a la media, se acercan a la misma verdad. La variante sin riesgo de modelo ya está construida — arbitraje estadístico con la estadística sustituida por aritmética, que es estrictamente mejor. Pendiente: lead-lag entre mercados del mismo tema."},
+ {i:"03",fam:"Microestructura",tema:"libros · HFT · liquidez",e:"ok",pri:2,
+  usa:"Profundidad del libro, delta y CVD · falta OFI y lambda de Kyle",dnd:"F7",
+  por:"La única familia que no depende de la forma del proceso, y los datos existen: libro completo y operaciones con lado BUY/SELL. Falta el Order Flow Imbalance de Cont–Kukanov–Stoikov y la lambda de Kyle (impacto por unidad negociada). Necesita grabar snapshots con el cron: Polymarket solo da la foto actual y el dato no se recupera hacia atrás. HFT fuera: sin colocación no hay ventaja de latencia."},
+ {i:"04",fam:"Anomalías ocultas",tema:"calendario · transversales",e:"cola",pri:4,
+  usa:"Sesgo favorito-longshot (Wang) · falta escáner de mercados nuevos",dnd:"F7",
+  por:"Los efectos de calendario no portan: estos mercados resuelven en fechas de acontecimientos, no en cierres de trimestre. Las anomalías propias del dominio sí: el sesgo favorito-longshot (λ̂=0,183 sobre 291.000 contratos según oracle3) y el mercado recién listado, mal valorado antes de que llegue dinero informado. El z-score transversal ya está."},
+ {i:"05",fam:"Machine learning",tema:"transformers · refuerzo · features",e:"no",pri:6,
+  usa:"Solo calibración isotónica, y no todavía",dnd:"—",
+  por:"Con n=107 y ninguna estrategia por encima de |t|≥2, meter transformers es añadir parámetros al ruido: encuentran patrones inexistentes y con una convicción que engaña. El refuerzo optimiza ejecución y no hay ejecución que optimizar. Excepción de bajo riesgo: calibración isotónica sobre el histórico resuelto, pocos parámetros e interpretable. Solo cuando el motor de papel acumule muestra."},
+ {i:"06",fam:"Crypto quant",tema:"AMMs · DeFi · entre exchanges",e:"cola",pri:1,
+  usa:"Kalshi vía pmxt: mismo acontecimiento, dos precios",dnd:"—",
+  por:"Las matemáticas de AMM no aplican: Polymarket usa libro, no creador automático. Pero las señales entre exchanges son lo más desaprovechado: Kalshi y Polymarket cotizan los mismos acontecimientos a precios distintos. Mismo rigor que el arbitraje por restricción y con márgenes mayores, porque hay fricción real entre plataformas. pmxt (2.111★, MIT) da la API unificada."},
+ {i:"07",fam:"Experimental",tema:"econofísica · fractales · régimen · información",e:"cola",pri:3,
+  usa:"Descomposición del Brier · detección de cambio de régimen",dnd:"F8",
+  por:"Fractales y econofísica son trampa: el exponente de Hurst sobre una martingala acotada mide la frontera, no memoria. Cambio de régimen sí, con matiz: estos mercados tienen regímenes reales (hay noticia o no la hay) y la detección bayesiana distingue revalorización por información de simple deriva. Teoría de la información es lo mejor de la biblioteca y lo más nativo: descomponer el Brier en fiabilidad, resolución e incertidumbre dice POR QUÉ el mercado acierta, no solo cuánto."}
+];
+var LF="all";
+
+function renderLib(){
+ var E={ok:["implementado","t3"],cola:["en cola","t2"],no:["descartado","t4"]};
+ var f=LIB.filter(function(x){return LF==="all"||x.e===LF});
+ $("l1").textContent=LIB.filter(function(x){return x.e==="ok"}).length;
+ $("l2").textContent=LIB.filter(function(x){return x.e==="cola"}).length;
+ $("l3").textContent=LIB.filter(function(x){return x.e==="no"}).length;
+ $("l-cnt").textContent="("+f.length+" de "+LIB.length+")";
+ f.sort(function(a,b){return (a.pri===null?99:a.pri)-(b.pri===null?99:b.pri)});
+ $("l-rows").innerHTML=f.map(function(x){
+  var st=E[x.e];
+  return "<tr>"+
+   "<td class='dim'>"+x.i+"</td>"+
+   "<td><b>"+esc(x.fam)+"</b><br><span class='dim' style='font-size:10px'>"+esc(x.tema)+"</span></td>"+
+   "<td><span class='"+st[1]+"'>"+st[0]+"</span>"+(x.pri?"<br><span class='dim' style='font-size:10px'>prioridad "+x.pri+"</span>":"")+"</td>"+
+   "<td>"+esc(x.usa)+"</td>"+
+   "<td class='dim'>"+esc(x.dnd)+"</td>"+
+   "<td class='dim' style='font-size:10.5px;line-height:1.5'>"+esc(x.por)+"</td>"+
+  "</tr>"}).join("")}
+
 function go(v){VIEW=v;
- ["dash","con","sc","pm","news","quant","brain","sim","cart"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
+ ["dash","con","sc","pm","news","quant","brain","sim","cart","lib"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
  [].forEach.call($("nav").querySelectorAll("button"),function(b){b.classList.toggle("on",b.dataset.v===v)});
  if(v==="news")loadNews(NR);
  if((v==="brain"||v==="cart")&&!BQ&&!BLOAD)loadBrain();
@@ -2290,13 +2490,13 @@ $("cmd").addEventListener("input",function(e){e.target.dataset.q=e.target.value;
 $("cmd").addEventListener("keydown",function(e){
  if(e.key!=="Enter")return;
  var c=e.target.value.trim().toUpperCase();
- var m={CON:"con",CONTRATOS:"con",SC:"sc",SMALLCAPS:"sc",PM:"pm",POLYMARKET:"pm",NEWS:"news",NOTICIAS:"news",DASH:"dash",F1:"dash",QUANT:"quant",Q:"quant",BRAIN:"brain",CEREBRO:"brain",PQ:"brain",SIM:"sim",SIMULADOR:"sim",BT:"sim",CART:"cart",CARTERA:"cart"};
+ var m={CON:"con",CONTRATOS:"con",SC:"sc",SMALLCAPS:"sc",PM:"pm",POLYMARKET:"pm",NEWS:"news",NOTICIAS:"news",DASH:"dash",F1:"dash",QUANT:"quant",Q:"quant",BRAIN:"brain",CEREBRO:"brain",PQ:"brain",SIM:"sim",SIMULADOR:"sim",BT:"sim",CART:"cart",CARTERA:"cart",LIB:"lib",BIBLIOTECA:"lib"};
  if(m[c]){e.target.value="";e.target.dataset.q="";go(m[c])}
  else if(c==="REFRESH"||c==="RELOAD"){e.target.value="";e.target.dataset.q="";refresh()}});
 document.addEventListener("keydown",function(e){
  if(e.key==="Escape"&&DT){dtClose();return}
  if(e.key==="/"&&document.activeElement!==$("cmd")){e.preventDefault();$("cmd").focus();return}
- var m={F1:"dash",F2:"con",F3:"sc",F4:"pm",F5:"news",F6:"quant",F7:"brain",F8:"sim",F9:"cart"};
+ var m={F1:"dash",F2:"con",F3:"sc",F4:"pm",F5:"news",F6:"quant",F7:"brain",F8:"sim",F9:"cart",F10:"lib"};
  if(m[e.key]){e.preventDefault();go(m[e.key])}});
 document.addEventListener("click",function(e){var t=e.target;
  if(t.classList.contains("str")){W[t.dataset.tk]=!W[t.dataset.tk];sw();render()}
@@ -2314,6 +2514,9 @@ document.addEventListener("click",function(e){var t=e.target;
   render()}});
 $("bload").onclick=function(){loadBrain(true)};
 $("srun").onclick=btRun;
+[].forEach.call(document.querySelectorAll(".lf"),function(b){b.onclick=function(){
+ LF=b.dataset.f;[].forEach.call(document.querySelectorAll(".lf"),function(o){o.classList.toggle("on",o===b)});render()}});
+$("mc-run").onclick=mcRun;
 $("p-snap").onclick=function(){loadPaper("snap")};
 $("p-set").onclick=function(){loadPaper("set")};
 $("c-add").onclick=cAdd;
