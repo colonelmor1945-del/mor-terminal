@@ -1508,6 +1508,9 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 .lg .sp{text-align:right;font-variant-numeric:tabular-nums;color:var(--dim);font-size:9.5px}
 .dom{display:grid;grid-template-columns:1fr 1fr;gap:9px;font-size:10.5px}
 /* ---- modo simple ---- */
+#lang{background:#0b1119;border:1px solid var(--line);color:var(--dim);padding:4px 10px;
+ font:inherit;font-size:10px;letter-spacing:.08em;cursor:pointer}
+#lang:hover{color:var(--am);border-color:var(--am)}
 #modo{background:#0b1119;border:1px solid var(--line);color:var(--dim);padding:4px 11px;
  font:inherit;font-size:10px;letter-spacing:.06em;cursor:pointer;white-space:nowrap}
 #modo.pro{border-color:var(--am);color:var(--am)}
@@ -1566,6 +1569,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 </div>
 <div class="hdr">
   <div class="brand"><em></em>MOR TERMINAL</div>
+  <button id="lang" title="Language / Idioma">ES</button>
   <button id="volver" title="Volver a la pantalla anterior" style="display:none">← VOLVER</button>
   <button id="modo" title="Cambia entre vista sencilla y vista completa">MODO SENCILLO</button>
   <div class="cmd solo-cmd"><input id="cmd" placeholder="COMANDO / BUSCAR…" autocomplete="off"><span class="hint">↵</span></div>
@@ -3669,6 +3673,76 @@ var MODO=(function(){try{return localStorage.getItem("mor_modo")||"simple"}catch
 
 /* Diccionario de traduccion. El modo sencillo NO quita herramientas: cambia como
    se llaman. Izquierda lo que ve un quant, derecha lo que entiende cualquiera.   */
+/* ================= IDIOMA =================
+   Mismo mecanismo que el modo sencillo: un diccionario y una pasada sobre los
+   elementos. No hay dos versiones del terminal, hay una con dos vocabularios.  */
+var EN={
+ // navegacion
+ "Inicio":"Home","Mercado":"Market","Análisis":"Analysis","Herramientas":"Tools",
+ "F1 INICIO":"F1 HOME","F2 DASH":"F2 OVERVIEW","F2 RESUMEN":"F2 OVERVIEW",
+ "F3 CONTRATOS":"F3 CONTRACTS","F4 EMPRESAS":"F4 COMPANIES","F5 APUESTAS":"F5 MARKETS",
+ "F6 NOTICIAS":"F6 NEWS","F7 QUANT":"F7 QUANT","F7 ANÁLISIS DE EMPRESAS":"F7 STOCK ANALYSIS",
+ "F8 CEREBRO":"F8 EDGE","F8 OPORTUNIDADES":"F8 OPPORTUNITIES",
+ "F9 SIMULADOR":"F9 BACKTEST","F9 ¿ESTO FUNCIONA?":"F9 DOES IT WORK?",
+ "F10 CARTERA":"F10 SIZING","F10 CUÁNTO APOSTAR":"F10 POSITION SIZING",
+ "F11 BIBLIOTECA":"F11 METHODS","F11 MÉTODOS":"F11 METHODS",
+ // KPIs y titulos
+ "DOD 30D · VALOR":"DOD 30D · VALUE","FUERA DE GIGANTES":"OUTSIDE PRIMES",
+ "CRUCES":"MATCHES","CRUCES DETECTADOS":"MATCHES DETECTED",
+ "FLUJO DIARIO DE ADJUDICACIONES · 30D":"DAILY AWARD FLOW · 30D",
+ "REPARTO DEL GASTO":"SPEND BREAKDOWN","ADJUDICATARIOS · TOP 30D":"TOP RECIPIENTS · 30D",
+ "MERCADOS ANALIZADOS":"MARKETS SCANNED","APUESTAS MIRADAS":"MARKETS SCANNED",
+ "GRUPOS CON VENTAJA":"GROUPS WITH EDGE","DONDE SOBRA DINERO":"WHERE MONEY IS LEFT",
+ "MEJOR VENTAJA NETA":"BEST NET EDGE","LA MEJOR DE HOY":"BEST TODAY",
+ "SESGO FAVORITO-LONGSHOT":"FAVOURITE-LONGSHOT BIAS",
+ "¿ESTÁN CAROS LOS IMPROBABLES?":"ARE LONGSHOTS OVERPRICED?",
+ "ARBITRAJE ESTRUCTURAL":"STRUCTURAL ARBITRAGE",
+ "DONDE LAS CUENTAS NO CUADRAN":"WHERE THE MATH DOESN'T ADD UP",
+ "TODAS LAS APUESTAS":"ALL MARKETS","TABLA DE MERCADOS":"MARKETS TABLE",
+ "TODAS LAS EMPRESAS":"ALL COMPANIES","CASOS YA TERMINADOS":"RESOLVED CASES",
+ "MERCADOS RESUELTOS":"RESOLVED MARKETS","ACIERTO DEL MERCADO":"MARKET ACCURACY",
+ "BRIER SCORE":"BRIER SCORE","SESGO MEDIDO":"MEASURED BIAS","λ EMPÍRICA":"EMPIRICAL λ",
+ "LA QUE MEJOR SALIÓ":"BEST PERFORMER","MEJOR ESTRATEGIA":"BEST STRATEGY",
+ "ESTRATEGIAS SIMULADAS":"SIMULATED STRATEGIES","QUÉ HABRÍA PASADO SI…":"WHAT WOULD HAVE HAPPENED",
+ "REGISTRO EN PAPEL":"PAPER LOG","APUNTES SIN DINERO REAL":"PAPER LOG",
+ "DINERO EN JUEGO":"CAPITAL AT RISK","CAPITAL COMPROMETIDO":"CAPITAL COMMITTED",
+ "LO QUE ESPERARÍAS GANAR":"EXPECTED VALUE","VALOR ESPERADO":"EXPECTED VALUE",
+ "SI SALE TODO MAL":"WORST CASE","PEOR CASO":"WORST CASE",
+ "DINERO SIN ADIVINAR":"EDGE WITHOUT FORECASTING","ARBITRAJE DISPONIBLE":"ARBITRAGE AVAILABLE",
+ "PLAN DE ARBITRAJE":"ARBITRAGE PLAN","VIGILANTE 8-K · SEC EDGAR":"8-K WATCHER · SEC EDGAR",
+ "AVISOS OFICIALES DE EMPRESAS":"OFFICIAL COMPANY FILINGS",
+ "EMPRESAS CON PRECIO":"COMPANIES PRICED","COBERTURA DE PRECIOS":"PRICE COVERAGE",
+ "LA QUE MÁS SUBIÓ":"BIGGEST GAINER","CUÁNTO SE MUEVEN":"AVERAGE VOLATILITY",
+ "AVISOS ACTIVOS":"ACTIVE SIGNALS","SEÑALES ACTIVAS":"ACTIVE SIGNALS",
+ "YA FUNCIONA":"LIVE","POR HACER":"QUEUED","NO SIRVE":"DISCARDED","LO QUE FALTA":"BOTTLENECK",
+ // columnas
+ "Empresa":"Company","Precio":"Price","Mercado":"Market","Evento":"Event","Tipo":"Type",
+ "Fecha":"Date","Ticker":"Ticker","Sector (SIC)":"Sector (SIC)","Señal":"Signal",
+ "Precio justo":"Fair price","Justo (Wang)":"Fair (Wang)","¿Caro?":"Rich?","Sesgo":"Bias",
+ "Coste de entrar":"Entry cost","Spread rel.":"Rel. spread","¿Se mueve dinero?":"Money flowing?",
+ "Rotación":"Turnover","Nerviosismo":"Jumpiness","σ norm.":"Norm. σ","Prisa":"Urgency",
+ "Urgencia":"Urgency","Tendencia":"Trend","Z mom.":"Z mom.","Días":"Days","Opciones":"Legs",
+ "Salidas":"Legs","Suma":"Sum","Σ probs":"Σ probs","Se pasa en":"Overround","Desvío":"Deviation",
+ "Coste":"Cost","Limpio":"Net","Neto":"Net","En bruto":"Gross","Bruto":"Gross",
+ "Qué harías":"Action","Acción":"Action","Qué mide":"Measure","Medida":"Measure",
+ "Estrategia":"Strategy","Veces":"Bets","Apuestas":"Bets","Aciertos":"Hit rate","Acierto":"Hit rate",
+ "Media":"Mean","Medio":"Mean","Caso típico":"Median","Mediana":"Median","Total":"Total",
+ "Peor caída":"Max DD","Max DD":"Max DD","¿Es suerte?":"Luck?","t-stat":"t-stat",
+ "¿Es de fiar?":"Reliable?","¿Significativo?":"Significant?","Fuerza":"Strength","Z-score":"Z-score",
+ "Cuánto se mueve":"Volatility","Vol.anual":"Ann. vol","1 mes":"1M","3 meses":"3M","6 meses":"6M",
+ "Tu apuesta":"Your prob.","Tu prob.":"Your prob.","Tu ventaja":"Your edge","Ventaja":"Edge",
+ "% sugerido":"Suggested %","Kelly":"Kelly","Dinero":"Amount","Importe":"Amount",
+ "Participaciones":"Shares","Títulos":"Shares","Si acierta":"If right","Salida":"Exit",
+ "Estado":"Status","Familia":"Family","Razón":"Reason","Dónde":"Where",
+ "Empresa afectada":"Company","Partidas del 8-K":"8-K items","Pleitos en tribunales":"Court cases",
+ // botones y controles
+ "MODO SENCILLO":"SIMPLE MODE","MODO COMPLETO":"FULL MODE","← VOLVER":"← BACK",
+ "🧠 PREGUNTA AL TERMINAL":"🧠 ASK THE TERMINAL","Enviar":"Send","Guardar":"Save","Canjear":"Redeem",
+ "ASISTENTE":"ASSISTANT","Vaciar":"Clear","+ Añadir":"+ Add"
+};
+var ENK=Object.keys(EN).sort(function(a,b){return b.length-a.length});
+var IDIOMA=(function(){try{return localStorage.getItem("mor_lang")||"es"}catch(e){return "es"}})();
+
 var TRAD={
  // navegacion
  "F2 DASH":"F2 RESUMEN","F7 QUANT":"F7 ANÁLISIS DE EMPRESAS","F8 CEREBRO":"F8 OPORTUNIDADES",
@@ -3722,6 +3796,7 @@ var AYUDA={
 
 function traducir(){
  var simple=MODO==="simple";
+ var en=IDIOMA==="en";
  [].forEach.call(document.querySelectorAll("#nav button[data-v], th, h3, .kpi .k, .tarj .t"),function(el){
   if(el.dataset.oTxt===undefined)el.dataset.oTxt=el.innerHTML;
   var o=el.dataset.oTxt;
@@ -3730,9 +3805,14 @@ function traducir(){
   // claves van de mas larga a mas corta: si no, "6M" casa antes que
   // "MEJOR MOMENTUM 6M" y sale "MEJOR MOMENTUM 6 meses".
   var out=o;
-  for(var i=0;i<TRADK.length;i++){
+  if(simple){for(var i=0;i<TRADK.length;i++){
    var k=TRADK[i];
-   if(o.indexOf(k)>=0){out=out.split(k).join(TRAD[k]);break}}
+   if(out.indexOf(k)>=0){out=out.split(k).join(TRAD[k]);break}}}
+  // El ingles se aplica DESPUES: asi traduce tambien las etiquetas del modo
+  // sencillo, que ya han pasado por el primer diccionario.
+  if(en){for(var j=0;j<ENK.length;j++){
+   var e=ENK[j];
+   if(out.indexOf(e)>=0){out=out.split(e).join(EN[e])}}}
   el.innerHTML=out});
  // ayuda por vista
  for(var v in AYUDA){
@@ -3927,7 +4007,8 @@ function grupoDe(v){
 
 function pintarNav(){
  $("nav2").innerHTML=GRUPOS.map(function(g){
-  return "<button data-g='"+g.id+"' class='"+(g.id===GACT?"on":"")+"'>"+g.t+"</button>"}).join("");
+  var t=(IDIOMA==="en"&&EN[g.t])?EN[g.t]:g.t;
+  return "<button data-g='"+g.id+"' class='"+(g.id===GACT?"on":"")+"'>"+t+"</button>"}).join("");
  var g=GRUPOS.filter(function(x){return x.id===GACT})[0]||GRUPOS[0];
  [].forEach.call($("nav").querySelectorAll("button[data-v]"),function(b){
   b.classList.toggle("vis",g.v.indexOf(b.dataset.v)>=0)});
@@ -3943,7 +4024,10 @@ function irGrupo(id){
 function aplicarModo(){
  document.body.classList.toggle("simple",MODO==="simple");
  var b=$("modo");
- b.textContent=MODO==="simple"?"MODO SENCILLO":"MODO COMPLETO";
+ var etiq=MODO==="simple"?"MODO SENCILLO":"MODO COMPLETO";
+ b.textContent=(IDIOMA==="en"&&EN[etiq])?EN[etiq]:etiq;
+ $("lang").textContent=IDIOMA==="es"?"ES":"EN";
+ document.documentElement.lang=IDIOMA;
  b.classList.toggle("pro",MODO!=="simple");
  try{localStorage.setItem("mor_modo",MODO)}catch(e){}
  traducir();
@@ -4130,6 +4214,11 @@ $("iavoz").onchange=function(){HABLAR=this.checked;
 $("iaq").addEventListener("keydown",function(e){if(e.key==="Enter")iaPreguntar()});
 $("iaeg").addEventListener("click",function(e){
  if(e.target.dataset&&e.target.dataset.ia)iaPreguntar(e.target.dataset.ia)});
+$("lang").onclick=function(){
+ IDIOMA=(IDIOMA==="es"?"en":"es");
+ try{localStorage.setItem("mor_lang",IDIOMA)}catch(e){}
+ document.documentElement.lang=IDIOMA;
+ aplicarModo();pintarNav();render()};
 $("modo").onclick=function(){MODO=(MODO==="simple"?"pro":"simple");aplicarModo();render()};
 $("e-load").onclick=loadEdgar;
 $("e-d").onchange=loadEdgar;
