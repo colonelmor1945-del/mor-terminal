@@ -29,6 +29,16 @@ const env = {
       if (o.limit) ks = ks.slice(0, o.limit);
       return { keys: ks.map((name) => ({ name })), list_complete: true };
     }
+  },
+  // Workers AI falso: devuelve el contexto para poder comprobar que se arma bien
+  // sin gastar cuota. En produccion lo sustituye el binding real.
+  AI: {
+    run: async (modelo, opts) => {
+      const u = (opts.messages || []).filter((m) => m.role === "user").pop();
+      const NL = String.fromCharCode(10);
+      return { response: "[SIMULADO en local con " + modelo + "] Contexto recibido:" + NL +
+               String(u && u.content || "").slice(0, 1200) };
+    }
   }
 };
 

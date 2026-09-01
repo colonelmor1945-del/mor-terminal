@@ -9,6 +9,11 @@ compatibility_date = "2026-07-01"
 binding = "RADAR"
 id = "a82f8cbf53054956abf9804916e55b19"
 
+# Asistente: Workers AI. Tambien hay que anadirlo en el panel
+# (Settings -> Bindings -> Add -> Workers AI, nombre AI) si se despliega pegando.
+[ai]
+binding = "AI"
+
 [triggers]
 crons = ["0 7 * * *"]
 

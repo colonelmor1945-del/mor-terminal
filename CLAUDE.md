@@ -159,6 +159,19 @@ el navegador por obligación, y llevan la matemática normal estándar — que e
 libro de texto y no protege nada. Lo propietario es la aplicación sobre TUS grupos,
 no la fórmula.
 
+## Asistente (F1, botón flotante)
+No es un modelo "entrenado con el quant": eso envejecería el día que se entrena.
+`/api/chat` reúne los datos EN VIVO (precio, pleitos, 8-K, arbitraje del día) y el
+modelo solo los redacta. Motor: **Workers AI**, que ya viene con la cuenta.
+
+Regla de diseño, tras todo lo aparecido en el proyecto: **que no se invente nada**.
+El prompt le prohíbe salirse del contexto, le obliga a decir "ese dato no lo tengo
+cargado" cuando falte, y le impide recomendar comprar, vender o apostar.
+
+⚠️ Necesita el binding **AI** en el panel (Settings → Bindings → Add → Workers AI,
+nombre `AI`). Sin él devuelve un error explicando cómo añadirlo.
+`dev.mjs` trae un AI simulado que devuelve el contexto, para probar sin gastar cuota.
+
 ## Roadmap (siguiente)
 1. ~~Subir `index.html` al Worker~~ hecho (31/08/2026, vía `sync.mjs`). Falta desplegar.
 2. Mover el universo `SC` a Google Sheets o KV para editarlo sin redesplegar. ← prioridad

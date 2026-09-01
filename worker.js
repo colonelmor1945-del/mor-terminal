@@ -858,6 +858,131 @@ async function fetchLitigios(dias, soloTk) {
            materiales: materiales.length, errores: errores, casos: casos.slice(0, 120) };
 }
 
+/* ---------- ASISTENTE ----------
+   No es un modelo "entrenado con el quant": eso envejeceria el dia que lo entrenas.
+   Consulta los datos EN VIVO y el modelo solo los redacta.
+
+   Regla de diseno, despues de todo lo que ha aparecido en este proyecto: que NO se
+   invente nada. Se le da el contexto, se le prohibe salirse de el, y si el dato no
+   esta se le obliga a decirlo. Un asistente que rellena huecos con plausibilidades
+   es peor que no tenerlo, porque suena igual de seguro cuando acierta que cuando
+   se lo inventa.                                                                 */
+
+const CHAT_MODELOS = [
+  "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+  "@cf/meta/llama-3.1-8b-instruct",
+  "@cf/mistral/mistral-7b-instruct-v0.2"
+];
+
+const CHAT_SISTEMA =
+  "Eres el asistente de MOR TERMINAL, un terminal de inteligencia financiera sobre " +
+  "contratos de defensa de EE.UU., small caps de defensa y mercados de prediccion.\n\n" +
+  "REGLAS ABSOLUTAS:\n" +
+  "1. Responde SOLO con los datos del CONTEXTO. Si el dato no esta ahi, di " +
+  "exactamente: 'Ese dato no lo tengo cargado ahora mismo'. NUNCA lo inventes ni lo " +
+  "estimes de memoria.\n" +
+  "2. Cita siempre las cifras concretas del contexto. Nada de generalidades.\n" +
+  "3. NUNCA recomiendes comprar, vender ni apostar. No das consejo de inversion.\n" +
+  "4. Si te preguntan que va a pasar o que subira, responde que el terminal no " +
+  "predice: probamos las estrategias con 4.010 millones de operaciones simuladas y " +
+  "ninguna supero al azar.\n" +
+  "5. Los cruces por nombre son coincidencias, no hechos: di siempre que hay que " +
+  "verificarlos a mano.\n" +
+  "6. Responde en espanol llano, breve, sin jerga. Maximo 5 frases salvo que te " +
+  "pidan detalle.";
+
+/* Reune el contexto con lo que ya calcula el terminal. Se recorta a proposito: los
+   modelos gratuitos tienen ventana corta y un contexto enorme empeora la respuesta. */
+async function chatContexto(pregunta) {
+  const q = String(pregunta || "").toLowerCase();
+  const partes = [];
+
+  // ¿Pregunta por una empresa concreta del universo?
+  const emp = SC.find(s => {
+    const n = s.name.toLowerCase(), t = String(s.tk).split(":").pop().toLowerCase();
+    return (n.length > 3 && q.includes(n.split(" ")[0].toLowerCase())) || (t.length > 2 && q.includes(t));
+  });
+
+  if (emp) {
+    partes.push("EMPRESA: " + emp.name + " (" + emp.tk + "), " + emp.country +
+                ", " + emp.region + ", nicho: " + emp.niche);
+    try {
+      const px = await fetchPx(emp.tk.split(":").pop());
+      const c = px.c, u = c[c.length - 1];
+      const m1 = c.length > 21 ? ((u / c[c.length - 22] - 1) * 100).toFixed(1) : null;
+      partes.push("PRECIO: " + u.toFixed(2) + " " + px.cur +
+                  (m1 !== null ? ", " + (m1 >= 0 ? "+" : "") + m1 + "% en el ultimo mes" : ""));
+    } catch (e) { partes.push("PRECIO: no disponible ahora mismo"); }
+    try {
+      const lit = await fetchLitigios(730, emp.tk);
+      partes.push("PLEITOS (2 anos): " + (lit.casos.length
+        ? lit.casos.slice(0, 3).map(c => c.fecha + " " + c.caso + " [" + c.natTxt + "]").join(" | ")
+        : "ninguno"));
+    } catch (e) {}
+  }
+
+  // Contexto general del dia
+  try {
+    const pmq = await fetchPMQ(2);
+    const ops = (pmq.groups || []).filter(g => g.net > 0).slice(0, 5);
+    partes.push("ARBITRAJE HOY (" + ops.length + " con ventaja neta): " + (ops.length
+      ? ops.map(g => g.ev + " suma " + g.sum.toFixed(4) + " (neto " + (g.net * 100).toFixed(2) + "%, " + g.side + ")").join(" | ")
+      : "ninguno cubre costes"));
+    if ((pmq.mono || []).length)
+      partes.push("MONOTONIA VIOLADA: " + pmq.mono.slice(0, 2)
+        .map(g => g.ev + ": '" + g.caro + "' no puede superar a '" + g.barato + "' (neto " + (g.neto * 100).toFixed(2) + "%)").join(" | "));
+  } catch (e) { partes.push("ARBITRAJE: no se pudo consultar"); }
+
+  try {
+    const ed = await fetchEdgar(30);
+    partes.push("AVISOS 8-K (30 dias): " + ed.n + " presentaciones, " + ed.descartadas +
+      " descartadas por sector. Cruces con el universo: " + (ed.cruces.length
+        ? ed.cruces.map(x => x.universo + " el " + x.fecha).join(", ") : "ninguno") +
+      ". Candidatas nuevas: " + (ed.candidatas.length
+        ? ed.candidatas.slice(0, 4).map(x => x.nombre + " (" + x.sector + ")").join(", ") : "ninguna"));
+  } catch (e) {}
+
+  try {
+    const con = await fetchContracts(30, 100);
+    const radar = con.filter(c => !c.prime);
+    partes.push("CONTRATOS DoD (30 dias): " + con.length + " adjudicados, " +
+      radar.length + " fuera de los gigantes. Mayor fuera de gigantes: " +
+      (radar[0] ? radar[0].name + " " + fmtM(radar[0].amount) : "n/d"));
+  } catch (e) {}
+
+  partes.push("UNIVERSO: " + SC.length + " small caps de defensa seguidas.");
+  partes.push("AVISO PERMANENTE: ninguna estrategia direccional del terminal ha " +
+              "superado al azar en 4.010 millones de operaciones simuladas.");
+  return partes.join("\n");
+}
+
+async function chatResponder(env, pregunta) {
+  const p = String(pregunta || "").trim().slice(0, 400);
+  if (!p) return { error: "pregunta vacia" };
+  if (!env.AI) return {
+    error: "Falta el binding AI. En el panel de Cloudflare: Settings -> Bindings -> " +
+           "Add -> Workers AI, con nombre AI."
+  };
+
+  const ctx = await chatContexto(p);
+  const mensajes = [
+    { role: "system", content: CHAT_SISTEMA },
+    { role: "user", content: "CONTEXTO (datos reales de ahora mismo):\n" + ctx +
+                             "\n\nPREGUNTA: " + p }
+  ];
+
+  let ultimo = "";
+  for (const modelo of CHAT_MODELOS) {
+    try {
+      const r = await env.AI.run(modelo, { messages: mensajes, max_tokens: 420 });
+      const txt = (r && (r.response || r.result || "")) + "";
+      if (txt.trim()) return { respuesta: txt.trim(), modelo: modelo, contexto: ctx };
+      ultimo = "respuesta vacia";
+    } catch (e) { ultimo = String(e && e.message || e); }
+  }
+  return { error: "Ningun modelo respondio (" + ultimo + ")", contexto: ctx };
+}
+
 /* ---------- MOTOR DE PAPEL ----------
    Existe porque el backtest sobre mercados cerrados tiene sesgo de seleccion: se
    piden ordenados por volumen, asi que la muestra son los mercados famosos. Aqui
@@ -1127,6 +1252,33 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 .fila{padding:8px 0;border-bottom:1px solid var(--line2);font-size:11.5px;line-height:1.45}
 .fila b{font-size:12px}
 .fila .m{color:var(--dim);font-size:10.5px}
+/* ---- asistente ---- */
+#iabtn{position:fixed;right:16px;bottom:16px;z-index:70;background:var(--pane);
+ border:1px solid var(--am);color:var(--am);padding:9px 15px;font:inherit;font-size:11px;
+ letter-spacing:.06em;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.6)}
+#iabtn:hover{background:rgba(255,159,26,.12)}
+#iap{position:fixed;right:16px;bottom:16px;width:min(430px,calc(100vw - 32px));
+ height:min(560px,calc(100vh - 90px));background:var(--pane);border:1px solid var(--line);
+ border-top:2px solid var(--am);z-index:71;display:none;flex-direction:column;
+ box-shadow:0 8px 34px rgba(0,0,0,.75)}
+#iap.on{display:flex}
+#iah{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line)}
+#iah b{font-size:12px;color:var(--am)}
+#iax{margin-left:auto;background:none;border:0;color:var(--dim);cursor:pointer;font-size:14px}
+#iam{flex:1;overflow:auto;padding:10px 11px;display:flex;flex-direction:column;gap:9px}
+.iab{padding:8px 10px;font-size:12px;line-height:1.55;max-width:92%}
+.iab.tu{background:var(--pane2);border:1px solid var(--line2);align-self:flex-end}
+.iab.ia{background:rgba(255,159,26,.06);border-left:2px solid var(--am);align-self:flex-start}
+.iab.err{background:rgba(255,77,94,.08);border-left:2px solid var(--rd);align-self:flex-start;color:var(--txt)}
+#iaf{display:flex;gap:6px;padding:9px 11px;border-top:1px solid var(--line)}
+#iaq{flex:1;background:#0b1119;border:1px solid var(--line);color:var(--txt);
+ padding:7px 9px;font:inherit;font-size:12px}
+#iag{background:#0b1119;border:1px solid var(--am);color:var(--am);padding:7px 13px;
+ font:inherit;font-size:11px;cursor:pointer}
+.iaeg{display:flex;flex-wrap:wrap;gap:5px;padding:0 11px 9px}
+.iaeg button{background:#0b1119;border:1px solid var(--line2);color:var(--dim);
+ padding:4px 8px;font:inherit;font-size:10px;cursor:pointer}
+.iaeg button:hover{color:var(--am);border-color:var(--am)}
 #dt.on{display:flex;align-items:center;justify-content:center}
 #dtb{width:min(1400px,95vw);height:min(900px,93vh);background:var(--pane);border:1px solid var(--line);
  border-top:2px solid var(--am);display:flex;flex-direction:column;min-height:0}
@@ -1196,6 +1348,13 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 <body>
 <div id="app">
 <canvas id="topo"></canvas>
+<button id="iabtn">🧠 PREGUNTA AL TERMINAL</button>
+<div id="iap">
+  <div id="iah"><b>ASISTENTE</b><span class="st">responde solo con tus datos</span><button id="iax">✕</button></div>
+  <div id="iam"></div>
+  <div class="iaeg" id="iaeg"></div>
+  <div id="iaf"><input id="iaq" placeholder="¿Qué merece la pena hoy?" autocomplete="off"><button id="iag">Enviar</button></div>
+</div>
 <div class="hdr">
   <div class="brand"><em></em>MOR TERMINAL</div>
   <button id="volver" title="Volver a la pantalla anterior" style="display:none">← VOLVER</button>
@@ -2118,7 +2277,9 @@ function pcl(x){return (x===null||!isFinite(x))?"":(x>=0?"up":"dn")}
 function renderQuant(){
  var Q=qv().toLowerCase();
  if(!QUANT.length){
-  var msg=Object.keys(PX).length?emp("📊","Calculando…"):emp("📈","Pulsa ⟳ Cargar precios.<br>Necesita el endpoint /api/px en tu Worker.");
+  var msg=QLOAD?emp("⏳","Descargando precios de 32 empresas…<br>Tarda unos segundos."):
+   (Object.keys(PX).length?emp("📊","Calculando…"):
+    emp("📈","Los precios se cargan solos al entrar.<br>Si no aparecen, pulsa ⟳ arriba."));
   $("q-rows").innerHTML="<tr><td colspan='10'>"+msg+"</td></tr>";
   $("q-rank").innerHTML=msg;$("q-rr").innerHTML=msg;return}
  $("q1").textContent=QUANT.length;$("q1s").textContent="de "+SC.length+" empresas";
@@ -2756,7 +2917,9 @@ function renderPaper(){
 
 function renderSim(){
  if(!BT){
-  var msg=emp("🧪","Pulsa ▶ Ejecutar simulación.<br>Descarga histórico real de mercados ya resueltos.");
+  var msg=BTLOAD?emp("⏳","Simulando… descargando históricos reales.<br>Tarda 1–3 minutos."):
+   emp("🧪","Pulsa <b>▶ Ejecutar simulación</b> aquí arriba.<br>"+
+    "No se lanza sola porque descarga cientos de históricos y tarda 1–3 minutos.");
   $("sim-rows").innerHTML="<tr><td colspan='9'>"+msg+"</td></tr>";
   $("s-cal").innerHTML=msg;$("s-eq").innerHTML=msg;return}
  var b=BT,best=b.strats[0];
@@ -3430,6 +3593,48 @@ function dibujarTopo(){
  for(var q=0;q<np;q++)g.fillRect(Math.floor(rnd()*W),Math.floor(rnd()*H),1.2,1.2);
 }
 
+/* ================= ASISTENTE =================
+   Consulta /api/chat, que reune los datos EN VIVO y se los pasa al modelo con
+   prohibicion expresa de salirse de ellos. Aqui solo se pinta la conversacion.  */
+var IABUSY=false;
+
+var IAEJ=["¿Qué merece la pena hoy?","¿Hay algún arbitraje abierto?",
+ "¿Qué pasa con Byrna?","¿Ha habido avisos 8-K de mi lista?",
+ "¿Qué contratos grandes no se han llevado los gigantes?"];
+
+function iaMsg(txt,clase){
+ var d=document.createElement("div");
+ d.className="iab "+(clase||"ia");
+ d.textContent=txt;
+ $("iam").appendChild(d);
+ $("iam").scrollTop=$("iam").scrollHeight;
+ return d}
+
+function iaPreguntar(q){
+ q=(q||$("iaq").value||"").trim();
+ if(!q||IABUSY)return;
+ IABUSY=true;$("iaq").value="";
+ iaMsg(q,"tu");
+ var esp=iaMsg("Consultando tus datos…","ia");
+ api("/api/chat?q="+encodeURIComponent(q),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){
+   if(j.error){esp.className="iab err";esp.textContent=j.error;return}
+   esp.textContent=j.respuesta})
+  .catch(function(e){esp.className="iab err";esp.textContent="No se pudo consultar: "+(e.message||e)})
+  .then(function(){IABUSY=false;$("iaq").focus()})}
+
+function iaAbrir(v){
+ $("iap").classList.toggle("on",v);
+ $("iabtn").style.display=v?"none":"";
+ if(v){
+  if(!$("iam").children.length){
+   iaMsg("Pregúntame por lo que hay hoy. Solo respondo con los datos que el terminal "+
+         "tiene cargados: si algo no lo sé, te lo digo en vez de inventarlo.","ia");
+   $("iaeg").innerHTML=IAEJ.map(function(e){return "<button data-ia=\\""+esc(e)+"\\">"+esc(e)+"</button>"}).join("");
+  }
+  $("iaq").focus()}}
+
 function aplicarModo(){
  document.body.classList.toggle("simple",MODO==="simple");
  var b=$("modo");
@@ -3541,6 +3746,7 @@ function go(v,sinApilar){
  if(v==="news")loadNews(NR);
  if(v==="con"&&!EDG&&!EDGL)loadEdgar();
  if(v==="ini"){if(!EDG&&!EDGL)loadEdgar(); if(!BQ&&!BLOAD)loadBrain();}
+ if(v==="quant"&&!Object.keys(PX).length&&!QLOAD)loadPx();
  if((v==="brain"||v==="cart")&&!BQ&&!BLOAD)loadBrain();
  if(v==="sim"&&!PAP)loadPaper();
  render()}
@@ -3553,6 +3759,7 @@ $("cmd").addEventListener("keydown",function(e){
  if(m[c]){e.target.value="";e.target.dataset.q="";go(m[c])}
  else if(c==="REFRESH"||c==="RELOAD"){e.target.value="";e.target.dataset.q="";refresh()}});
 document.addEventListener("keydown",function(e){
+ if(e.key==="Escape"&&$("iap").classList.contains("on")){iaAbrir(false);return}
  if(e.key==="Escape"&&FE){feCerrar();return}
  if(e.key==="Escape"&&DT){dtClose();return}
  if(e.key==="/"&&document.activeElement!==$("cmd")){e.preventDefault();$("cmd").focus();return}
@@ -3587,6 +3794,12 @@ $("i-keyok").onclick=function(){
  var v=$("i-key").value.trim();setKey(v);$("i-key").value="";
  $("i-keyst").textContent=v?"Clave guardada. Recargando…":"Clave borrada. Recargando…";
  setTimeout(function(){location.reload()},700)};
+$("iabtn").onclick=function(){iaAbrir(true)};
+$("iax").onclick=function(){iaAbrir(false)};
+$("iag").onclick=function(){iaPreguntar()};
+$("iaq").addEventListener("keydown",function(e){if(e.key==="Enter")iaPreguntar()});
+$("iaeg").addEventListener("click",function(e){
+ if(e.target.dataset&&e.target.dataset.ia)iaPreguntar(e.target.dataset.ia)});
 $("modo").onclick=function(){MODO=(MODO==="simple"?"pro":"simple");aplicarModo();render()};
 $("e-load").onclick=loadEdgar;
 $("e-d").onchange=loadEdgar;
@@ -3768,6 +3981,7 @@ export default {
       if (p === "/api/news") return json(await fetchNews(url.searchParams.get("region") || "Pentágono"), cab);
       if (p === "/api/pmq") return json(await fetchPMQ(Number(url.searchParams.get("pages")) || 3), cab);
       if (p === "/api/pmh") return json(await fetchPMHist(url.searchParams.get("t"), url.searchParams.get("i")), cab);
+      if (p === "/api/chat") return json(await chatResponder(env, url.searchParams.get("q")), cab);
       if (p === "/api/ynews") return json(await fetchYNews(url.searchParams.get("s")), cab);
       if (p === "/api/litigios") return json(await fetchLitigios(Number(url.searchParams.get("d")) || 365, url.searchParams.get("tk")), cab);
       if (p === "/api/edgar") return json(await fetchEdgar(Number(url.searchParams.get("d")) || 30), cab);

@@ -124,6 +124,33 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 .fila{padding:8px 0;border-bottom:1px solid var(--line2);font-size:11.5px;line-height:1.45}
 .fila b{font-size:12px}
 .fila .m{color:var(--dim);font-size:10.5px}
+/* ---- asistente ---- */
+#iabtn{position:fixed;right:16px;bottom:16px;z-index:70;background:var(--pane);
+ border:1px solid var(--am);color:var(--am);padding:9px 15px;font:inherit;font-size:11px;
+ letter-spacing:.06em;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.6)}
+#iabtn:hover{background:rgba(255,159,26,.12)}
+#iap{position:fixed;right:16px;bottom:16px;width:min(430px,calc(100vw - 32px));
+ height:min(560px,calc(100vh - 90px));background:var(--pane);border:1px solid var(--line);
+ border-top:2px solid var(--am);z-index:71;display:none;flex-direction:column;
+ box-shadow:0 8px 34px rgba(0,0,0,.75)}
+#iap.on{display:flex}
+#iah{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line)}
+#iah b{font-size:12px;color:var(--am)}
+#iax{margin-left:auto;background:none;border:0;color:var(--dim);cursor:pointer;font-size:14px}
+#iam{flex:1;overflow:auto;padding:10px 11px;display:flex;flex-direction:column;gap:9px}
+.iab{padding:8px 10px;font-size:12px;line-height:1.55;max-width:92%}
+.iab.tu{background:var(--pane2);border:1px solid var(--line2);align-self:flex-end}
+.iab.ia{background:rgba(255,159,26,.06);border-left:2px solid var(--am);align-self:flex-start}
+.iab.err{background:rgba(255,77,94,.08);border-left:2px solid var(--rd);align-self:flex-start;color:var(--txt)}
+#iaf{display:flex;gap:6px;padding:9px 11px;border-top:1px solid var(--line)}
+#iaq{flex:1;background:#0b1119;border:1px solid var(--line);color:var(--txt);
+ padding:7px 9px;font:inherit;font-size:12px}
+#iag{background:#0b1119;border:1px solid var(--am);color:var(--am);padding:7px 13px;
+ font:inherit;font-size:11px;cursor:pointer}
+.iaeg{display:flex;flex-wrap:wrap;gap:5px;padding:0 11px 9px}
+.iaeg button{background:#0b1119;border:1px solid var(--line2);color:var(--dim);
+ padding:4px 8px;font:inherit;font-size:10px;cursor:pointer}
+.iaeg button:hover{color:var(--am);border-color:var(--am)}
 #dt.on{display:flex;align-items:center;justify-content:center}
 #dtb{width:min(1400px,95vw);height:min(900px,93vh);background:var(--pane);border:1px solid var(--line);
  border-top:2px solid var(--am);display:flex;flex-direction:column;min-height:0}
@@ -193,6 +220,13 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 <body>
 <div id="app">
 <canvas id="topo"></canvas>
+<button id="iabtn">🧠 PREGUNTA AL TERMINAL</button>
+<div id="iap">
+  <div id="iah"><b>ASISTENTE</b><span class="st">responde solo con tus datos</span><button id="iax">✕</button></div>
+  <div id="iam"></div>
+  <div class="iaeg" id="iaeg"></div>
+  <div id="iaf"><input id="iaq" placeholder="¿Qué merece la pena hoy?" autocomplete="off"><button id="iag">Enviar</button></div>
+</div>
 <div class="hdr">
   <div class="brand"><em></em>MOR TERMINAL</div>
   <button id="volver" title="Volver a la pantalla anterior" style="display:none">← VOLVER</button>
@@ -1115,7 +1149,9 @@ function pcl(x){return (x===null||!isFinite(x))?"":(x>=0?"up":"dn")}
 function renderQuant(){
  var Q=qv().toLowerCase();
  if(!QUANT.length){
-  var msg=Object.keys(PX).length?emp("📊","Calculando…"):emp("📈","Pulsa ⟳ Cargar precios.<br>Necesita el endpoint /api/px en tu Worker.");
+  var msg=QLOAD?emp("⏳","Descargando precios de 32 empresas…<br>Tarda unos segundos."):
+   (Object.keys(PX).length?emp("📊","Calculando…"):
+    emp("📈","Los precios se cargan solos al entrar.<br>Si no aparecen, pulsa ⟳ arriba."));
   $("q-rows").innerHTML="<tr><td colspan='10'>"+msg+"</td></tr>";
   $("q-rank").innerHTML=msg;$("q-rr").innerHTML=msg;return}
  $("q1").textContent=QUANT.length;$("q1s").textContent="de "+SC.length+" empresas";
@@ -1753,7 +1789,9 @@ function renderPaper(){
 
 function renderSim(){
  if(!BT){
-  var msg=emp("🧪","Pulsa ▶ Ejecutar simulación.<br>Descarga histórico real de mercados ya resueltos.");
+  var msg=BTLOAD?emp("⏳","Simulando… descargando históricos reales.<br>Tarda 1–3 minutos."):
+   emp("🧪","Pulsa <b>▶ Ejecutar simulación</b> aquí arriba.<br>"+
+    "No se lanza sola porque descarga cientos de históricos y tarda 1–3 minutos.");
   $("sim-rows").innerHTML="<tr><td colspan='9'>"+msg+"</td></tr>";
   $("s-cal").innerHTML=msg;$("s-eq").innerHTML=msg;return}
  var b=BT,best=b.strats[0];
@@ -2427,6 +2465,48 @@ function dibujarTopo(){
  for(var q=0;q<np;q++)g.fillRect(Math.floor(rnd()*W),Math.floor(rnd()*H),1.2,1.2);
 }
 
+/* ================= ASISTENTE =================
+   Consulta /api/chat, que reune los datos EN VIVO y se los pasa al modelo con
+   prohibicion expresa de salirse de ellos. Aqui solo se pinta la conversacion.  */
+var IABUSY=false;
+
+var IAEJ=["¿Qué merece la pena hoy?","¿Hay algún arbitraje abierto?",
+ "¿Qué pasa con Byrna?","¿Ha habido avisos 8-K de mi lista?",
+ "¿Qué contratos grandes no se han llevado los gigantes?"];
+
+function iaMsg(txt,clase){
+ var d=document.createElement("div");
+ d.className="iab "+(clase||"ia");
+ d.textContent=txt;
+ $("iam").appendChild(d);
+ $("iam").scrollTop=$("iam").scrollHeight;
+ return d}
+
+function iaPreguntar(q){
+ q=(q||$("iaq").value||"").trim();
+ if(!q||IABUSY)return;
+ IABUSY=true;$("iaq").value="";
+ iaMsg(q,"tu");
+ var esp=iaMsg("Consultando tus datos…","ia");
+ api("/api/chat?q="+encodeURIComponent(q),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){
+   if(j.error){esp.className="iab err";esp.textContent=j.error;return}
+   esp.textContent=j.respuesta})
+  .catch(function(e){esp.className="iab err";esp.textContent="No se pudo consultar: "+(e.message||e)})
+  .then(function(){IABUSY=false;$("iaq").focus()})}
+
+function iaAbrir(v){
+ $("iap").classList.toggle("on",v);
+ $("iabtn").style.display=v?"none":"";
+ if(v){
+  if(!$("iam").children.length){
+   iaMsg("Pregúntame por lo que hay hoy. Solo respondo con los datos que el terminal "+
+         "tiene cargados: si algo no lo sé, te lo digo en vez de inventarlo.","ia");
+   $("iaeg").innerHTML=IAEJ.map(function(e){return "<button data-ia=\""+esc(e)+"\">"+esc(e)+"</button>"}).join("");
+  }
+  $("iaq").focus()}}
+
 function aplicarModo(){
  document.body.classList.toggle("simple",MODO==="simple");
  var b=$("modo");
@@ -2538,6 +2618,7 @@ function go(v,sinApilar){
  if(v==="news")loadNews(NR);
  if(v==="con"&&!EDG&&!EDGL)loadEdgar();
  if(v==="ini"){if(!EDG&&!EDGL)loadEdgar(); if(!BQ&&!BLOAD)loadBrain();}
+ if(v==="quant"&&!Object.keys(PX).length&&!QLOAD)loadPx();
  if((v==="brain"||v==="cart")&&!BQ&&!BLOAD)loadBrain();
  if(v==="sim"&&!PAP)loadPaper();
  render()}
@@ -2550,6 +2631,7 @@ $("cmd").addEventListener("keydown",function(e){
  if(m[c]){e.target.value="";e.target.dataset.q="";go(m[c])}
  else if(c==="REFRESH"||c==="RELOAD"){e.target.value="";e.target.dataset.q="";refresh()}});
 document.addEventListener("keydown",function(e){
+ if(e.key==="Escape"&&$("iap").classList.contains("on")){iaAbrir(false);return}
  if(e.key==="Escape"&&FE){feCerrar();return}
  if(e.key==="Escape"&&DT){dtClose();return}
  if(e.key==="/"&&document.activeElement!==$("cmd")){e.preventDefault();$("cmd").focus();return}
@@ -2584,6 +2666,12 @@ $("i-keyok").onclick=function(){
  var v=$("i-key").value.trim();setKey(v);$("i-key").value="";
  $("i-keyst").textContent=v?"Clave guardada. Recargando…":"Clave borrada. Recargando…";
  setTimeout(function(){location.reload()},700)};
+$("iabtn").onclick=function(){iaAbrir(true)};
+$("iax").onclick=function(){iaAbrir(false)};
+$("iag").onclick=function(){iaPreguntar()};
+$("iaq").addEventListener("keydown",function(e){if(e.key==="Enter")iaPreguntar()});
+$("iaeg").addEventListener("click",function(e){
+ if(e.target.dataset&&e.target.dataset.ia)iaPreguntar(e.target.dataset.ia)});
 $("modo").onclick=function(){MODO=(MODO==="simple"?"pro":"simple");aplicarModo();render()};
 $("e-load").onclick=loadEdgar;
 $("e-d").onchange=loadEdgar;
