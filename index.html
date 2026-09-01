@@ -105,7 +105,21 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 .chips button:hover{color:var(--txt)}
 .str{cursor:pointer;color:#2b3a4d;font-size:13px}
 /* ---- panel de detalle de mercado ---- */
-#dt{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:60;display:none}
+#dt,#fe{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:60;display:none}
+#fe.on{display:flex;align-items:center;justify-content:center}
+#feb{width:min(1400px,95vw);height:min(900px,93vh);background:var(--pane);border:1px solid var(--line);
+ border-top:2px solid var(--cy);display:flex;flex-direction:column;min-height:0}
+#feh{display:flex;align-items:flex-start;gap:12px;padding:10px 13px;border-bottom:1px solid var(--line);flex:0 0 auto}
+#feh h2{font-size:14px;font-weight:600;color:var(--txt)}
+#feh .sub{font-size:10.5px;color:var(--dim);margin-top:3px}
+#fex{margin-left:auto;background:#0b1119;border:1px solid var(--line);color:var(--dim);
+ padding:4px 10px;font:inherit;font-size:11px;cursor:pointer;flex:0 0 auto}
+#fex:hover{color:var(--rd);border-color:var(--rd)}
+#fec{flex:1;overflow:auto;padding:10px 13px;display:grid;gap:9px;grid-template-columns:1fr 1fr;grid-auto-rows:min-content}
+#fec .full{grid-column:1/-1}
+.fila{padding:8px 0;border-bottom:1px solid var(--line2);font-size:11.5px;line-height:1.45}
+.fila b{font-size:12px}
+.fila .m{color:var(--dim);font-size:10.5px}
 #dt.on{display:flex;align-items:center;justify-content:center}
 #dtb{width:min(1400px,95vw);height:min(900px,93vh);background:var(--pane);border:1px solid var(--line);
  border-top:2px solid var(--am);display:flex;flex-direction:column;min-height:0}
@@ -137,7 +151,12 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 #modo{background:#0b1119;border:1px solid var(--line);color:var(--dim);padding:4px 11px;
  font:inherit;font-size:10px;letter-spacing:.06em;cursor:pointer;white-space:nowrap}
 #modo.pro{border-color:var(--am);color:var(--am)}
-body.simple .solo-pro{display:none !important}
+/* El modo sencillo NO esconde herramientas: las traduce. Solo se oculta el
+   comando de texto, que es para teclear ordenes tipo terminal.                  */
+body.simple .solo-cmd{display:none !important}
+body.simple .ayuda{display:block}
+.ayuda{display:none;font-size:12px;line-height:1.55;color:var(--txt);background:rgba(255,159,26,.06);
+ border-left:2px solid var(--am);padding:8px 11px;margin:0 0 8px}
 .tarj{background:var(--pane);border:1px solid var(--line);border-left:3px solid var(--am);padding:14px 16px;
  display:flex;flex-direction:column;gap:6px;min-height:0}
 .tarj.ok{border-left-color:var(--gr)} .tarj.no{border-left-color:var(--rd)} .tarj.inf{border-left-color:var(--cy)}
@@ -172,7 +191,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 <div class="hdr">
   <div class="brand"><em></em>MOR TERMINAL</div>
   <button id="modo" title="Cambia entre vista sencilla y vista completa">MODO SENCILLO</button>
-  <div class="cmd"><input id="cmd" placeholder="COMANDO / BUSCAR…" autocomplete="off"><span class="hint">↵</span></div>
+  <div class="cmd solo-cmd"><input id="cmd" placeholder="COMANDO / BUSCAR…" autocomplete="off"><span class="hint">↵</span></div>
   <div class="lights">
     <div class="lt ld" id="L1"><b></b><span>DOD</span></div>
     <div class="lt ld" id="L2"><b></b><span>PM</span></div>
@@ -184,16 +203,16 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 <div class="tape"><div class="run" id="tape"></div></div>
 <div class="nav" id="nav">
   <button data-v="ini" class="on">F1 INICIO</button>
-  <button data-v="dash" class="solo-pro">F2 DASH</button>
+  <button data-v="dash">F2 DASH</button>
   <button data-v="con">F3 CONTRATOS</button>
   <button data-v="sc">F4 EMPRESAS</button>
   <button data-v="pm">F5 APUESTAS</button>
   <button data-v="news">F6 NOTICIAS</button>
-  <button data-v="quant" class="solo-pro">F7 QUANT</button>
-  <button data-v="brain" class="solo-pro">F8 CEREBRO</button>
-  <button data-v="sim" class="solo-pro">F9 SIMULADOR</button>
-  <button data-v="cart" class="solo-pro">F10 CARTERA</button>
-  <button data-v="lib" class="solo-pro">F11 BIBLIOTECA</button>
+  <button data-v="quant">F7 QUANT</button>
+  <button data-v="brain">F8 CEREBRO</button>
+  <button data-v="sim">F9 SIMULADOR</button>
+  <button data-v="cart">F10 CARTERA</button>
+  <button data-v="lib">F11 BIBLIOTECA</button>
   <div class="sp"></div>
   <div class="meta" id="meta"></div>
 </div>
@@ -307,7 +326,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="p" style="height:260px"><h3>RIESGO vs RETORNO · 6 MESES</h3><div class="bd" id="q-rr"></div></div>
   </div>
   <div class="p" style="height:calc(100vh - 470px);min-height:280px">
-    <h3>TABLA QUANT · SMALL CAPS DEFENSA <span id="q-cnt"></span></h3>
+    <h3>TABLA QUANT · SMALL CAPS DEFENSA <span id="q-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— clic en una empresa para su ficha completa</span></h3>
     <div class="chips"><button id="qload">⟳ Cargar / actualizar precios</button><span class="st" id="q-st">Los precios pasan por tu Worker (Yahoo Finance; el navegador no puede por CORS).</span></div>
     <div class="bd"><table><thead><tr>
       <th data-k="name" style="width:17%">Empresa</th><th style="width:9%">Precio</th>
@@ -586,7 +605,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
       superó al azar</b>. Lo que sí hace es enseñarte información pública antes de que
       la mire nadie más, y marcar cuando las cuentas de un mercado no cuadran.
       Nada de esto es recomendación de inversión.
-      <span class="solo-pro"> · En modo completo tienes el detalle técnico de todo: F7 a F11.</span>
+
     </div>
   </div>
 </div>
@@ -627,6 +646,21 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   </div>
 </div>
 </main>
+
+<div id="fe"><div id="feb">
+  <div id="feh">
+    <div style="min-width:0"><h2 id="fe-n">—</h2><div class="sub" id="fe-s">—</div></div>
+    <button id="fex">✕ CERRAR · Esc</button>
+  </div>
+  <div id="fec">
+    <div class="dp full"><h4 id="fe-h1">Lo esencial</h4><div class="c"><div class="mg" id="fe-met"></div></div></div>
+    <div class="dp" style="height:270px"><h4 id="fe-h2">Precio · último año</h4><div class="c" style="flex:1" id="fe-px"></div></div>
+    <div class="dp" style="height:270px"><h4 id="fe-h3">Avisos oficiales a la SEC (8-K)</h4><div class="c" style="flex:1;overflow:auto" id="fe-8k"></div></div>
+    <div class="dp" style="height:230px"><h4 id="fe-h4">Pleitos en tribunales</h4><div class="c" style="flex:1;overflow:auto" id="fe-lit"></div></div>
+    <div class="dp" style="height:230px"><h4 id="fe-h5">Noticias</h4><div class="c" style="flex:1;overflow:auto" id="fe-news"></div></div>
+    <div class="dp full"><h4 id="fe-h6">Contratos del Pentágono que podrían ser suyos</h4><div class="c" style="overflow:auto;max-height:200px" id="fe-con"></div></div>
+  </div>
+</div></div>
 
 <div id="dt"><div id="dtb">
   <div id="dth">
@@ -968,7 +1002,7 @@ function render(){
   var r2=SC.filter(function(s){return (RG==="Todas"||s.r===RG)&&(!WO||W[s.tk])&&(!Q||(s.name+" "+s.c+" "+s.n+" "+s.tk).toLowerCase().indexOf(Q)>=0)});
   $("s-cnt").textContent=r2.length+" de "+SC.length;r2=srt(r2,"name");
   $("s-rows").innerHTML=r2.length?r2.map(function(s){
-   return "<tr><td><span class='str "+(W[s.tk]?"on":"")+"' data-tk='"+s.tk+"'>"+(W[s.tk]?"★":"☆")+"</span></td>"+
+   return "<tr data-tk='"+s.tk+"' style='cursor:pointer'><td><span class='str "+(W[s.tk]?"on":"")+"' data-tk='"+s.tk+"'>"+(W[s.tk]?"★":"☆")+"</span></td>"+
    "<td>"+esc(s.name)+"<div class='dsc'>"+s.tk+"</div></td><td class='dsc' style='color:var(--txt)'>"+esc(s.c)+"</td>"+
    "<td><span class='tg "+SZC[s.z]+"'>"+SZ[s.z]+"</span></td><td class='dsc'>"+esc(s.n)+"</td>"+
    "<td><a target='_blank' rel='noopener' href='https://www.tradingview.com/chart/?symbol="+encodeURIComponent(s.tk)+"'>TradingView</a> · <a target='_blank' rel='noopener' href='https://simplywall.st/search?query="+encodeURIComponent(s.name)+"'>Simply Wall St</a></td></tr>"}).join("")
@@ -1105,7 +1139,7 @@ function renderQuant(){
  var rows=QUANT.filter(function(q){return !Q||(q.s.name+" "+q.s.tk).toLowerCase().indexOf(Q)>=0});
  $("q-cnt").textContent=rows.length+" con datos";
  $("q-rows").innerHTML=rows.map(function(q){
-  return "<tr><td>"+esc(q.s.name)+"<div class='dsc'>"+q.s.tk+"</div></td>"+
+  return "<tr data-tk='"+q.s.tk+"' style='cursor:pointer'><td>"+esc(q.s.name)+"<div class='dsc'>"+q.s.tk+"</div></td>"+
   "<td class='n'>"+q.px.toFixed(2)+"</td>"+
   "<td class='n "+pcl(q.r1)+"'>"+pct(q.r1)+"</td><td class='n "+pcl(q.r3)+"'>"+pct(q.r3)+"</td><td class='n "+pcl(q.r6)+"'>"+pct(q.r6)+"</td>"+
   "<td class='n dsc'>"+(isFinite(q.vol)?(q.vol*100).toFixed(0)+"%":"—")+"</td>"+
@@ -1734,6 +1768,88 @@ function renderSim(){
    Access-Control-Allow-Origin *, así que no hace falta pasar por el Worker.       */
 var DT=null;
 
+/* ================= FICHA DE EMPRESA =================
+   Reune en un sitio todo lo que el terminal sabe de una compania: precio, avisos a
+   la SEC, pleitos, noticias y contratos que podrian ser suyos. Es el nodo que
+   conecta el resto de vistas.                                                    */
+var FE=null,FELIT=null;
+
+function feAbrir(tk){
+ var e=null;
+ for(var i=0;i<SC.length;i++)if(SC[i].tk===tk){e=SC[i];break}
+ if(!e)return;
+ FE=e;$("fe").classList.add("on");
+ $("fe-n").textContent=e.name;
+ $("fe-s").innerHTML=esc(e.tk)+" · "+esc(e.c)+" · "+esc(e.n)+
+  " · <a href='https://www.tradingview.com/symbols/"+esc(e.tk.replace(":","-"))+"/' target='_blank' rel='noopener'>ver gráfico ↗</a>";
+
+ var sim=SMAP[e.tk];
+ // --- lo esencial ---
+ var q=null;for(var j=0;j<QUANT.length;j++)if(QUANT[j].s.tk===e.tk){q=QUANT[j];break}
+ var k=function(l,v,c){return "<div><div class='l'>"+l+"</div><div class='v "+(c||"")+"'>"+v+"</div></div>"};
+ $("fe-met").innerHTML=
+  k(MODO==="simple"?"TAMAÑO":"CAPITALIZACIÓN",["micro","pequeña","mediana"][e.z]||"—")+
+  k("REGIÓN",esc(e.r))+
+  (q?k(MODO==="simple"?"ÚLTIMO MES":"1M",pct(q.r1),pcl(q.r1))+
+     k(MODO==="simple"?"ÚLTIMOS 6 MESES":"6M",pct(q.r6),pcl(q.r6))+
+     k(MODO==="simple"?"CUÁNTO SE MUEVE":"VOL. ANUAL",pct(q.vol))+
+     k(MODO==="simple"?"PEOR CAÍDA":"MAX DD",pct(q.dd),"dn")+
+     k(MODO==="simple"?"FUERZA":"Z-SCORE",q.z.toFixed(2),q.z>0?"up":"dn")
+   :k("PRECIOS","<span class='dim'>sin cargar</span>"))+
+  k("EN TU LISTA",W[e.tk]?"sí":"no")+
+  (sim?k("SÍMBOLO",esc(sim)):"");
+
+ // --- precio ---
+ $("fe-px").innerHTML=q&&q.c?areaChart(q.c):emp("📈",MODO==="simple"?
+  "Pulsa «Cargar precios» en ANÁLISIS DE EMPRESAS.":"Carga los precios en la vista QUANT.");
+
+ // --- 8-K ---
+ var tkc=e.tk.split(":").pop();
+ if(EDG){
+  var f=EDG.todas.filter(function(x){return x.tk===tkc});
+  $("fe-8k").innerHTML=f.length?f.map(function(x){
+   return "<div class='fila'><b><a href='"+esc(x.url)+"' target='_blank' rel='noopener'>"+esc(x.fecha)+"</a></b> · "+
+    esc(x.sector)+"<div class='m'>"+esc(x.etiquetas.join(", "))+"</div></div>"}).join("")
+   :emp("—","Sin avisos en los últimos "+(EDG.desde?("días desde "+EDG.desde):"30 días")+
+     ".<br>Amplía la ventana en CONTRATOS para mirar más atrás.")}
+ else $("fe-8k").innerHTML=emp("⏳","Cargando avisos…");
+
+ // --- pleitos ---
+ $("fe-lit").innerHTML=emp("⏳","Buscando pleitos…");
+ api("/api/litigios?d=730&tk="+encodeURIComponent(e.tk),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){
+   var c=j.casos||[];
+   $("fe-lit").innerHTML=c.length?c.map(function(x){
+    return "<div class='fila'><b><a href='"+esc(x.url)+"' target='_blank' rel='noopener'>"+esc(x.caso.slice(0,52))+"</a></b>"+
+     "<div class='m'>"+esc(x.fecha)+" · "+esc(x.tribunal)+" · "+esc(x.natTxt)+
+     (x.contraEstado?" · <span class='t1'>contra el Estado</span>":"")+"</div></div>"}).join("")
+    :emp("—",MODO==="simple"?"Ningún pleito en los últimos dos años. Buena señal.":"Sin litigios en 730 días.")})
+  .catch(function(){$("fe-lit").innerHTML=emp("⚠️","No se pudieron cargar los pleitos.")});
+
+ // --- noticias ---
+ $("fe-news").innerHTML=emp("⏳","Buscando noticias…");
+ api("/api/ynews?s="+encodeURIComponent(sim||tkc),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){var nw=j.noticias||[];
+   $("fe-news").innerHTML=nw.length?nw.map(function(x){
+    return "<div class='fila'><b><a href='"+esc(x.url||"#")+"' target='_blank' rel='noopener'>"+esc(x.t.slice(0,74))+"</a></b>"+
+     "<div class='m'>"+esc(x.medio)+"</div></div>"}).join("")
+    :emp("—","Sin noticias recientes.")})
+  .catch(function(){$("fe-news").innerHTML=emp("⚠️","Noticias no disponibles.")});
+
+ // --- contratos que podrian ser suyos ---
+ var tok=e.name.toUpperCase().split(/[^A-Z0-9]+/).filter(function(x){return x.length>=4})[0]||"";
+ var cc=tok?CON.filter(function(c){return c.name.toUpperCase().indexOf(tok)>=0}):[];
+ $("fe-con").innerHTML=cc.length?cc.slice(0,12).map(function(c){
+  return "<div class='fila'><b>"+f$(c.amount)+"</b> · "+esc(c.name.slice(0,44))+
+   "<div class='m'>"+esc(c.date)+" · "+esc((c.desc||"").slice(0,90))+"</div></div>"}).join("")+
+  "<div class='st' style='margin-top:7px'>Coincidencia por nombre. <b>Verifícalo a mano</b>: que el nombre encaje no significa que sea la misma empresa.</div>"
+  :emp("—","Ningún contrato coincide con este nombre en los últimos 30 días.");
+}
+
+function feCerrar(){$("fe").classList.remove("on");FE=null}
+
 function dtOpen(id){
  var m=null;
  if(BQ)for(var i=0;i<BQ.markets.length;i++)if(String(BQ.markets[i].id)===String(id)){m=BQ.markets[i];break}
@@ -2102,19 +2218,84 @@ function renderEdgar(){
    completo no se elimina: se esconde tras un interruptor.                        */
 var MODO=(function(){try{return localStorage.getItem("mor_modo")||"simple"}catch(e){return "simple"}})();
 
+/* Diccionario de traduccion. El modo sencillo NO quita herramientas: cambia como
+   se llaman. Izquierda lo que ve un quant, derecha lo que entiende cualquiera.   */
+var TRAD={
+ // navegacion
+ "F2 DASH":"F2 RESUMEN","F7 QUANT":"F7 ANÁLISIS DE EMPRESAS","F8 CEREBRO":"F8 OPORTUNIDADES",
+ "F9 SIMULADOR":"F9 ¿ESTO FUNCIONA?","F10 CARTERA":"F10 CUÁNTO APOSTAR","F11 BIBLIOTECA":"F11 MÉTODOS",
+ // columnas de acciones
+ "Vol.anual":"Cuánto se mueve","Max DD":"Peor caída","Z-score":"Fuerza","1M":"1 mes","3M":"3 meses","6M":"6 meses",
+ // columnas de prediccion
+ "Justo (Wang)":"Precio justo","Sesgo":"¿Caro?","Spread rel.":"Coste de entrar","Rotación":"¿Se mueve dinero?",
+ "σ norm.":"Nerviosismo","Urgencia":"Prisa","Z mom.":"Tendencia","Σ probs":"Suma","Desvío":"Se pasa en",
+ "Medida":"Qué mide","Bruto":"En bruto","Neto":"Limpio","Acción":"Qué harías","Salidas":"Opciones",
+ // simulador
+ "BRIER SCORE":"ACIERTO DEL MERCADO","λ EMPÍRICA":"SESGO MEDIDO","MEJOR ESTRATEGIA":"LA QUE MEJOR SALIÓ",
+ "MERCADOS RESUELTOS":"CASOS YA TERMINADOS","t-stat":"¿Es suerte?","Mediana":"Caso típico","Medio":"Media",
+ "Apuestas":"Veces","Acierto":"Aciertos","¿Significativo?":"¿Es de fiar?","Total":"Total",
+ // cartera
+ "Kelly":"% sugerido","Tu prob.":"Tu apuesta","Ventaja":"Tu ventaja","Importe":"Dinero","Títulos":"Participaciones",
+ "CAPITAL COMPROMETIDO":"DINERO EN JUEGO","VALOR ESPERADO":"LO QUE ESPERARÍAS GANAR","PEOR CASO":"SI SALE TODO MAL",
+ "ARBITRAJE DISPONIBLE":"DINERO SIN ADIVINAR",
+ // titulos de panel
+ "ARBITRAJE ESTRUCTURAL":"DONDE LAS CUENTAS NO CUADRAN",
+ "SESGO FAVORITO-LONGSHOT":"¿ESTÁN CAROS LOS IMPROBABLES?",
+ "DISTORSIÓN DE WANG · PRECIO vs PROBABILIDAD REAL":"LO QUE CUESTA vs LO QUE VALE DE VERDAD",
+ "CALCULADORA DE VENTAJA Y KELLY":"CALCULADORA: ¿CUÁNTO APOSTARÍAS?",
+ "TABLA DE MERCADOS":"TODAS LAS APUESTAS","TABLA QUANT · SMALL CAPS DEFENSA":"TODAS LAS EMPRESAS",
+ "PRUEBA DE CHOQUE · MONTE CARLO CONTRA EL AZAR":"¿ESTO ES SUERTE? PRUEBA CONTRA EL AZAR",
+ "ESTRATEGIAS SIMULADAS":"QUÉ HABRÍA PASADO SI…","REGISTRO EN PAPEL":"APUNTES SIN DINERO REAL",
+ "CALIBRACIÓN · LO QUE EL MERCADO DICE vs LO QUE PASA":"¿ACIERTA EL MERCADO CUANDO DICE 70%?",
+ "CURVA DE CAPITAL · MEJOR ESTRATEGIA":"CÓMO HABRÍA IDO TU DINERO",
+ "RANKING POR MOMENTUM COMPUESTO (Z-SCORE)":"LAS QUE MÁS FUERZA LLEVAN",
+ "RIESGO vs RETORNO · 6 MESES":"RIESGO FRENTE A GANANCIA · 6 MESES",
+ "BIBLIOTECA QUANT · ESTADO EN EL PROYECTO":"MÉTODOS: CUÁLES USAMOS Y POR QUÉ",
+ "MERCADOS ANALIZADOS":"APUESTAS MIRADAS","GRUPOS CON VENTAJA":"DONDE SOBRA DINERO",
+ "MEJOR VENTAJA NETA":"LA MEJOR DE HOY","COBERTURA DE PRECIOS":"EMPRESAS CON PRECIO",
+ "MEJOR MOMENTUM 6M":"LA QUE MÁS SUBIÓ","MEDIA VOL. ANUAL":"CUÁNTO SE MUEVEN","SEÑALES ACTIVAS":"AVISOS ACTIVOS",
+ "VIGILANTE 8-K · SEC EDGAR":"AVISOS OFICIALES DE EMPRESAS",
+ "IMPLEMENTADO":"YA FUNCIONA","EN COLA":"POR HACER","DESCARTADO":"NO SIRVE","CUELLO DE BOTELLA":"LO QUE FALTA"
+};
+
+/* Ayudas por vista: una frase que dice para que sirve la pantalla. */
+var AYUDA={
+ quant:"Aquí ves las 33 empresas con su precio y cuánto se han movido. «Fuerza» compara cada una con las demás: por encima de 0 va mejor que la media del grupo.",
+ brain:"Cada línea es una apuesta abierta en Polymarket. Lo importante está arriba: «donde las cuentas no cuadran» son sitios donde las probabilidades no suman 100% y sobra dinero sin tener que acertar nada. Haz clic en cualquier fila para verlo todo de esa apuesta.",
+ sim:"Aquí se comprueba si una idea habría funcionado de verdad, con datos que ya pasaron. Mira la columna «¿Es de fiar?»: si dice que es ruido, es que el resultado bonito era casualidad.",
+ cart:"Tú pones cuánta probabilidad le das a algo y cuánto dinero tienes; esto calcula cuánto arriesgarías. Abajo, las operaciones donde no hace falta adivinar nada porque las cuentas ya no cuadran.",
+ lib:"Los siete grandes métodos del análisis cuantitativo y si sirven aquí o no. Un contrato de predicción no es una acción, y por eso la mitad de las técnicas clásicas no valen.",
+ dash:"Vista general de todo a la vez: contratos del Pentágono, tus empresas, apuestas y noticias."
+};
+
+function traducir(){
+ var simple=MODO==="simple";
+ [].forEach.call(document.querySelectorAll("#nav button[data-v], th, h3, .kpi .k, .tarj .t"),function(el){
+  if(el.dataset.oTxt===undefined)el.dataset.oTxt=el.innerHTML;
+  var o=el.dataset.oTxt;
+  if(!simple){el.innerHTML=o;return}
+  // se traduce por trozos: muchos titulos llevan contadores detras.
+  var out=o;
+  for(var k in TRAD){if(o.indexOf(k)>=0){out=out.split(k).join(TRAD[k]);break}}
+  el.innerHTML=out});
+ // ayuda por vista
+ for(var v in AYUDA){
+  var cont=$("v-"+v);if(!cont)continue;
+  var a=cont.querySelector(".ayuda");
+  if(!a){a=document.createElement("div");a.className="ayuda";cont.insertBefore(a,cont.firstChild)}
+  a.innerHTML=AYUDA[v]}}
+
 function aplicarModo(){
  document.body.classList.toggle("simple",MODO==="simple");
  var b=$("modo");
  b.textContent=MODO==="simple"?"MODO SENCILLO":"MODO COMPLETO";
  b.classList.toggle("pro",MODO!=="simple");
  try{localStorage.setItem("mor_modo",MODO)}catch(e){}
+ traducir();
  // Las teclas F siguen funcionando, pero el numero se oculta: a alguien no tecnico
- // solo le anade ruido, y en modo sencillo la numeracion ademas salta huecos.
+ // solo le anade ruido.
  [].forEach.call($("nav").querySelectorAll("button[data-v]"),function(b){
-  if(!b.dataset.txt)b.dataset.txt=b.textContent;
-  b.textContent=MODO==="simple"?b.dataset.txt.replace(/^F\d+\s+/,""):b.dataset.txt});
- // Si estabas en una vista avanzada y cambias a sencillo, te devuelve a la portada.
- if(MODO==="simple"&&["quant","brain","sim","cart","lib","dash"].indexOf(VIEW)>=0)go("ini");}
+  if(MODO==="simple")b.textContent=b.textContent.replace(/^F\d+\s+/,"")});}
 
 function nEmp(n,sing,plur){return n+" "+(n===1?sing:plur)}
 
@@ -2203,6 +2384,7 @@ $("cmd").addEventListener("keydown",function(e){
  if(m[c]){e.target.value="";e.target.dataset.q="";go(m[c])}
  else if(c==="REFRESH"||c==="RELOAD"){e.target.value="";e.target.dataset.q="";refresh()}});
 document.addEventListener("keydown",function(e){
+ if(e.key==="Escape"&&FE){feCerrar();return}
  if(e.key==="Escape"&&DT){dtClose();return}
  if(e.key==="/"&&document.activeElement!==$("cmd")){e.preventDefault();$("cmd").focus();return}
  var m={F1:"ini",F2:"dash",F3:"con",F4:"sc",F5:"pm",F6:"news",F7:"quant",F8:"brain",F9:"sim",F10:"cart",F11:"lib"};
@@ -2213,7 +2395,12 @@ document.addEventListener("click",function(e){var t=e.target;
  if(t.dataset&&t.dataset.n){NR=t.dataset.n;loadNews(NR);render()}
  if(t.dataset&&t.dataset.nf){loadNews(NR,true)}
  if(t.dataset&&t.dataset.del){POS=POS.filter(function(x){return String(x.id)!==String(t.dataset.del)});render();return}
- if(t.closest){var tr=t.closest("tr[data-mid]");
+ if(t.closest){
+  var fr=t.closest("tr[data-tk]");
+  if(fr&&t.tagName!=="A"&&!t.classList.contains("str")){feAbrir(fr.dataset.tk);return}
+  var ec=t.closest("[data-emp]");
+  if(ec){feAbrir(ec.dataset.emp);return}
+  var tr=t.closest("tr[data-mid]");
   if(tr&&t.tagName!=="A"){dtOpen(tr.dataset.mid)}}});
 [].forEach.call(document.querySelectorAll("th[data-k]"),function(th){
  var enBrain=!!(th.closest&&th.closest("#v-brain"));
@@ -2250,6 +2437,8 @@ $("c-mkt").onchange=function(){
  if(!BQ)return;for(var i=0;i<BQ.markets.length;i++)
   if(String(BQ.markets[i].id)===String($("c-mkt").value)){$("c-p").value=(BQ.markets[i].p*100).toFixed(1);break}};
 $("dtx").onclick=dtClose;
+$("fex").onclick=feCerrar;
+$("fe").addEventListener("click",function(e){if(e.target.id==="fe")feCerrar()});
 $("dt").addEventListener("click",function(e){if(e.target.id==="dt")dtClose()});
 $("bvol").onclick=loadBVol;
 $("b-kmkt").onchange=function(){syncKellyP();kellyCalc()};
