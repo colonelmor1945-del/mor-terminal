@@ -1135,6 +1135,8 @@ body.simple .solo-pro{display:none !important}
 .gloss{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
 .gloss div{background:var(--pane2);border:1px solid var(--line2);padding:8px 10px}
 .gloss .k{font-size:11px;color:var(--am);margin-bottom:3px}
+.su{}
+.su.on{border-color:var(--am) !important;color:var(--am) !important;background:rgba(255,159,26,.08) !important}
 .gloss .v{font-size:11.5px;color:var(--dim);line-height:1.45}
 .dom .side{display:flex;flex-direction:column;gap:2px}
 .dom .row{position:relative;display:flex;justify-content:space-between;padding:2px 6px;background:#0a0f16}
@@ -1364,6 +1366,16 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   </div>
 
   <div class="p" style="margin-bottom:8px">
+    <h3>QUÉ ESTÁS SIMULANDO</h3>
+    <div class="chips" style="gap:7px;flex-wrap:wrap">
+      <button class="su on" data-u="pm">Polymarket · predicción</button>
+      <button class="su" data-u="fx">Forex · divisas</button>
+      <button class="su" data-u="mc">Memecoins</button>
+    </div>
+    <div id="s-uinfo" class="st" style="padding:9px 10px;line-height:1.55;border-top:1px solid var(--line2);margin-top:6px"></div>
+  </div>
+
+  <div class="p" style="margin-bottom:8px" id="s-cfgpm">
     <h3>CONFIGURACIÓN DEL BACKTEST</h3>
     <div class="chips" style="align-items:center;flex-wrap:wrap;gap:10px">
       <label class="st">Mercados <select id="s-n"><option value="120">120</option><option value="250" selected>250</option><option value="400">400</option></select></label>
@@ -1371,6 +1383,35 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
       <label class="st">Volumen mínimo <select id="s-v"><option value="10000">10 mil $</option><option value="100000" selected>100 mil $</option><option value="1000000">1 M$</option></select></label>
       <button id="srun">▶ Ejecutar simulación</button>
       <span class="st" id="s-st">Descarga histórico real del CLOB de mercados ya resueltos. Tarda 1–3 min.</span>
+    </div>
+  </div>
+
+  <div class="p" style="margin-bottom:8px;display:none" id="s-cfgfx">
+    <h3>CONFIGURACIÓN · DIVISAS</h3>
+    <div class="chips" style="align-items:center;flex-wrap:wrap;gap:10px">
+      <label class="st">Señal a <select id="f-n"><option value="5">5 días</option><option value="20" selected>20 días</option><option value="60">60 días</option></select></label>
+      <label class="st">Mantener <select id="f-h"><option value="5">5 días</option><option value="10" selected>10 días</option><option value="20">20 días</option></select></label>
+      <button id="frun">▶ Ejecutar sobre divisas</button>
+      <span class="st" id="f-st">10 pares, 400 sesiones cada uno, desde Yahoo vía tu Worker.</span>
+    </div>
+  </div>
+
+  <div class="p" style="margin-bottom:8px;display:none" id="s-cfgmc">
+    <h3>MEMECOINS · POR QUÉ AQUÍ NO HAY BOTÓN DE BACKTEST</h3>
+    <div class="st" style="padding:9px 10px;line-height:1.6">
+      Lo comprobé con datos reales: de 27 pares recién listados, <b>15 ya tenían liquidez cero</b>
+      — no se pueden vender — y la edad media era de <b>1,5 horas</b>.<br><br>
+      Y hay algo peor. DexScreener solo lista lo que <b>sigue existiendo</b>: las que murieron
+      del todo desaparecen de la lista. Un backtest sobre lo que hoy se ve mediría
+      <b style="color:var(--rd)">solo a los supervivientes</b>, y daría rentabilidades espectaculares que
+      serían pura ilusión. Es el mismo error que hizo que un t-stat de 5,35 fuese en realidad 0,30.<br><br>
+      Por eso aquí solo cabe <b>seguimiento hacia delante</b>: se anota hoy el universo entero
+      —con sus futuras muertas dentro— y se sigue. En semanas tendrás una muestra honesta.
+      Cualquier otra cosa sería mentirte con números bonitos.
+    </div>
+    <div class="chips" style="gap:8px">
+      <button id="mcsnap">✎ Anotar el universo de hoy</button>
+      <span class="st" id="mc-st2">Se guarda con el motor de papel y se sigue solo.</span>
     </div>
   </div>
 
@@ -1425,7 +1466,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
       <th style="width:10%">Medio</th><th style="width:9%">Mediana</th><th style="width:10%">Total</th><th style="width:9%">Max DD</th>
       <th style="width:9%">t-stat</th><th style="width:18%">¿Significativo?</th>
     </tr></thead><tbody id="s-rows"></tbody></table></div>
-    <div class="st">Media y mediana divergen mucho a propósito: un longshot acertado a 0.02 paga 50× y arrastra la media él solo, así que la mediana dice mejor qué pasa en la apuesta típica. Retorno por unidad arriesgada: comprar SÍ a precio p paga (desenlace − p)/p. t-stat = media ÷ (desviación/√n): por encima de 2 el resultado difícilmente es azar. <b>Rentabilidad pasada simulada sobre datos históricos; no predice resultados futuros y no descuenta el impacto de mercado. Informativo, no es recomendación de inversión ni de apuesta.</b></div>
+    <div class="st">Media y mediana divergen mucho a propósito: un longshot acertado a 0.02 paga 50× y arrastra la media él solo, así que la mediana dice mejor qué pasa en la apuesta típica. Retorno por unidad arriesgada: comprar SÍ a precio p paga (desenlace − p)/p. t-stat = media ÷ (desviación/√n): por encima de 2 el resultado difícilmente es azar. En divisas se muestra <b>agrupado por par y con ventanas sin solapar</b>, y debajo el «ingenuo» para que veas la diferencia: contar ventanas solapadas como si fueran independientes dispara el t-stat y hace pasar por ventaja lo que es ruido. <b>Rentabilidad pasada simulada sobre datos históricos; no predice resultados futuros y no descuenta el impacto de mercado. Informativo, no es recomendación de inversión ni de apuesta.</b></div>
   </div>
 </div>
 <div class="view" id="v-cart">
@@ -2270,7 +2311,91 @@ function wangInv(p,l){return nCdf(nPpf(p)-l)}
    con Access-Control-Allow-Origin *, y un backtest necesita cientos de peticiones,
    muy por encima del límite de 50 subpeticiones por request del plan gratuito de
    Cloudflare. Mismo patrón que ya se usa con USAspending.                        */
-var BT=null,BTLOAD=false;
+var BT=null,BTLOAD=false,UNIV="pm";
+
+/* Pares con 400 sesiones diarias via /api/px. EURPLN y USDKRW no son decorativos:
+   mueven los resultados de las small caps polacas y coreanas del universo.       */
+var FXP=[["EURUSD=X","EUR/USD"],["GBPUSD=X","GBP/USD"],["USDJPY=X","USD/JPY"],
+ ["EURPLN=X","EUR/PLN"],["USDKRW=X","USD/KRW"],["AUDUSD=X","AUD/USD"],
+ ["USDINR=X","USD/INR"],["EURSEK=X","EUR/SEK"],["USDTRY=X","USD/TRY"],["DX-Y.NYB","Índice dólar"]];
+
+var UINFO={
+ pm:["Mercados de predicción de Polymarket ya resueltos.",
+     "Se puede hacer backtest de verdad: cada mercado terminó en sí o en no, y el histórico del CLOB no se borra. "+
+     "<b>Sesgo que queda:</b> se piden ordenados por volumen, así que la muestra son los mercados famosos. "+
+     "No es sesgo de supervivencia, pero tampoco es una muestra aleatoria."],
+ fx:["Divisas al contado, 10 pares, 400 sesiones diarias desde Yahoo.",
+     "<b>Es el único universo aquí sin sesgo de supervivencia:</b> el euro y el yen no desaparecen, "+
+     "así que la muestra de hoy es la misma que la de hace dos años. Lo que midas aquí es limpio. "+
+     "A cambio son los mercados más eficientes y competidos del mundo, así que no esperes encontrar oro."],
+ mc:["Memecoins en DEX. <b style='color:var(--rd)'>Aquí el backtest es imposible sin mentir.</b>",
+     "Ver el panel de abajo: las que mueren desaparecen de la lista, así que solo se ven supervivientes."]};
+
+function setUniv(u){
+ UNIV=u;
+ [].forEach.call(document.querySelectorAll(".su"),function(b){b.classList.toggle("on",b.dataset.u===u)});
+ $("s-cfgpm").style.display=(u==="pm")?"":"none";
+ $("s-cfgfx").style.display=(u==="fx")?"":"none";
+ $("s-cfgmc").style.display=(u==="mc")?"":"none";
+ var i=UINFO[u];
+ $("s-uinfo").innerHTML="<b style='color:var(--txt)'>"+i[0]+"</b><br>"+i[1];
+ render()}
+
+/* Backtest de divisas. Retorno simple (p_salida - p_entrada)/p_entrada; sin
+   apalancamiento ni carry, que necesitaria tipos de interes y no los tenemos.   */
+function fxRun(){
+ if(BTLOAD)return;BTLOAD=true;
+ var N=+$("f-n").value,H=+$("f-h").value;
+ $("f-st").textContent="Descargando divisas…";
+ pool(FXP,function(par){
+  return api("/api/px?s="+encodeURIComponent(par[0]),{cache:"no-store"})
+   .then(function(r){return r.json()})
+   .then(function(j){return (j&&j.c&&j.c.length>N+H+20)?{n:par[1],c:j.c,d:j.d}:null})
+   .catch(function(){return null})},4,
+  function(a,b){$("f-st").textContent="Descargando divisas… "+a+"/"+b})
+ .then(function(rs){
+  var series=rs.filter(Boolean);
+  if(series.length<3)throw new Error("no se pudieron descargar suficientes pares");
+  /* VENTANAS SIN SOLAPAR. Avanzando de dia en dia con periodos de H dias, cada
+     observacion comparte H-1 dias con la siguiente y el t-stat se dispara solo:
+     con paso diario salian 8,47 y 7,39, que serian ventajas enormes si fueran
+     reales. Avanzando de H en H cada observacion es independiente.
+     Ademas se agrupa por par: 10 divisas no son 3.700 datos sueltos.            */
+  var mom=[],rev=[],todo=[];
+  var porPar={mom:[],rev:[],todo:[]};
+  series.forEach(function(s){
+   var c=s.c,acc={mom:[],rev:[],todo:[]};
+   for(var i=N;i+H<c.length;i+=H){        // <- paso H, no 1
+    var sig=(c[i]-c[i-N])/c[i-N];          // señal: retorno de los N dias previos
+    var fwd=(c[i+H]-c[i])/c[i];            // resultado: retorno de los H siguientes
+    if(!isFinite(sig)||!isFinite(fwd))continue;
+    todo.push({r:fwd});acc.todo.push(fwd);
+    if(sig>0.01){mom.push({r:fwd});acc.mom.push(fwd)}
+    if(sig<-0.01){rev.push({r:fwd});acc.rev.push(fwd)}
+   }
+   ["mom","rev","todo"].forEach(function(k){
+    if(acc[k].length)porPar[k].push(mean(acc[k]))})});
+
+  // t-stat agrupado por par: el honesto. Se sustituye el ingenuo.
+  function agrup(ms){
+   if(!ms||ms.length<3)return null;
+   var mu=mean(ms),sg=sd(ms);
+   return sg>0?mu/(sg/Math.sqrt(ms.length)):0}
+
+  var strats=[
+   btStats("Momentum: comprar tras subir "+N+"d",mom),
+   btStats("Reversión: comprar tras caer "+N+"d",rev),
+   btStats("Comprar siempre (referencia)",todo)
+  ].filter(function(x){return x.n>=20});
+  ["mom","rev","todo"].forEach(function(k,i){
+   if(strats[i]){strats[i].tIng=strats[i].t;
+    var ta=agrup(porPar[k]); strats[i].t=(ta===null?0:ta); strats[i].nPares=porPar[k].length}});
+  strats.sort(function(a,b){return b.t-a.t});
+  BT={S:todo,H:H,fx:true,brier:null,brierBase:null,base:null,lam:null,cal:[],strats:strats,
+      series:series.length};
+  $("f-st").textContent=series.length+" pares · "+todo.length+" ventanas · señal "+N+"d, mantener "+H+"d";})
+ .catch(function(e){BT=null;$("f-st").textContent="Error: "+(e.message||e)})
+ .then(function(){BTLOAD=false;render()})}
 
 function pool(items,work,conc,prog){
  return new Promise(function(res){
@@ -2566,11 +2691,12 @@ function renderSim(){
   $("s-rows").innerHTML="<tr><td colspan='9'>"+msg+"</td></tr>";
   $("s-cal").innerHTML=msg;$("s-eq").innerHTML=msg;return}
  var b=BT,best=b.strats[0];
- $("s1").textContent=b.S.length;$("s1s").textContent="entrada a "+b.H+" días del cierre";
- $("s2").textContent=b.brier.toFixed(4);
- $("s2s").textContent=(b.brier<b.brierBase?"mejor":"peor")+" que la tasa base ("+b.brierBase.toFixed(4)+")";
+ $("s1").textContent=b.S.length;
+ $("s1s").textContent=b.fx?(b.series+" pares · mantener "+b.H+" días"):("entrada a "+b.H+" días del cierre");
+ $("s2").textContent=b.brier===null?"—":b.brier.toFixed(4);
+ $("s2s").textContent=b.brier===null?"no aplica a divisas":((b.brier<b.brierBase?"mejor":"peor")+" que la tasa base ("+b.brierBase.toFixed(4)+")");
  $("s3").textContent=b.lam===null?"—":b.lam.toFixed(3);
- $("s3s").textContent=b.lam===null?"no converge":(b.lam>0.02?"longshots caros de verdad":(b.lam<-0.02?"sesgo invertido":"sin sesgo medible"));
+ $("s3s").textContent=b.lam===null?(b.fx?"no aplica a divisas":"no converge"):(b.lam>0.02?"longshots caros de verdad":(b.lam<-0.02?"sesgo invertido":"sin sesgo medible"));
  $("s4").textContent=best?((best.total>=0?"+":"")+best.total.toFixed(1)+"u"):"—";
  $("s4s").textContent=best?best.name:"—";
  $("s-cal").innerHTML=calChart(b.cal);
@@ -2585,7 +2711,7 @@ function renderSim(){
    "<td class='"+(s.med>=0?"up":"dn")+"'>"+(s.med>=0?"+":"")+(s.med*100).toFixed(1)+"%</td>"+
    "<td class='"+(s.total>=0?"up":"dn")+"'><b>"+(s.total>=0?"+":"")+s.total.toFixed(1)+"u</b></td>"+
    "<td class='dn'>−"+s.dd.toFixed(1)+"u</td>"+
-   "<td>"+s.t.toFixed(2)+"</td>"+
+   "<td>"+s.t.toFixed(2)+(s.tIng!==undefined?"<br><span class='dim' style='font-size:9px'>ingenuo "+s.tIng.toFixed(2)+"</span>":"")+"</td>"+
    "<td><span class='"+sig[1]+"'>"+sig[0]+"</span></td></tr>"}).join("")}
 
 /* ================= DETALLE DE MERCADO =================
@@ -3091,6 +3217,13 @@ $("i-keyok").onclick=function(){
 $("modo").onclick=function(){MODO=(MODO==="simple"?"pro":"simple");aplicarModo();render()};
 $("e-load").onclick=loadEdgar;
 $("e-d").onchange=loadEdgar;
+[].forEach.call(document.querySelectorAll(".su"),function(b){b.onclick=function(){setUniv(b.dataset.u)}});
+$("frun").onclick=fxRun;
+$("mcsnap").onclick=function(){
+ $("mc-st2").textContent="Anotando…";
+ api("/api/paper/snap",{cache:"no-store"}).then(function(r){return r.json()}).then(function(j){
+  $("mc-st2").textContent="Anotado: "+JSON.stringify(j)}).catch(function(e){
+  $("mc-st2").textContent="Error: "+(e.message||e)})};
 $("mc-run").onclick=mcRun;
 $("p-snap").onclick=function(){loadPaper("snap")};
 $("p-set").onclick=function(){loadPaper("set")};
@@ -3121,6 +3254,7 @@ $("scsv").onclick=function(){
 function refresh(){NEWS={};NSRC={};loadCon();loadPM();loadNews("Pentágono",true);if(NR!=="Pentágono")loadNews(NR,true)}
 $("rel").onclick=refresh;
 $("qload").onclick=loadPx;
+setUniv("pm");
 aplicarModo();
 api("/api/estado").then(function(r){return r.json()}).then(function(j){
  $("i-keyst").textContent=j.control==="abierto"?"Acceso abierto: no hace falta clave."
