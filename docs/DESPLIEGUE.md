@@ -131,6 +131,41 @@ Planes: `libre` (50 llamadas/día, sin EDGAR ni pleitos) y `pro` (5.000, todo).
 
 ---
 
+## Cobrar en USDC (Solana / Phantom)
+
+Solo si vas a cobrar. **Nunca hace falta tu clave privada ni tu frase semilla**: el
+Worker solo LEE la cadena, que es pública.
+
+1. En el panel, *Settings → Variables*, añade:
+
+| Variable | Valor | Tipo |
+|---|---|---|
+| `WALLET_SOL` | Tu dirección **pública** de Phantom | Texto |
+| `PRECIO_USDC` | Precio mensual, p.ej. `20` | Texto |
+
+2. Activa también `EXIGIR_CLAVE = 1`, o el terminal seguirá siendo de acceso libre
+   y nadie tendrá motivo para pagar.
+
+3. El usuario te envía USDC y pega la firma de la transacción en la portada. El
+   Worker comprueba cuatro cosas y las cuatro hacen falta:
+   - La transacción existe, está **finalizada** y no falló.
+   - El dinero llega **a tu dirección**, no a otra.
+   - El importe alcanza el precio.
+   - Esa firma **no se ha canjeado antes**. Sin esto, uno paga una vez y genera
+     claves infinitas reenviando la misma firma.
+
+4. Si todo cuadra emite una clave `pro` con caducidad. Pagar el triple da tres meses.
+
+Probado con seis transacciones simuladas: pago correcto aceptado, pago a otra
+cartera rechazado, importe insuficiente rechazado, transacción fallida rechazada,
+otro token rechazado, y reintento del pago válido rechazado por repetido.
+
+**Aviso legal, no técnico:** cobrar por información financiera tributa igual en
+cripto que en euros, y desde 2026 los exchanges reportan a Hacienda. Consúltalo con
+un gestor antes de facturar.
+
+---
+
 ## Comprobar que fue bien
 
 ```bash

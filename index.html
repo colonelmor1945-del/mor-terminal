@@ -640,6 +640,18 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     </div>
   </div>
 
+  <div class="p" style="padding:13px 16px;margin-bottom:9px" id="i-pago">
+    <div class="t" style="font-size:11px;letter-spacing:.08em;color:var(--dim);text-transform:uppercase;margin-bottom:8px">Acceso</div>
+    <div class="expl" style="font-size:12px;margin-bottom:9px" id="i-pinfo">Comprobando…</div>
+    <div class="chips" style="align-items:center;gap:9px;flex-wrap:wrap">
+      <span class="st">¿Ya pagaste? Pega la firma</span>
+      <input id="i-sig" placeholder="firma de la transacción" style="width:250px" autocomplete="off">
+      <button id="i-sigok">Canjear</button>
+      <span class="st" id="i-sigst"></span>
+    </div>
+    <div class="st" style="margin-top:7px">La firma es el identificador largo que te da Phantom al enviar. Cada pago genera <b>una sola</b> clave.</div>
+  </div>
+
   <div class="p" style="padding:13px 16px;margin-bottom:9px">
     <div class="chips" style="align-items:center;gap:9px;flex-wrap:wrap">
       <span class="st">Clave de acceso</span>
@@ -2726,6 +2738,25 @@ $("bload").onclick=function(){loadBrain(true)};
 $("srun").onclick=btRun;
 [].forEach.call(document.querySelectorAll(".lf"),function(b){b.onclick=function(){
  LF=b.dataset.f;[].forEach.call(document.querySelectorAll(".lf"),function(o){o.classList.toggle("on",o===b)});render()}});
+$("i-sigok").onclick=function(){
+ var sig=$("i-sig").value.trim();
+ if(!sig){$("i-sigst").textContent="Pega la firma primero.";return}
+ $("i-sigst").textContent="Verificando en la cadena…";
+ api("/api/pago?sig="+encodeURIComponent(sig),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){
+   if(j.error){$("i-sigst").innerHTML="<span class='dn'>"+esc(j.error)+"</span>";return}
+   setKey(j.clave);
+   $("i-sig").value="";
+   $("i-sigst").innerHTML="<span class='up'>Pago verificado: "+j.pagado.toFixed(2)+
+    " USDC, "+j.meses+" mes(es). Clave guardada. Recargando…</span>";
+   // se enseña una vez, por si quiere apuntarla
+   var SL=String.fromCharCode(10);
+   alert("Tu clave de acceso (guardala, no se puede recuperar):"+SL+SL+j.clave+SL+SL+
+         "Caduca: "+j.caduca.slice(0,10));
+   setTimeout(function(){location.reload()},1200)})
+  .catch(function(e){$("i-sigst").innerHTML="<span class='dn'>"+esc(e.message||e)+"</span>"})};
+
 $("i-keyok").onclick=function(){
  var v=$("i-key").value.trim();setKey(v);$("i-key").value="";
  $("i-keyst").textContent=v?"Clave guardada. Recargando…":"Clave borrada. Recargando…";
@@ -2785,9 +2816,16 @@ $("qload").onclick=loadPx;
 setUniv("pm");
 aplicarModo();
 api("/api/estado").then(function(r){return r.json()}).then(function(j){
- $("i-keyst").textContent=j.control==="abierto"?"Acceso abierto: no hace falta clave."
-  :("Acceso controlado · plan "+(j.plan||"?"))}).catch(function(e){
- $("i-keyst").textContent="Necesitas clave: "+(e.message||e)});
+ var abierto=j.control==="abierto";
+ $("i-keyst").textContent=abierto?"Acceso abierto: no hace falta clave.":("Acceso controlado · plan "+(j.plan||"?"));
+ $("i-pinfo").innerHTML=abierto
+  ? "Ahora mismo el terminal es <b>de acceso libre</b>: no hace falta pagar ni tener clave."
+  : "El acceso está controlado. Si tienes clave, pégala abajo. Si has pagado en USDC, "+
+    "pega aquí la firma de tu transacción y se verifica sola contra la cadena.";
+ $("i-pago").style.display=abierto?"none":"";
+}).catch(function(e){
+ $("i-keyst").textContent="Necesitas clave: "+(e.message||e);
+ $("i-pinfo").textContent="El acceso está controlado y no tienes clave válida."});
 if(!EDG&&!EDGL)loadEdgar();
 if(!BQ&&!BLOAD)loadBrain();
 dibujarTopo();

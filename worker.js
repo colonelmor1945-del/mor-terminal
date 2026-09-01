@@ -858,6 +858,114 @@ async function fetchLitigios(dias, soloTk) {
            materiales: materiales.length, errores: errores, casos: casos.slice(0, 120) };
 }
 
+/* ---------- COBRO EN CRIPTO (Solana / Phantom) ----------
+   El usuario paga USDC a TU cartera y pega aqui la firma de la transaccion. El
+   Worker la verifica contra la cadena y, si cuadra, emite una clave de acceso.
+
+   Nunca se toca ninguna clave privada ni frase semilla: solo se LEE la cadena, que
+   es publica. Tu direccion de cartera va en la variable WALLET_SOL del panel; es
+   publica por naturaleza, pero asi la controlas tu y no vive en el repositorio.
+
+   Cuatro comprobaciones, y las cuatro hacen falta:
+     1. La transaccion existe, esta finalizada y no fallo.
+     2. El dinero llega A TU direccion (no a otra).
+     3. El importe alcanza el precio.
+     4. Esa firma NO se ha usado antes. Sin esto, uno paga una vez y genera claves
+        infinitas reenviando la misma firma.                                      */
+
+const SOL_RPC = "https://api.mainnet-beta.solana.com";
+const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+async function solRpc(metodo, params) {
+  const r = await fetch(SOL_RPC, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: metodo, params: params })
+  });
+  if (!r.ok) throw new Error("RPC HTTP " + r.status);
+  const j = await r.json();
+  if (j.error) throw new Error("RPC: " + (j.error.message || "error"));
+  return j.result;
+}
+
+/* Cuanto USDC entro en `destino` en esta transaccion. Se mira la diferencia entre
+   los saldos de tokens antes y despues: es el metodo que no se puede falsear
+   mirando solo las instrucciones.                                               */
+function usdcRecibido(tx, destino) {
+  const meta = tx && tx.meta;
+  if (!meta) return 0;
+  const pre = meta.preTokenBalances || [], post = meta.postTokenBalances || [];
+  const clave = b => b.accountIndex + ":" + b.mint;
+  const antes = {};
+  pre.forEach(b => { antes[clave(b)] = Number((b.uiTokenAmount || {}).uiAmount) || 0; });
+  let total = 0;
+  post.forEach(b => {
+    if (b.mint !== USDC_MINT) return;
+    if (b.owner !== destino) return;
+    const d = (Number((b.uiTokenAmount || {}).uiAmount) || 0) - (antes[clave(b)] || 0);
+    if (d > 0) total += d;
+  });
+  return total;
+}
+
+async function verificarPago(env, firma) {
+  const sig = String(firma || "").trim();
+  if (!/^[1-9A-HJ-NP-Za-km-z]{60,120}$/.test(sig))
+    return { error: "Esa no parece una firma de Solana válida." };
+  if (!env.RADAR) return { error: "KV no configurado: no puedo evitar pagos repetidos." };
+  if (!env.WALLET_SOL) return {
+    error: "Falta la variable WALLET_SOL. Ponla en el panel de Cloudflare con tu " +
+           "dirección pública de Phantom (Settings → Variables)."
+  };
+
+  const precio = Number(env.PRECIO_USDC) || 20;
+  const destino = String(env.WALLET_SOL).trim();
+
+  // 4. Antifraude por repeticion: primero, antes que nada.
+  const kUsada = "pago:" + sig;
+  if (await env.RADAR.get(kUsada))
+    return { error: "Esa transacción ya se canjeó. Cada pago genera una sola clave." };
+
+  let tx;
+  try {
+    tx = await solRpc("getTransaction", [sig, {
+      encoding: "jsonParsed", commitment: "finalized", maxSupportedTransactionVersion: 0
+    }]);
+  } catch (e) { return { error: "No pude consultar la cadena: " + (e.message || e) }; }
+
+  // 1. Existe, finalizada y sin error
+  if (!tx) return { error: "No encuentro esa transacción finalizada. Si acabas de pagar, espera un minuto." };
+  if (tx.meta && tx.meta.err) return { error: "Esa transacción falló en la cadena." };
+
+  // 2 y 3. Llega a tu direccion y cubre el precio
+  const recibido = usdcRecibido(tx, destino);
+  if (recibido <= 0) return {
+    error: "Esa transacción no envía USDC a la cartera del terminal. Comprueba la dirección."
+  };
+  if (recibido + 1e-6 < precio) return {
+    error: "El importe no llega: recibidos " + recibido.toFixed(2) + " USDC de " + precio + " necesarios."
+  };
+
+  // Todo cuadra: se marca la firma y se emite la clave.
+  const meses = Math.max(1, Math.floor(recibido / precio));
+  const clave = nuevaClave();
+  const id = (await sha256(clave)).slice(0, 12);
+  const caduca = new Date(Date.now() + meses * 30 * 864e5).toISOString();
+
+  await env.RADAR.put("key:" + (await sha256(clave)), JSON.stringify({
+    id: id, plan: "pro", creada: new Date().toISOString(), caduca: caduca,
+    nota: "pago " + recibido.toFixed(2) + " USDC"
+  }));
+  // La firma se marca DESPUES de crear la clave: si algo falla antes, el usuario
+  // puede reintentar en vez de perder el pago.
+  await env.RADAR.put(kUsada, id);
+
+  return {
+    ok: true, clave: clave, plan: "pro", pagado: recibido, meses: meses, caduca: caduca,
+    aviso: "Guarda la clave ahora: solo se almacena su hash y no se puede recuperar."
+  };
+}
+
 /* ---------- ASISTENTE ----------
    No es un modelo "entrenado con el quant": eso envejeceria el dia que lo entrenas.
    Consulta los datos EN VIVO y el modelo solo los redacta.
@@ -1825,6 +1933,18 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
         <div><div class="k">Verificar a mano</div><div class="v">Siempre. El terminal encuentra coincidencias, no verdades. Que un nombre coincida no significa que sea la misma empresa.</div></div>
       </div></div>
     </div>
+  </div>
+
+  <div class="p" style="padding:13px 16px;margin-bottom:9px" id="i-pago">
+    <div class="t" style="font-size:11px;letter-spacing:.08em;color:var(--dim);text-transform:uppercase;margin-bottom:8px">Acceso</div>
+    <div class="expl" style="font-size:12px;margin-bottom:9px" id="i-pinfo">Comprobando…</div>
+    <div class="chips" style="align-items:center;gap:9px;flex-wrap:wrap">
+      <span class="st">¿Ya pagaste? Pega la firma</span>
+      <input id="i-sig" placeholder="firma de la transacción" style="width:250px" autocomplete="off">
+      <button id="i-sigok">Canjear</button>
+      <span class="st" id="i-sigst"></span>
+    </div>
+    <div class="st" style="margin-top:7px">La firma es el identificador largo que te da Phantom al enviar. Cada pago genera <b>una sola</b> clave.</div>
   </div>
 
   <div class="p" style="padding:13px 16px;margin-bottom:9px">
@@ -3913,6 +4033,25 @@ $("bload").onclick=function(){loadBrain(true)};
 $("srun").onclick=btRun;
 [].forEach.call(document.querySelectorAll(".lf"),function(b){b.onclick=function(){
  LF=b.dataset.f;[].forEach.call(document.querySelectorAll(".lf"),function(o){o.classList.toggle("on",o===b)});render()}});
+$("i-sigok").onclick=function(){
+ var sig=$("i-sig").value.trim();
+ if(!sig){$("i-sigst").textContent="Pega la firma primero.";return}
+ $("i-sigst").textContent="Verificando en la cadena…";
+ api("/api/pago?sig="+encodeURIComponent(sig),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){
+   if(j.error){$("i-sigst").innerHTML="<span class='dn'>"+esc(j.error)+"</span>";return}
+   setKey(j.clave);
+   $("i-sig").value="";
+   $("i-sigst").innerHTML="<span class='up'>Pago verificado: "+j.pagado.toFixed(2)+
+    " USDC, "+j.meses+" mes(es). Clave guardada. Recargando…</span>";
+   // se enseña una vez, por si quiere apuntarla
+   var SL=String.fromCharCode(10);
+   alert("Tu clave de acceso (guardala, no se puede recuperar):"+SL+SL+j.clave+SL+SL+
+         "Caduca: "+j.caduca.slice(0,10));
+   setTimeout(function(){location.reload()},1200)})
+  .catch(function(e){$("i-sigst").innerHTML="<span class='dn'>"+esc(e.message||e)+"</span>"})};
+
 $("i-keyok").onclick=function(){
  var v=$("i-key").value.trim();setKey(v);$("i-key").value="";
  $("i-keyst").textContent=v?"Clave guardada. Recargando…":"Clave borrada. Recargando…";
@@ -3972,9 +4111,16 @@ $("qload").onclick=loadPx;
 setUniv("pm");
 aplicarModo();
 api("/api/estado").then(function(r){return r.json()}).then(function(j){
- $("i-keyst").textContent=j.control==="abierto"?"Acceso abierto: no hace falta clave."
-  :("Acceso controlado · plan "+(j.plan||"?"))}).catch(function(e){
- $("i-keyst").textContent="Necesitas clave: "+(e.message||e)});
+ var abierto=j.control==="abierto";
+ $("i-keyst").textContent=abierto?"Acceso abierto: no hace falta clave.":("Acceso controlado · plan "+(j.plan||"?"));
+ $("i-pinfo").innerHTML=abierto
+  ? "Ahora mismo el terminal es <b>de acceso libre</b>: no hace falta pagar ni tener clave."
+  : "El acceso está controlado. Si tienes clave, pégala abajo. Si has pagado en USDC, "+
+    "pega aquí la firma de tu transacción y se verifica sola contra la cadena.";
+ $("i-pago").style.display=abierto?"none":"";
+}).catch(function(e){
+ $("i-keyst").textContent="Necesitas clave: "+(e.message||e);
+ $("i-pinfo").textContent="El acceso está controlado y no tienes clave válida."});
 if(!EDG&&!EDGL)loadEdgar();
 if(!BQ&&!BLOAD)loadBrain();
 dibujarTopo();
@@ -4003,7 +4149,7 @@ const PLANES = {
 };
 
 // Publicos siempre: la portada tiene que cargar aunque no tengas clave.
-const ABIERTOS = ["", "estado"];
+const ABIERTOS = ["", "estado", "pago"];
 
 async function sha256(txt) {
   const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt));
@@ -4035,6 +4181,8 @@ async function autorizar(env, request, url, recurso) {
 
   const reg = await env.RADAR.get("key:" + (await sha256(clave)), "json");
   if (!reg || reg.revocada) return { ok: false, cod: 403, motivo: "Clave no valida" };
+  if (reg.caduca && new Date(reg.caduca) < new Date())
+    return { ok: false, cod: 403, motivo: "Tu clave caduco el " + reg.caduca.slice(0, 10) };
 
   const plan = PLANES[reg.plan] || PLANES.libre;
   if (plan.endpoints !== "*" && plan.endpoints.indexOf(recurso) < 0)
@@ -4107,6 +4255,7 @@ export default {
       if (p === "/api/news") return json(await fetchNews(url.searchParams.get("region") || "Pentágono"), cab);
       if (p === "/api/pmq") return json(await fetchPMQ(Number(url.searchParams.get("pages")) || 3), cab);
       if (p === "/api/pmh") return json(await fetchPMHist(url.searchParams.get("t"), url.searchParams.get("i")), cab);
+      if (p === "/api/pago") return json(await verificarPago(env, url.searchParams.get("sig")), cab);
       if (p === "/api/chat") return json(await chatResponder(env, url.searchParams.get("q")), cab);
       if (p === "/api/ynews") return json(await fetchYNews(url.searchParams.get("s")), cab);
       if (p === "/api/litigios") return json(await fetchLitigios(Number(url.searchParams.get("d")) || 365, url.searchParams.get("tk")), cab);
