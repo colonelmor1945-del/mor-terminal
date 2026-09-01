@@ -505,6 +505,120 @@ async function fetchPMQ(pages = 3) {
   };
 }
 
+/* ---------- MOTOR DE PAPEL ----------
+   Existe porque el backtest sobre mercados cerrados tiene sesgo de seleccion: se
+   piden ordenados por volumen, asi que la muestra son los mercados famosos. Aqui
+   se registra la senal EN EL MOMENTO en que se emite, sin saber el desenlace, y se
+   liquida cuando el mercado resuelve. En unas semanas da una muestra propia y
+   limpia con la que saber si alguna senal tiene ventaja de verdad.
+   No ejecuta nada ni mueve dinero: solo anota.                                    */
+
+const PAPER_MAX = 400;   // tope de posiciones abiertas en KV
+
+function paperId(tipo, id, ts) { return "paper:" + tipo + ":" + id + ":" + ts; }
+
+async function paperSnap(env, q) {
+  if (!env.RADAR) return { error: "KV no configurado" };
+  const datos = q || await fetchPMQ(3);
+  const ts = new Date().toISOString();
+  const dia = ts.slice(0, 10);
+
+  // Una sola instantanea por dia y tipo: si no, el cron duplicaria las mismas senales.
+  const yaHay = await env.RADAR.get("paper:dia:" + dia);
+  if (yaHay) return { note: "ya registrado hoy", dia: dia, n: 0 };
+
+  const nuevas = [];
+
+  // 1. Direccionales: es lo que de verdad hay que validar.
+  const porSesgo = datos.markets.filter(m => m.live !== false && m.days !== null && m.days > 2 &&
+                                             m.p > 0.03 && m.p < 0.97 && m.liq > 5000);
+  const topZ = porSesgo.slice().sort((a, b) => Math.abs(b.z) - Math.abs(a.z)).slice(0, 5);
+  topZ.forEach(m => nuevas.push({
+    tipo: "momentum", senal: m.z > 0 ? "SI" : "NO", id: m.id, cid: m.cid,
+    q: m.q.slice(0, 90), p: m.p, z: m.z, dias: Math.round(m.days), ts: ts
+  }));
+
+  // 2. Arbitraje: aqui el beneficio es aritmetico; lo que se comprueba es que el
+  //    grupo resuelva de verdad con una sola pata ganadora.
+  (datos.groups || []).filter(g => g.net > 0 && g.dev > 0).slice(0, 5).forEach(g => nuevas.push({
+    tipo: "arb_suma", senal: "VENDER_TODAS", id: g.slug, q: g.ev.slice(0, 90),
+    sum: g.sum, n: g.n, completo: g.completo, capital: g.n - g.sum,
+    benTeorico: g.dev - g.cost, ts: ts
+  }));
+  (datos.mono || []).slice(0, 3).forEach(g => nuevas.push({
+    tipo: "arb_mono", senal: "PAR", id: g.slug, q: g.ev.slice(0, 90),
+    caro: g.caro, barato: g.barato, pCaro: g.pCaro, pBarato: g.pBarato,
+    benTeorico: g.neto, ts: ts
+  }));
+
+  for (const p of nuevas) await env.RADAR.put(paperId(p.tipo, p.id, ts), JSON.stringify(p));
+  await env.RADAR.put("paper:dia:" + dia, ts, { expirationTtl: 172800 });
+  return { dia: dia, n: nuevas.length, tipos: nuevas.reduce((a, p) => (a[p.tipo] = (a[p.tipo] || 0) + 1, a), {}) };
+}
+
+async function paperSettle(env, limite) {
+  if (!env.RADAR) return { error: "KV no configurado" };
+  const lista = await env.RADAR.list({ prefix: "paper:momentum:", limit: limite || 60 });
+  let liquidadas = 0, aciertos = 0, sumR = 0;
+
+  for (const k of lista.keys) {
+    const p = await env.RADAR.get(k.name, "json");
+    if (!p || !p.id) continue;
+    let m = null;
+    try {
+      // Ojo: `?id=` devuelve lista VACIA. El id va en la ruta y devuelve un objeto.
+      const r = await fetch("https://gamma-api.polymarket.com/markets/" + encodeURIComponent(p.id));
+      if (!r.ok) continue;
+      m = await r.json();
+    } catch (e) { continue; }
+    if (!m || !m.id || !m.closed) continue;
+
+    let o = null;
+    try {
+      const a = JSON.parse(m.outcomePrices || "[]");
+      const y = parseFloat(a[0]), nn = parseFloat(a[1]);
+      if (y === 1 && nn === 0) o = 1; else if (y === 0 && nn === 1) o = 0;
+    } catch (e) {}
+    if (o === null) continue;
+
+    // Retorno por unidad arriesgada. Comprar SI a p paga (o - p)/p; comprar NO
+    // a (1-p) paga ((1-o) - (1-p))/(1-p).
+    const r = p.senal === "SI" ? (o - p.p) / p.p : ((1 - o) - (1 - p.p)) / (1 - p.p);
+    const cerrada = Object.assign({}, p, { o: o, r: r, tsCierre: new Date().toISOString() });
+    await env.RADAR.put("paper:done:" + p.tipo + ":" + p.id + ":" + p.ts, JSON.stringify(cerrada));
+    await env.RADAR.delete(k.name);
+    liquidadas++; sumR += r; if (r > 0) aciertos++;
+  }
+  return { liquidadas: liquidadas, aciertos: aciertos, retornoMedio: liquidadas ? sumR / liquidadas : null };
+}
+
+async function paperState(env) {
+  if (!env.RADAR) return { error: "KV no configurado" };
+  const ab = await env.RADAR.list({ prefix: "paper:", limit: PAPER_MAX });
+  const abiertas = [], cerradas = [];
+  for (const k of ab.keys) {
+    if (k.name.indexOf("paper:dia:") === 0) continue;
+    const v = await env.RADAR.get(k.name, "json");
+    if (!v) continue;
+    (k.name.indexOf("paper:done:") === 0 ? cerradas : abiertas).push(v);
+  }
+  abiertas.sort((a, b) => a.ts < b.ts ? 1 : -1);
+  cerradas.sort((a, b) => a.tsCierre < b.tsCierre ? 1 : -1);
+
+  // Estadistica solo de las direccionales cerradas: el arbitraje no se puntua asi.
+  const dir = cerradas.filter(x => x.tipo === "momentum" && isFinite(x.r));
+  let est = null;
+  if (dir.length >= 2) {
+    const rs = dir.map(x => x.r);
+    const mu = rs.reduce((a, b) => a + b, 0) / rs.length;
+    const sg = Math.sqrt(rs.reduce((a, b) => a + (b - mu) * (b - mu), 0) / (rs.length - 1)) || 0;
+    est = { n: rs.length, media: mu, acierto: dir.filter(x => x.r > 0).length / rs.length,
+            t: sg > 0 ? mu / (sg / Math.sqrt(rs.length)) : 0 };
+  }
+  return { abiertas: abiertas.slice(0, 120), cerradas: cerradas.slice(0, 120), est: est,
+           nAbiertas: abiertas.length, nCerradas: cerradas.length };
+}
+
 /* Histórico del CLOB para volatilidad realizada (el navegador no puede: sin CORS). */
 async function fetchPMHist(token, interval) {
   const t = String(token || "").replace(/[^0-9]/g, "");
@@ -886,7 +1000,21 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     </div>
   </div>
 
-  <div class="p" style="height:calc(100vh - 620px);min-height:250px">
+  <div class="p" style="margin-bottom:8px">
+    <h3>REGISTRO EN PAPEL <span id="p-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— muestra propia y sin sesgo: la señal se anota al emitirse, sin saber el desenlace</span></h3>
+    <div class="chips" style="align-items:center;gap:8px">
+      <button id="p-snap">✎ Anotar señales de hoy</button>
+      <button id="p-set">✓ Liquidar resueltas</button>
+      <span class="st" id="p-st">El cron diario lo hace solo. Necesita KV configurado en el Worker.</span>
+    </div>
+    <div class="bd" style="max-height:190px"><table><thead><tr>
+      <th style="width:11%">Estado</th><th style="width:11%">Tipo</th><th style="width:9%">Señal</th>
+      <th style="width:38%">Mercado</th><th style="width:9%">Entrada</th><th style="width:11%">Anotada</th><th style="width:11%">Retorno</th>
+    </tr></thead><tbody id="p-rows"></tbody></table></div>
+    <div class="st" id="p-est">Sin datos todavía.</div>
+  </div>
+
+  <div class="p" style="height:calc(100vh - 830px);min-height:220px">
     <h3>ESTRATEGIAS SIMULADAS <span id="s-cnt"></span></h3>
     <div class="bd"><table><thead><tr>
       <th style="width:24%">Estrategia</th><th style="width:7%">Apuestas</th><th style="width:8%">Acierto</th>
@@ -1290,7 +1418,7 @@ function render(){
 
  if(VIEW==="quant"){renderQuant()}
  if(VIEW==="brain"){renderBrain()}
- if(VIEW==="sim"){renderSim()}
+ if(VIEW==="sim"){renderSim();renderPaper()}
  if(VIEW==="cart"){renderCart()}
  if(VIEW==="news"){
   $("n-chips").innerHTML=Object.keys(NQ).map(function(r){return "<button data-n='"+r+"' class='"+(r===NR?"on":"")+"'>"+r+"</button>"}).join("")+
@@ -1801,6 +1929,37 @@ function eqChart(s){
   "<text x='"+(W-12)+"' y='12' fill='"+(s.total>=0?"var(--green)":"var(--red)")+"' font-size='11' text-anchor='end'>"+
    (s.total>=0?"+":"")+s.total.toFixed(1)+"u</text></svg>"}
 
+var PAP=null;
+function loadPaper(accion){
+ var u=accion==="snap"?"/api/paper/snap":(accion==="set"?"/api/paper/settle?n=40":"/api/paper");
+ $("p-st").textContent="Consultando…";
+ fetch(u,{cache:"no-store"}).then(function(r){return r.json()}).then(function(j){
+  if(j.error)throw new Error(j.error);
+  if(accion){$("p-st").textContent=JSON.stringify(j);return fetch("/api/paper",{cache:"no-store"}).then(function(r){return r.json()})}
+  return j})
+ .then(function(j){if(j&&!j.error){PAP=j;if(!accion)$("p-st").textContent=j.nAbiertas+" abiertas · "+j.nCerradas+" liquidadas";}render()})
+ .catch(function(e){$("p-st").textContent="Error: "+(e.message||e)+" — ¿KV configurado?"})}
+
+function renderPaper(){
+ if(!PAP){$("p-rows").innerHTML="<tr><td colspan='7'>"+emp("✎","Pulsa «Anotar señales de hoy».")+"</td></tr>";return}
+ var todas=PAP.cerradas.map(function(x){return {c:1,x:x}}).concat(PAP.abiertas.map(function(x){return {c:0,x:x}}));
+ $("p-cnt").textContent="("+PAP.nAbiertas+" abiertas / "+PAP.nCerradas+" liquidadas)";
+ $("p-rows").innerHTML=todas.slice(0,60).map(function(r){var x=r.x;
+  return "<tr>"+
+   "<td><span class='"+(r.c?"t3":"t2")+"'>"+(r.c?"liquidada":"abierta")+"</span></td>"+
+   "<td class='dim'>"+esc(x.tipo)+"</td>"+
+   "<td>"+esc(x.senal||"—")+"</td>"+
+   "<td title='"+esc(x.q||"")+"'>"+esc((x.q||"").slice(0,52))+"</td>"+
+   "<td>"+(x.p!==undefined?(x.p*100).toFixed(1)+"%":(x.sum!==undefined?"Σ "+x.sum.toFixed(4):"—"))+"</td>"+
+   "<td class='dim'>"+esc((x.ts||"").slice(0,10))+"</td>"+
+   "<td class='"+(x.r>0?"up":(x.r<0?"dn":""))+"'>"+(x.r!==undefined?((x.r>=0?"+":"")+(x.r*100).toFixed(0)+"%"):"—")+"</td>"+
+  "</tr>"}).join("")||"<tr><td colspan='7'>"+emp("✎","Nada anotado todavía.")+"</td></tr>";
+ var e=PAP.est;
+ $("p-est").innerHTML=e?("Direccionales liquidadas: <b>"+e.n+"</b> · acierto <b>"+(e.acierto*100).toFixed(0)+"%</b> · retorno medio <b class='"+
+   (e.media>=0?"up":"dn")+"'>"+(e.media>=0?"+":"")+(e.media*100).toFixed(1)+"%</b> · t-stat <b>"+e.t.toFixed(2)+"</b> — "+
+   (Math.abs(e.t)>=2?"<b class='up'>significativo</b>":"todavía indistinguible del azar"+(e.n<30?", y con "+e.n+" casos es pronto para nada":""))):
+   "Sin liquidaciones todavía. Hacen falta semanas de cron para tener muestra.";}
+
 function renderSim(){
  if(!BT){
   var msg=emp("🧪","Pulsa ▶ Ejecutar simulación.<br>Descarga histórico real de mercados ya resueltos.");
@@ -2124,6 +2283,7 @@ function go(v){VIEW=v;
  [].forEach.call($("nav").querySelectorAll("button"),function(b){b.classList.toggle("on",b.dataset.v===v)});
  if(v==="news")loadNews(NR);
  if((v==="brain"||v==="cart")&&!BQ&&!BLOAD)loadBrain();
+ if(v==="sim"&&!PAP)loadPaper();
  render()}
 [].forEach.call($("nav").querySelectorAll("button"),function(b){b.onclick=function(){go(b.dataset.v)}});
 $("cmd").addEventListener("input",function(e){e.target.dataset.q=e.target.value;render()});
@@ -2154,6 +2314,8 @@ document.addEventListener("click",function(e){var t=e.target;
   render()}});
 $("bload").onclick=function(){loadBrain(true)};
 $("srun").onclick=btRun;
+$("p-snap").onclick=function(){loadPaper("snap")};
+$("p-set").onclick=function(){loadPaper("set")};
 $("c-add").onclick=cAdd;
 $("c-clr").onclick=function(){POS=[];render()};
 ["c-cap","c-frac","c-mp","c-mt"].forEach(function(k){$(k).oninput=render;$(k).onchange=render});
@@ -2204,6 +2366,9 @@ export default {
       if (p === "/api/news") return json(await fetchNews(url.searchParams.get("region") || "Pentágono"));
       if (p === "/api/pmq") return json(await fetchPMQ(Number(url.searchParams.get("pages")) || 3));
       if (p === "/api/pmh") return json(await fetchPMHist(url.searchParams.get("t"), url.searchParams.get("i")));
+      if (p === "/api/paper") return json(await paperState(env));
+      if (p === "/api/paper/snap") return json(await paperSnap(env));
+      if (p === "/api/paper/settle") return json(await paperSettle(env, Number(url.searchParams.get("n")) || 60));
       if (p === "/api/history") return json(await getHistory(env));
       if (p === "/api/run") return json(await dailyJob(env));
     } catch (e) {
@@ -2214,6 +2379,12 @@ export default {
     return new Response(HTML, { headers: { "content-type": "text/html;charset=utf-8" } });
   },
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(dailyJob(env));
+    ctx.waitUntil((async () => {
+      await dailyJob(env);
+      // El motor de papel vive del cron: anota las senales del dia y liquida las
+      // que ya hayan resuelto. Si falla, no debe tumbar el trabajo de contratos.
+      try { await paperSnap(env); } catch (e) {}
+      try { await paperSettle(env, 40); } catch (e) {}
+    })());
   }
 };

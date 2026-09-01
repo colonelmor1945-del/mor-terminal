@@ -6,13 +6,29 @@ import { createServer } from "node:http";
 const PORT = Number(process.argv[2]) || 8787;
 const WORKER = new URL("./worker.js", import.meta.url).href;
 
-// KV falso en memoria, para que /api/history y el cron no revienten.
+// KV falso en memoria, para que /api/history, el motor de papel y el cron no revienten.
+// Imita el KV real: get(k,"json") DEVUELVE OBJETO, no la cadena. Sin esto las pruebas
+// locales pasan y en produccion se comporta distinto.
 const kv = new Map();
 const env = {
   RADAR: {
-    get: async (k) => kv.get(k) ?? null,
-    put: async (k, v) => void kv.set(k, v),
-    list: async () => ({ keys: [...kv.keys()].map((name) => ({ name })) })
+    get: async (k, tipo) => {
+      const v = kv.get(k);
+      if (v === undefined) return null;
+      if (tipo === "json" || (tipo && tipo.type === "json")) {
+        try { return JSON.parse(v); } catch (e) { return null; }
+      }
+      return v;
+    },
+    put: async (k, v) => void kv.set(k, typeof v === "string" ? v : JSON.stringify(v)),
+    delete: async (k) => void kv.delete(k),
+    list: async (o = {}) => {
+      let ks = [...kv.keys()];
+      if (o.prefix) ks = ks.filter((x) => x.startsWith(o.prefix));
+      ks.sort();
+      if (o.limit) ks = ks.slice(0, o.limit);
+      return { keys: ks.map((name) => ({ name })), list_complete: true };
+    }
   }
 };
 

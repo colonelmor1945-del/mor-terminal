@@ -365,7 +365,21 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     </div>
   </div>
 
-  <div class="p" style="height:calc(100vh - 620px);min-height:250px">
+  <div class="p" style="margin-bottom:8px">
+    <h3>REGISTRO EN PAPEL <span id="p-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— muestra propia y sin sesgo: la señal se anota al emitirse, sin saber el desenlace</span></h3>
+    <div class="chips" style="align-items:center;gap:8px">
+      <button id="p-snap">✎ Anotar señales de hoy</button>
+      <button id="p-set">✓ Liquidar resueltas</button>
+      <span class="st" id="p-st">El cron diario lo hace solo. Necesita KV configurado en el Worker.</span>
+    </div>
+    <div class="bd" style="max-height:190px"><table><thead><tr>
+      <th style="width:11%">Estado</th><th style="width:11%">Tipo</th><th style="width:9%">Señal</th>
+      <th style="width:38%">Mercado</th><th style="width:9%">Entrada</th><th style="width:11%">Anotada</th><th style="width:11%">Retorno</th>
+    </tr></thead><tbody id="p-rows"></tbody></table></div>
+    <div class="st" id="p-est">Sin datos todavía.</div>
+  </div>
+
+  <div class="p" style="height:calc(100vh - 830px);min-height:220px">
     <h3>ESTRATEGIAS SIMULADAS <span id="s-cnt"></span></h3>
     <div class="bd"><table><thead><tr>
       <th style="width:24%">Estrategia</th><th style="width:7%">Apuestas</th><th style="width:8%">Acierto</th>
@@ -769,7 +783,7 @@ function render(){
 
  if(VIEW==="quant"){renderQuant()}
  if(VIEW==="brain"){renderBrain()}
- if(VIEW==="sim"){renderSim()}
+ if(VIEW==="sim"){renderSim();renderPaper()}
  if(VIEW==="cart"){renderCart()}
  if(VIEW==="news"){
   $("n-chips").innerHTML=Object.keys(NQ).map(function(r){return "<button data-n='"+r+"' class='"+(r===NR?"on":"")+"'>"+r+"</button>"}).join("")+
@@ -1280,6 +1294,37 @@ function eqChart(s){
   "<text x='"+(W-12)+"' y='12' fill='"+(s.total>=0?"var(--green)":"var(--red)")+"' font-size='11' text-anchor='end'>"+
    (s.total>=0?"+":"")+s.total.toFixed(1)+"u</text></svg>"}
 
+var PAP=null;
+function loadPaper(accion){
+ var u=accion==="snap"?"/api/paper/snap":(accion==="set"?"/api/paper/settle?n=40":"/api/paper");
+ $("p-st").textContent="Consultando…";
+ fetch(u,{cache:"no-store"}).then(function(r){return r.json()}).then(function(j){
+  if(j.error)throw new Error(j.error);
+  if(accion){$("p-st").textContent=JSON.stringify(j);return fetch("/api/paper",{cache:"no-store"}).then(function(r){return r.json()})}
+  return j})
+ .then(function(j){if(j&&!j.error){PAP=j;if(!accion)$("p-st").textContent=j.nAbiertas+" abiertas · "+j.nCerradas+" liquidadas";}render()})
+ .catch(function(e){$("p-st").textContent="Error: "+(e.message||e)+" — ¿KV configurado?"})}
+
+function renderPaper(){
+ if(!PAP){$("p-rows").innerHTML="<tr><td colspan='7'>"+emp("✎","Pulsa «Anotar señales de hoy».")+"</td></tr>";return}
+ var todas=PAP.cerradas.map(function(x){return {c:1,x:x}}).concat(PAP.abiertas.map(function(x){return {c:0,x:x}}));
+ $("p-cnt").textContent="("+PAP.nAbiertas+" abiertas / "+PAP.nCerradas+" liquidadas)";
+ $("p-rows").innerHTML=todas.slice(0,60).map(function(r){var x=r.x;
+  return "<tr>"+
+   "<td><span class='"+(r.c?"t3":"t2")+"'>"+(r.c?"liquidada":"abierta")+"</span></td>"+
+   "<td class='dim'>"+esc(x.tipo)+"</td>"+
+   "<td>"+esc(x.senal||"—")+"</td>"+
+   "<td title='"+esc(x.q||"")+"'>"+esc((x.q||"").slice(0,52))+"</td>"+
+   "<td>"+(x.p!==undefined?(x.p*100).toFixed(1)+"%":(x.sum!==undefined?"Σ "+x.sum.toFixed(4):"—"))+"</td>"+
+   "<td class='dim'>"+esc((x.ts||"").slice(0,10))+"</td>"+
+   "<td class='"+(x.r>0?"up":(x.r<0?"dn":""))+"'>"+(x.r!==undefined?((x.r>=0?"+":"")+(x.r*100).toFixed(0)+"%"):"—")+"</td>"+
+  "</tr>"}).join("")||"<tr><td colspan='7'>"+emp("✎","Nada anotado todavía.")+"</td></tr>";
+ var e=PAP.est;
+ $("p-est").innerHTML=e?("Direccionales liquidadas: <b>"+e.n+"</b> · acierto <b>"+(e.acierto*100).toFixed(0)+"%</b> · retorno medio <b class='"+
+   (e.media>=0?"up":"dn")+"'>"+(e.media>=0?"+":"")+(e.media*100).toFixed(1)+"%</b> · t-stat <b>"+e.t.toFixed(2)+"</b> — "+
+   (Math.abs(e.t)>=2?"<b class='up'>significativo</b>":"todavía indistinguible del azar"+(e.n<30?", y con "+e.n+" casos es pronto para nada":""))):
+   "Sin liquidaciones todavía. Hacen falta semanas de cron para tener muestra.";}
+
 function renderSim(){
  if(!BT){
   var msg=emp("🧪","Pulsa ▶ Ejecutar simulación.<br>Descarga histórico real de mercados ya resueltos.");
@@ -1603,6 +1648,7 @@ function go(v){VIEW=v;
  [].forEach.call($("nav").querySelectorAll("button"),function(b){b.classList.toggle("on",b.dataset.v===v)});
  if(v==="news")loadNews(NR);
  if((v==="brain"||v==="cart")&&!BQ&&!BLOAD)loadBrain();
+ if(v==="sim"&&!PAP)loadPaper();
  render()}
 [].forEach.call($("nav").querySelectorAll("button"),function(b){b.onclick=function(){go(b.dataset.v)}});
 $("cmd").addEventListener("input",function(e){e.target.dataset.q=e.target.value;render()});
@@ -1633,6 +1679,8 @@ document.addEventListener("click",function(e){var t=e.target;
   render()}});
 $("bload").onclick=function(){loadBrain(true)};
 $("srun").onclick=btRun;
+$("p-snap").onclick=function(){loadPaper("snap")};
+$("p-set").onclick=function(){loadPaper("set")};
 $("c-add").onclick=cAdd;
 $("c-clr").onclick=function(){POS=[];render()};
 ["c-cap","c-frac","c-mp","c-mt"].forEach(function(k){$(k).oninput=render;$(k).onchange=render});
