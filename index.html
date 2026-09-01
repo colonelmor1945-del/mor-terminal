@@ -212,7 +212,21 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="p" style="height:250px"><h3>DISTRIBUCIÓN · TOP 12</h3><div class="bd" id="c-bars"></div></div>
     <div class="p" style="height:250px"><h3>ACUMULADO DEL PERIODO</h3><div class="bd" id="c-cum"></div></div>
   </div>
-  <div class="p" style="height:calc(100vh - 430px);min-height:260px">
+  <div class="p" style="margin-bottom:8px">
+    <h3>VIGILANTE 8-K · SEC EDGAR <span id="e-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— el instante en que la información privada se vuelve pública</span></h3>
+    <div class="chips" style="align-items:center;gap:8px">
+      <label class="st">Ventana <select id="e-d"><option value="7">7 días</option><option value="30" selected>30 días</option><option value="60">60 días</option></select></label>
+      <button id="e-load">⟳ Buscar presentaciones</button>
+      <span class="st" id="e-st">Busca 8-K citando al Departamento de Defensa y los cruza con tu universo.</span>
+    </div>
+    <div class="bd" style="max-height:230px"><table><thead><tr>
+      <th style="width:9%">Fecha</th><th style="width:8%">Ticker</th><th style="width:26%">Empresa</th>
+      <th style="width:17%">Sector (SIC)</th><th style="width:22%">Partidas del 8-K</th><th style="width:18%">Señal</th>
+    </tr></thead><tbody id="e-rows"></tbody></table></div>
+    <div class="st">La partida <b>1.01</b> es «acuerdo material definitivo»: es la que se presenta al firmar un contrato, y por eso vale más que el resto. Citar al DoD <b>no</b> es ganar un contrato — las farmacéuticas lo citan por becas y los hospitales por TRICARE, así que esos sectores se descartan por código SIC. Verifícalo a mano siempre.</div>
+  </div>
+
+  <div class="p" style="height:calc(100vh - 640px);min-height:220px">
     <h3>CONTRATOS DEPARTMENT OF DEFENSE · 30 DÍAS <span id="c-cnt"></span></h3>
     <div class="chips">
       <button id="fa" class="on">TODOS</button><button id="fr">⚡ SIN GIGANTES</button>
@@ -799,7 +813,7 @@ function render(){
   return "<div class='ni'><a target='_blank' rel='noopener' href='"+n.l+"'>"+esc(n.t.slice(0,92))+"</a><div class='mt'>"+esc(n.s)+" · "+n.d+"</div></div>"}).join("")
   :(NEWS["Pentágono"]?emp("📰","Fuente no disponible.<br>Pulsa ⟳ REFRESH."):sk(5));
 
- if(VIEW==="con"){
+ if(VIEW==="con"){renderEdgar();
   var mn=+$("fm").value;
   var rw=CON.filter(function(d){return (FP==="all"||!d.prime)&&d.amount>=mn&&(!Q||(d.name+" "+d.desc).toLowerCase().indexOf(Q)>=0)});
   $("c-cnt").textContent=rw.length+" filas";
@@ -1843,10 +1857,42 @@ function renderLib(){
    "<td class='dim' style='font-size:10.5px;line-height:1.5'>"+esc(x.por)+"</td>"+
   "</tr>"}).join("")}
 
+/* ---- Vigilante de 8-K ---- */
+var EDG=null,EDGL=false;
+function loadEdgar(){
+ if(EDGL)return;EDGL=true;
+ $("e-st").textContent="Consultando EDGAR…";
+ fetch("/api/edgar?d="+(+$("e-d").value||30),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){
+   if(j.error)throw new Error(j.error);
+   EDG=j;
+   $("e-st").textContent=j.n+" presentaciones · "+j.descartadas+" descartadas por sector · "+
+     j.cruces.length+" cruces · "+j.candidatas.length+" candidatas"})
+  .catch(function(e){EDG=null;$("e-st").textContent="Error: "+(e.message||e)})
+  .then(function(){EDGL=false;render()})}
+
+function renderEdgar(){
+ if(!EDG){$("e-rows").innerHTML="<tr><td colspan='6'>"+emp("📄","Pulsa ⟳ para buscar presentaciones 8-K.")+"</td></tr>";return}
+ var f=EDG.cruces.concat(EDG.candidatas);
+ $("e-cnt").textContent="("+f.length+")";
+ $("e-rows").innerHTML=f.map(function(x){
+  var sg=x.enUniverso?["CRUCE","t1"]:(x.firma?["contrato firmado","t3"]:["mención","t2"]);
+  return "<tr>"+
+   "<td class='dim'>"+esc(x.fecha)+"</td>"+
+   "<td><b>"+esc(x.tk||"—")+"</b></td>"+
+   "<td title='"+esc(x.nombre)+"'><a href='"+esc(x.url)+"' target='_blank' rel='noopener'>"+esc(x.nombre.slice(0,40))+"</a>"+
+     (x.enUniverso?" <span class='dim'>· "+esc(x.universo)+"</span>":"")+"</td>"+
+   "<td class='dim' style='font-size:10.5px'>"+esc(x.sector)+"</td>"+
+   "<td class='dim' style='font-size:10.5px'>"+esc(x.etiquetas.join(", ").slice(0,44))+"</td>"+
+   "<td><span class='"+sg[1]+"'>"+sg[0]+"</span></td></tr>"}).join("")||
+  "<tr><td colspan='6'>"+emp("—","Ninguna presentación relevante en la ventana.")+"</td></tr>"}
+
 function go(v){VIEW=v;
  ["dash","con","sc","pm","news","quant","brain","sim","cart","lib"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
  [].forEach.call($("nav").querySelectorAll("button"),function(b){b.classList.toggle("on",b.dataset.v===v)});
  if(v==="news")loadNews(NR);
+ if(v==="con"&&!EDG&&!EDGL)loadEdgar();
  if((v==="brain"||v==="cart")&&!BQ&&!BLOAD)loadBrain();
  if(v==="sim"&&!PAP)loadPaper();
  render()}
@@ -1881,6 +1927,8 @@ $("bload").onclick=function(){loadBrain(true)};
 $("srun").onclick=btRun;
 [].forEach.call(document.querySelectorAll(".lf"),function(b){b.onclick=function(){
  LF=b.dataset.f;[].forEach.call(document.querySelectorAll(".lf"),function(o){o.classList.toggle("on",o===b)});render()}});
+$("e-load").onclick=loadEdgar;
+$("e-d").onchange=loadEdgar;
 $("mc-run").onclick=mcRun;
 $("p-snap").onclick=function(){loadPaper("snap")};
 $("p-set").onclick=function(){loadPaper("set")};

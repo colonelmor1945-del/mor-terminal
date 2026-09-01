@@ -97,6 +97,28 @@ F6 QUANT (acciones) · F7 CEREBRO (quant de predicción) · F8 SIMULADOR (backte
 - Muestra sesgada: los cerrados se piden ordenados por volumen. Pendiente muestrear
   al azar antes de sacar cualquier conclusión.
 
+## OSINT (el motor real del producto)
+El Monte Carlo (10 M repeticiones, 4.010 M operaciones) no encontró NINGUNA estrategia
+con p<0,05. Pero el Brier de 0,128 frente a 0,219 dice que el mercado incorpora bien
+la información existente. Las dos cosas juntas significan que **no hay ventaja
+estadística; solo la hay informativa**. Por eso el OSINT dejó de ser accesorio.
+
+Verificadas y funcionando, sin clave:
+- **SEC EDGAR full-text** (`efts.sec.gov/LATEST/search-index`) — exige User-Agent con
+  contacto real. Devuelve empresa, TICKER, SIC, partidas del 8-K y enlace al documento.
+  Partida **1.01 = acuerdo material definitivo**, que es la que se presenta al firmar.
+  ⚠️ Citar al DoD no es ganar un contrato: farmacéuticas (SIC 283x) lo citan por becas
+  y hospitales (806x) por TRICARE. Eran 22 de 59. Se separan por SIC, no a ciegas.
+- **Wikipedia pageviews** — atención diaria por artículo.
+- **Federal Register** — acciones regulatorias de EE.UU.
+- **OpenSky Network** — tráfico aéreo, anónimo y sin clave.
+- **Wayback CDX** — da la huella del contenido, así que detecta cuándo cambió de
+  verdad una web corporativa.
+
+No disponibles: **GDELT** (agotó el tiempo 3 veces desde aquí, sin confirmar),
+**SAM.gov** (licitaciones PRE-adjudicación — necesita clave gratuita, pedirla),
+**OpenCorporates** (401, clave gratuita).
+
 ## Roadmap (siguiente)
 1. ~~Subir `index.html` al Worker~~ hecho (31/08/2026, vía `sync.mjs`). Falta desplegar.
 2. Mover el universo `SC` a Google Sheets o KV para editarlo sin redesplegar. ← prioridad

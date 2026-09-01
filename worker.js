@@ -505,6 +505,177 @@ async function fetchPMQ(pages = 3) {
   };
 }
 
+/* ---------- VIGILANTE DE 8-K (SEC EDGAR) ----------
+   El 8-K es el instante en que informacion privada se vuelve publica: la empresa
+   esta OBLIGADA a comunicarlo. USAspending ensena la adjudicacion despues; esto la
+   ensena cuando la empresa la anuncia, que suele ser antes.
+   Busqueda a texto completo de EDGAR: gratis, sin clave. La SEC exige User-Agent
+   con contacto real y pide no pasar de 10 peticiones por segundo.                */
+
+const EDGAR_UA = "MOR Terminal - contacto colonelmor1945@gmail.com";
+
+const EDGAR_Q = [
+  '"Department of Defense"',
+  '"Defense Logistics Agency"',
+  '"Missile Defense Agency"',
+  '"Naval Sea Systems Command"',
+  '"Defense Advanced Research Projects"'
+];
+
+/* Codigos de partida del 8-K. 1.01 es el que importa: acuerdo material definitivo,
+   que es lo que se presenta al firmar un contrato. 2.02 son solo resultados.      */
+const EDGAR_ITEMS = {
+  "1.01": "acuerdo material firmado",
+  "1.02": "acuerdo material terminado",
+  "2.02": "resultados",
+  "7.01": "divulgacion Reg FD",
+  "8.01": "otro hecho relevante"
+};
+
+/* Citar al DoD en un 8-K no significa contrato de defensa: farmaceuticas lo citan
+   por becas de investigacion y los hospitales por TRICARE. En la ventana de prueba
+   eran 21 de 59. El codigo SIC los separa limpiamente, asi que se clasifica en vez
+   de filtrar a ciegas: se ve el sector y por que entra o no.                      */
+const SIC_DEF = {
+  "3480":"Municion y armamento","3482":"Municion ligera","3483":"Municion pesada","3489":"Ordenanza",
+  "3585":"Sistemas termicos","3559":"Maquinaria especial","3620":"Maquinaria electrica","3621":"Motores electricos",
+  "3663":"Radiodifusion y comunicaciones","3669":"Comunicaciones","3670":"Componentes electronicos",
+  "3672":"Circuitos impresos","3674":"Semiconductores","3679":"Componentes electronicos",
+  "3711":"Vehiculos (militares)","3713":"Carroceria","3714":"Piezas de vehiculo",
+  "3721":"Aeronaves","3724":"Motores aeronauticos","3728":"Partes de aeronave",
+  "3730":"Construccion naval","3731":"Buques","3761":"Misiles guiados","3764":"Propulsion espacial",
+  "3769":"Vehiculos espaciales","3812":"Busqueda, deteccion y navegacion","3827":"Instrumentos opticos",
+  "3829":"Instrumentos de medida","7372":"Software","7373":"Servicios informaticos",
+  "7363":"Servicios de personal","8711":"Ingenieria","8731":"I+D comercial","1731":"Instalaciones electricas"
+};
+/* Sectores que generan el ruido: se marcan explicitamente para poder excluirlos. */
+const SIC_RUIDO = {
+  "2833":"Farmacia","2834":"Farmacia","2835":"Diagnostico","2836":"Biologicos",
+  "3841":"Dispositivos medicos","3842":"Suministro medico","3845":"Electromedicina",
+  "8060":"Hospitales","8062":"Hospitales","8090":"Servicios sanitarios",
+  "6770":"Sociedad en blanco (SPAC)","6199":"Financiero","6022":"Banca","2860":"Quimica industrial"
+};
+
+function edgarTicker(nombre) {
+  // "374Water Inc.  (SCWO)  (CIK 0000933972)" -> SCWO
+  const m = String(nombre || "").match(/\(([A-Z][A-Z0-9.\-]{0,6})\)/);
+  return m ? m[1] : "";
+}
+function edgarNombre(s) {
+  return String(s || "").replace(/\s*\(.*$/, "").trim();
+}
+
+async function edgarBuscar(q, desde, hasta) {
+  const u = "https://efts.sec.gov/LATEST/search-index?q=" + encodeURIComponent(q) +
+            "&forms=8-K&startdt=" + desde + "&enddt=" + hasta;
+  const r = await fetch(u, { headers: { "User-Agent": EDGAR_UA, "Accept": "application/json" } });
+  if (!r.ok) throw new Error("EDGAR HTTP " + r.status);
+  const j = await r.json();
+  return ((j.hits || {}).hits) || [];
+}
+
+async function fetchEdgar(dias) {
+  const d = Math.max(1, Math.min(90, dias || 30));
+  const hasta = new Date().toISOString().slice(0, 10);
+  const desde = new Date(Date.now() - d * 864e5).toISOString().slice(0, 10);
+
+  // Tickers del universo SC, sin el prefijo de mercado. Solo las cotizadas en
+  // EE.UU. pueden aparecer: una empresa extranjera no presenta 8-K.
+  const univ = {};
+  SC.forEach(s => { const t = String(s.tk).split(":").pop(); if (t) univ[t] = s; });
+
+  const vistos = {}, out = [];
+  for (const q of EDGAR_Q) {
+    let hits = [];
+    try { hits = await edgarBuscar(q, desde, hasta); } catch (e) { continue; }
+    for (const h of hits) {
+      const s = h._source || {};
+      const nombreCompleto = (s.display_names || [])[0] || "";
+      const adsh = s.adsh || "";
+      if (!adsh || vistos[adsh]) continue;
+      vistos[adsh] = 1;
+
+      const tk = edgarTicker(nombreCompleto);
+      const nom = edgarNombre(nombreCompleto);
+      const NOM = nom.toUpperCase();
+      const items = s.items || [];
+      const cik = (s.ciks || [])[0] || "";
+      const sic = (s.sics || [])[0] || "";
+      const arch = String(h._id || "").split(":")[1] || "";
+
+      out.push({
+        fecha: s.file_date || "",
+        nombre: nom,
+        tk: tk,
+        cik: cik,
+        items: items,
+        // 1.01 = contrato firmado. Es la senal fuerte; el resto es contexto.
+        firma: items.indexOf("1.01") >= 0,
+        etiquetas: items.map(i => EDGAR_ITEMS[i] || i),
+        q: q.replace(/"/g, ""),
+        sic: sic,
+        sector: SIC_DEF[sic] || SIC_RUIDO[sic] || "sin clasificar",
+        // Plausible como contratista: el SIC encaja y no es de los sectores ruido.
+        defensa: !!SIC_DEF[sic],
+        ruido: !!SIC_RUIDO[sic],
+        // Gigante: interesa como contexto, no como oportunidad.
+        prime: PRIMES.some(p => NOM.includes(p)),
+        // El cruce: ya esta en tu universo de small caps.
+        enUniverso: !!univ[tk],
+        universo: univ[tk] ? univ[tk].name : "",
+        url: cik && arch
+          ? "https://www.sec.gov/Archives/edgar/data/" + Number(cik) + "/" +
+            adsh.replace(/-/g, "") + "/" + arch
+          : "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=" + cik
+      });
+    }
+  }
+
+  out.sort((a, b) => {
+    if (a.enUniverso !== b.enUniverso) return a.enUniverso ? -1 : 1;
+    if (a.firma !== b.firma) return a.firma ? -1 : 1;
+    return a.fecha < b.fecha ? 1 : -1;
+  });
+
+  const cruces = out.filter(x => x.enUniverso);
+  // Candidatas: no son gigantes y no estan en el universo. Es como crece la lista.
+  // Candidatas: contrato firmado, no gigante, fuera del universo y con SIC plausible.
+  const cand = out.filter(x => !x.enUniverso && !x.prime && x.firma && x.defensa);
+  const descartadas = out.filter(x => x.ruido).length;
+
+  return { desde: desde, hasta: hasta, n: out.length, descartadas: descartadas,
+           cruces: cruces, candidatas: cand.slice(0, 40), todas: out.slice(0, 120) };
+}
+
+/* Alerta diaria: solo lo que de verdad merece interrumpir. Un cruce con el universo
+   siempre; una candidata solo si firmo contrato y el SIC encaja. Se guarda lo ya
+   avisado para no repetir el mismo 8-K cada dia.                                  */
+async function edgarJob(env) {
+  const r = await fetchEdgar(3);
+  if (!env.RADAR) return { note: "KV no configurado", n: r.n };
+  const NL = String.fromCharCode(10);
+
+  const nuevos = [];
+  for (const x of r.cruces.concat(r.candidatas)) {
+    const k = "edgar:visto:" + x.cik + ":" + x.fecha;
+    if (await env.RADAR.get(k)) continue;
+    await env.RADAR.put(k, "1", { expirationTtl: 2592000 });
+    nuevos.push(x);
+  }
+  if (!nuevos.length) return { n: r.n, nuevos: 0 };
+
+  const cru = nuevos.filter(x => x.enUniverso), can = nuevos.filter(x => !x.enUniverso);
+  const li = [];
+  if (cru.length) li.push("CRUCE con tu universo:", ...cru.map(x =>
+    "- " + x.universo + " (" + x.tk + ") - " + x.etiquetas.join(", ") + NL + "  " + x.url));
+  if (can.length) li.push("Candidatas nuevas:", ...can.map(x =>
+    "- " + x.nombre + (x.tk ? " (" + x.tk + ")" : "") + " - " + x.sector + NL + "  " + x.url));
+
+  await sendTelegram(env, "SEC 8-K - " + nuevos.length + " presentacion(es) citando defensa:" + NL +
+    li.join(NL) + NL + "Verificalo a mano: citar al DoD no es ganar un contrato.");
+  return { n: r.n, nuevos: nuevos.length };
+}
+
 /* ---------- MOTOR DE PAPEL ----------
    Existe porque el backtest sobre mercados cerrados tiene sesgo de seleccion: se
    piden ordenados por volumen, asi que la muestra son los mercados famosos. Aqui
@@ -847,7 +1018,21 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="p" style="height:250px"><h3>DISTRIBUCIÓN · TOP 12</h3><div class="bd" id="c-bars"></div></div>
     <div class="p" style="height:250px"><h3>ACUMULADO DEL PERIODO</h3><div class="bd" id="c-cum"></div></div>
   </div>
-  <div class="p" style="height:calc(100vh - 430px);min-height:260px">
+  <div class="p" style="margin-bottom:8px">
+    <h3>VIGILANTE 8-K · SEC EDGAR <span id="e-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— el instante en que la información privada se vuelve pública</span></h3>
+    <div class="chips" style="align-items:center;gap:8px">
+      <label class="st">Ventana <select id="e-d"><option value="7">7 días</option><option value="30" selected>30 días</option><option value="60">60 días</option></select></label>
+      <button id="e-load">⟳ Buscar presentaciones</button>
+      <span class="st" id="e-st">Busca 8-K citando al Departamento de Defensa y los cruza con tu universo.</span>
+    </div>
+    <div class="bd" style="max-height:230px"><table><thead><tr>
+      <th style="width:9%">Fecha</th><th style="width:8%">Ticker</th><th style="width:26%">Empresa</th>
+      <th style="width:17%">Sector (SIC)</th><th style="width:22%">Partidas del 8-K</th><th style="width:18%">Señal</th>
+    </tr></thead><tbody id="e-rows"></tbody></table></div>
+    <div class="st">La partida <b>1.01</b> es «acuerdo material definitivo»: es la que se presenta al firmar un contrato, y por eso vale más que el resto. Citar al DoD <b>no</b> es ganar un contrato — las farmacéuticas lo citan por becas y los hospitales por TRICARE, así que esos sectores se descartan por código SIC. Verifícalo a mano siempre.</div>
+  </div>
+
+  <div class="p" style="height:calc(100vh - 640px);min-height:220px">
     <h3>CONTRATOS DEPARTMENT OF DEFENSE · 30 DÍAS <span id="c-cnt"></span></h3>
     <div class="chips">
       <button id="fa" class="on">TODOS</button><button id="fr">⚡ SIN GIGANTES</button>
@@ -1434,7 +1619,7 @@ function render(){
   return "<div class='ni'><a target='_blank' rel='noopener' href='"+n.l+"'>"+esc(n.t.slice(0,92))+"</a><div class='mt'>"+esc(n.s)+" · "+n.d+"</div></div>"}).join("")
   :(NEWS["Pentágono"]?emp("📰","Fuente no disponible.<br>Pulsa ⟳ REFRESH."):sk(5));
 
- if(VIEW==="con"){
+ if(VIEW==="con"){renderEdgar();
   var mn=+$("fm").value;
   var rw=CON.filter(function(d){return (FP==="all"||!d.prime)&&d.amount>=mn&&(!Q||(d.name+" "+d.desc).toLowerCase().indexOf(Q)>=0)});
   $("c-cnt").textContent=rw.length+" filas";
@@ -2478,10 +2663,42 @@ function renderLib(){
    "<td class='dim' style='font-size:10.5px;line-height:1.5'>"+esc(x.por)+"</td>"+
   "</tr>"}).join("")}
 
+/* ---- Vigilante de 8-K ---- */
+var EDG=null,EDGL=false;
+function loadEdgar(){
+ if(EDGL)return;EDGL=true;
+ $("e-st").textContent="Consultando EDGAR…";
+ fetch("/api/edgar?d="+(+$("e-d").value||30),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){
+   if(j.error)throw new Error(j.error);
+   EDG=j;
+   $("e-st").textContent=j.n+" presentaciones · "+j.descartadas+" descartadas por sector · "+
+     j.cruces.length+" cruces · "+j.candidatas.length+" candidatas"})
+  .catch(function(e){EDG=null;$("e-st").textContent="Error: "+(e.message||e)})
+  .then(function(){EDGL=false;render()})}
+
+function renderEdgar(){
+ if(!EDG){$("e-rows").innerHTML="<tr><td colspan='6'>"+emp("📄","Pulsa ⟳ para buscar presentaciones 8-K.")+"</td></tr>";return}
+ var f=EDG.cruces.concat(EDG.candidatas);
+ $("e-cnt").textContent="("+f.length+")";
+ $("e-rows").innerHTML=f.map(function(x){
+  var sg=x.enUniverso?["CRUCE","t1"]:(x.firma?["contrato firmado","t3"]:["mención","t2"]);
+  return "<tr>"+
+   "<td class='dim'>"+esc(x.fecha)+"</td>"+
+   "<td><b>"+esc(x.tk||"—")+"</b></td>"+
+   "<td title='"+esc(x.nombre)+"'><a href='"+esc(x.url)+"' target='_blank' rel='noopener'>"+esc(x.nombre.slice(0,40))+"</a>"+
+     (x.enUniverso?" <span class='dim'>· "+esc(x.universo)+"</span>":"")+"</td>"+
+   "<td class='dim' style='font-size:10.5px'>"+esc(x.sector)+"</td>"+
+   "<td class='dim' style='font-size:10.5px'>"+esc(x.etiquetas.join(", ").slice(0,44))+"</td>"+
+   "<td><span class='"+sg[1]+"'>"+sg[0]+"</span></td></tr>"}).join("")||
+  "<tr><td colspan='6'>"+emp("—","Ninguna presentación relevante en la ventana.")+"</td></tr>"}
+
 function go(v){VIEW=v;
  ["dash","con","sc","pm","news","quant","brain","sim","cart","lib"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
  [].forEach.call($("nav").querySelectorAll("button"),function(b){b.classList.toggle("on",b.dataset.v===v)});
  if(v==="news")loadNews(NR);
+ if(v==="con"&&!EDG&&!EDGL)loadEdgar();
  if((v==="brain"||v==="cart")&&!BQ&&!BLOAD)loadBrain();
  if(v==="sim"&&!PAP)loadPaper();
  render()}
@@ -2516,6 +2733,8 @@ $("bload").onclick=function(){loadBrain(true)};
 $("srun").onclick=btRun;
 [].forEach.call(document.querySelectorAll(".lf"),function(b){b.onclick=function(){
  LF=b.dataset.f;[].forEach.call(document.querySelectorAll(".lf"),function(o){o.classList.toggle("on",o===b)});render()}});
+$("e-load").onclick=loadEdgar;
+$("e-d").onchange=loadEdgar;
 $("mc-run").onclick=mcRun;
 $("p-snap").onclick=function(){loadPaper("snap")};
 $("p-set").onclick=function(){loadPaper("set")};
@@ -2569,6 +2788,7 @@ export default {
       if (p === "/api/news") return json(await fetchNews(url.searchParams.get("region") || "Pentágono"));
       if (p === "/api/pmq") return json(await fetchPMQ(Number(url.searchParams.get("pages")) || 3));
       if (p === "/api/pmh") return json(await fetchPMHist(url.searchParams.get("t"), url.searchParams.get("i")));
+      if (p === "/api/edgar") return json(await fetchEdgar(Number(url.searchParams.get("d")) || 30));
       if (p === "/api/paper") return json(await paperState(env));
       if (p === "/api/paper/snap") return json(await paperSnap(env));
       if (p === "/api/paper/settle") return json(await paperSettle(env, Number(url.searchParams.get("n")) || 60));
@@ -2586,6 +2806,7 @@ export default {
       await dailyJob(env);
       // El motor de papel vive del cron: anota las senales del dia y liquida las
       // que ya hayan resuelto. Si falla, no debe tumbar el trabajo de contratos.
+      try { await edgarJob(env); } catch (e) {}
       try { await paperSnap(env); } catch (e) {}
       try { await paperSettle(env, 40); } catch (e) {}
     })());
