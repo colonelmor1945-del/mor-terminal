@@ -20,7 +20,10 @@ empresa del universo small cap seguido.
   Ejecutar SIEMPRE tras tocar `index.html` y antes de desplegar.
 - `dev.mjs` — `node dev.mjs` levanta el Worker en `localhost:8787` sin wrangler,
   con KV falso en memoria. Recarga `worker.js` en cada petición.
-- `docs/DESPLIEGUE.md` — PENDIENTE: lo citan README y este archivo, pero no existe en el repo.
+- `docs/DESPLIEGUE.md` — cómo publicarlo. **No hace falta wrangler ni instalar nada**:
+  se pega `worker.js` en el panel de Cloudflare. 76 KB comprimidos contra 1 MB de
+  límite. No existe `wrangler.toml` en el repo; el documento trae la plantilla por
+  si algún día se prefiere línea de comandos.
 
 ## Estado actual
 - Desplegado en `https://mor-terminal.colonelmor1945.workers.dev` (versión antigua).
@@ -118,6 +121,17 @@ Verificadas y funcionando, sin clave:
 No disponibles: **GDELT** (agotó el tiempo 3 veces desde aquí, sin confirmar),
 **SAM.gov** (licitaciones PRE-adjudicación — necesita clave gratuita, pedirla),
 **OpenCorporates** (401, clave gratuita).
+
+## Qué necesita servidor y qué no
+Medido con cabeceras CORS reales. Solo **3 de 10** fuentes necesitan pasar por el
+Worker; el resto las llama el navegador directamente:
+- **Necesitan proxy:** SEC EDGAR, Yahoo precios, Yahoo noticias.
+- **CORS abierto:** USAspending, Polymarket gamma, Polymarket CLOB, CourtListener,
+  DexScreener, Federal Register, war.gov RSS.
+
+Eso importa para dos cosas: permite que el backtest corra en el navegador
+(esquivando el límite de 50 subpeticiones), y significa que migrar a un hosting
+estático sería posible — a costa de perder el control de acceso por claves.
 
 ## Acceso, claves y qué protege realmente
 La interfaz es HTML que el navegador descarga: **es copiable, siempre**. Ofuscarla
