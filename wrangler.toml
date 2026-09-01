@@ -1,0 +1,19 @@
+name = "mor-terminal"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+# Ejecutar SIEMPRE `node sync.mjs` antes de desplegar: worker.js lleva index.html
+# dentro y si no se regenera se sube la interfaz vieja.
+
+[[kv_namespaces]]
+binding = "RADAR"
+id = "a82f8cbf53054956abf9804916e55b19"
+
+[triggers]
+crons = ["0 7 * * *"]
+
+# Variables no secretas. Las secretas (ADMIN_TOKEN, TELEGRAM_TOKEN) se ponen con
+# `npx wrangler secret put NOMBRE` y NUNCA van en este archivo.
+# [vars]
+# EXIGIR_CLAVE = "1"
+# TELEGRAM_CHAT = "..."
