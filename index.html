@@ -8,6 +8,10 @@
 :root{--bg:#000;--pane:#080b10;--pane2:#0c1118;--line:#1a2231;--line2:#131a26;
 --txt:#d5dee9;--dim:#5f7186;--dim2:#3d4a5c;--am:#ff9f1a;--gr:#00e08a;--rd:#ff4d5e;--cy:#22d3ee;--vi:#a78bfa}
 *{margin:0;padding:0;box-sizing:border-box}
+/* Fondo topografico generado por codigo: sin archivos externos, se redibuja al
+   cambiar de tamano y queda detras de todo.                                     */
+#topo{position:fixed;inset:0;z-index:0;pointer-events:none}
+.hdr,.nav,main,.ftr,#dt,#fe{position:relative;z-index:1}
 html,body{height:100%}
 body{background:var(--bg);color:var(--txt);font:12px/1.35 "SF Mono","Roboto Mono","Cascadia Mono",Consolas,monospace;overflow:hidden}
 ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:#05070a}
@@ -51,11 +55,11 @@ main{flex:1;overflow:auto;padding:8px}
 .g23{grid-template-columns:2fr 1fr}
 .g32{grid-template-columns:1fr 2fr}
 @media(max-width:1250px){.g4{grid-template-columns:repeat(2,1fr)}.g3,.g2,.g23,.g32{grid-template-columns:1fr}}
-.p{background:var(--pane);border:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.p{background:rgba(8,11,16,.86);backdrop-filter:blur(2px);border:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .p>h3{font-size:9.5px;letter-spacing:1.6px;color:var(--dim);text-transform:uppercase;padding:6px 9px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0d131b,#090d13);display:flex;justify-content:space-between;align-items:center;flex:0 0 auto;gap:8px}
 .p>h3 span{color:var(--am);font-size:9.5px;white-space:nowrap}
 .p .bd{overflow:auto;flex:1;min-height:0}
-.kpi{background:linear-gradient(150deg,#0e141d,#080b10);border:1px solid var(--line);border-top:2px solid var(--am);padding:9px 11px}
+.kpi{background:linear-gradient(150deg,rgba(14,20,29,.9),rgba(8,11,16,.88));backdrop-filter:blur(2px);border:1px solid var(--line);border-top:2px solid var(--am);padding:9px 11px}
 .kpi.c2{border-top-color:var(--gr)}.kpi.c3{border-top-color:var(--cy)}.kpi.c4{border-top-color:var(--vi)}
 .kpi .k{color:var(--dim);font-size:9px;letter-spacing:1.4px;text-transform:uppercase}
 .kpi .v{font-size:26px;margin-top:2px;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
@@ -188,6 +192,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 </head>
 <body>
 <div id="app">
+<canvas id="topo"></canvas>
 <div class="hdr">
   <div class="brand"><em></em>MOR TERMINAL</div>
   <button id="volver" title="Volver a la pantalla anterior" style="display:none">← VOLVER</button>
@@ -535,7 +540,8 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
       <th style="width:8%">Ventaja</th><th style="width:8%">Kelly</th><th style="width:9%">Importe</th>
       <th style="width:8%">Títulos</th><th style="width:9%">Si acierta</th><th style="width:8%">Salida</th><th style="width:8%"></th>
     </tr></thead><tbody id="ca-rows"></tbody></table></div>
-    <div class="st">Kelly para un binario: <b>f* = (p − precio) / (1 − precio)</b>. «Salida» es el precio al que tu ventaja se agota, que es tu propia probabilidad — no es un objetivo de beneficio, es donde deja de haber razón para seguir. El reparto entre varias posiciones se escala proporcionalmente hasta el tope: es una aproximación, el Kelly multi-activo exacto exige la distribución conjunta. <b>Informativo. No es recomendación de inversión ni de apuesta.</b></div>
+    <div class="st">Kelly para un binario: <b>f* = (p − precio) / (1 − precio)</b>. «Salida» es el precio al que tu ventaja se agota, que es tu propia probabilidad — no es un objetivo de beneficio, es donde deja de haber razón para seguir. El reparto entre varias posiciones se escala proporcionalmente hasta el tope: es una aproximación, el Kelly multi-activo exacto exige la distribución conjunta. <b>Informativo. No es recomendación de inversión ni de apuesta.</b><br>
+    Si tu probabilidad es muchas veces mayor que el precio del mercado, la calculadora te avisa: casi siempre es un error de tecleo, y el «valor esperado» sale disparado por ese único dato.</div>
   </div>
 
   <div class="p" style="height:calc(100vh - 620px);min-height:230px">
@@ -758,7 +764,10 @@ function api(ruta,opt){
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;")}
 function lt(id,st,tx){var e=$(id);if(!e)return;e.className="lt "+st;if(tx)e.lastElementChild.textContent=tx}
 function sk(n){var o="";for(var i=0;i<(n||4);i++)o+="<div class='sk' style='width:"+(92-i*11)+"%'></div>";return o}
-function eur(n){n=+n||0;return (n>=1e4?Math.round(n).toLocaleString("es-ES"):n.toFixed(2))+" €"}
+function eur(n){n=+n||0;
+ // Siempre con dos decimales: "10.809" con separador español se lee como 10,8 de
+ // un vistazo y aquí eso puede ser un cero de diferencia.
+ return n.toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2})+" €"}
 function fn(n){n=+n||0;return n>=1e6?(n/1e6).toFixed(2)+"M":n>=1e3?(n/1e3).toFixed(1)+"K":Math.round(n).toString()}
 function emp(ic,m){return "<div class='emp'><b>"+ic+"</b>"+m+"</div>"}
 function tick(){var d=new Date();$("clk").textContent=d.toLocaleDateString("es-ES")+"  "+d.toLocaleTimeString("es-ES")}
@@ -1385,6 +1394,7 @@ function setUniv(u){
  UNIV=u;
  [].forEach.call(document.querySelectorAll(".su"),function(b){b.classList.toggle("on",b.dataset.u===u)});
  $("s-cfgpm").style.display=(u==="pm")?"":"none";
+ var mc=$("mc-run"); if(mc){mc.disabled=(u!=="pm");mc.style.opacity=(u==="pm")?"":"0.4"}
  $("s-cfgfx").style.display=(u==="fx")?"":"none";
  $("s-cfgmc").style.display=(u==="mc")?"":"none";
  var i=UINFO[u];
@@ -1647,6 +1657,10 @@ function mcTotal(p,o,lado,n){
 function mcRun(){
  if(MCRUN)return;
  if(!BT||!BT.S||BT.S.length<20){$("mc-st").textContent="Ejecuta antes la simulación de arriba: hace falta la muestra real.";return}
+ /* La hipotesis nula de esta prueba es "el precio ES la probabilidad", y para eso
+    hace falta un contrato binario con desenlace 0 o 1. En divisas no existe tal
+    cosa: sin este corte, la prueba corria sobre NaN y devolvia una fila basura. */
+ if(BT.fx){MC=null;$("mc-st").textContent="Esta prueba solo vale para mercados de predicción: necesita un desenlace de sí o no. En divisas no hay tal cosa.";render();return}
  MCRUN=true;
  var iters=+$("mc-n").value,S=BT.S,ss=mcStrats(S);
  if(!ss.length){MCRUN=false;$("mc-st").textContent="Muestra insuficiente por estrategia.";return}
@@ -1690,7 +1704,9 @@ function mcRun(){
  setTimeout(paso,0)}
 
 function renderMC(){
- if(!MC){$("mc-rows").innerHTML="<tr><td colspan='7'>"+emp("🎲","Pulsa «Ejecutar prueba de choque».")+"</td></tr>";return}
+ if(!MC){$("mc-rows").innerHTML="<tr><td colspan='7'>"+emp("🎲",
+   (BT&&BT.fx)?"No aplica a divisas: esta prueba necesita un desenlace de sí o no.":
+   "Pulsa «Ejecutar prueba de choque».")+"</td></tr>";return}
  $("mc-cnt").textContent="("+(MC.ops/1e6).toFixed(0)+" M operaciones)";
  $("mc-rows").innerHTML=MC.filas.map(function(r){
   var v=r.p<0.01?["muy improbable por azar","t3"]:
@@ -2085,7 +2101,12 @@ function cCompute(){
   for(var i=0;i<BQ.markets.length;i++)if(String(BQ.markets[i].id)===String(x.id)){m=BQ.markets[i];break}
   if(!m)return;
   var f=kellyBin(x.p,m.p);
-  filas.push({m:m,p:x.p,f:f,fa:Math.max(0,f)*frac})});
+  // Si dices que algo a 0,5% vale 60%, estás afirmando que el mercado se equivoca
+  // 100 veces. Puede pasar, pero casi siempre es un error de tecleo, y sin avisar
+  // la calculadora escupe un valor esperado enorme que parece una promesa.
+  var ratio=m.p>0?x.p/m.p:1;
+  filas.push({m:m,p:x.p,f:f,fa:Math.max(0,f)*frac,
+    delirio:(ratio>=8&&m.p<0.10)||(x.p>0.97&&m.p<0.5)})});
 
  // Tope por posición y, si el conjunto se pasa, escalado proporcional al tope total.
  filas.forEach(function(r){r.fa=Math.min(r.fa,mp)});
@@ -2135,7 +2156,10 @@ function renderCart(){
 
  $("c1").textContent=eur(r.tot);
  $("c1s").textContent=cap>0?((r.tot/cap*100).toFixed(1)+"% de "+eur(cap)+(r.escalado?" · escalado al tope":"")):"pon capital";
+ var raros=r.filas.filter(function(x){return x.delirio}).length;
  $("c2").textContent=(r.ev>=0?"+":"−")+eur(Math.abs(r.ev));
+ $("c2s").textContent=raros?("⚠ "+raros+" posición(es) con probabilidad desproporcionada"):"según TUS probabilidades";
+ $("c2").className="v "+(raros?"dn":(r.ev>=0?"up":"dn"));
  $("c2").className="v "+(r.ev>=0?"up":"dn");
  $("c3").textContent=r.tot>0?("−"+eur(r.tot)):eur(0);
  $("c3s").textContent=r.filas.length?("probabilidad "+(r.pFallo*100).toFixed(1)+"% si son independientes"):"sin posiciones";
@@ -2144,8 +2168,9 @@ function renderCart(){
 
  $("ca-rows").innerHTML=r.filas.map(function(x){
   return "<tr>"+
-   "<td title='"+esc(x.m.q)+"'>"+esc(x.m.q.slice(0,52))+"</td>"+
-   "<td>"+(x.m.p*100).toFixed(1)+"%</td>"+
+   "<td title='"+esc(x.m.q)+"'>"+esc(x.m.q.slice(0,52))+
+     (x.delirio?"<br><span class='t4' style='font-size:9px'>⚠ dices "+(x.p/x.m.p).toFixed(0)+"× lo que dice el mercado — ¿seguro?</span>":"")+"</td>"+
+   "<td>"+(x.m.p*100).toFixed(2)+"%</td>"+
    "<td style='color:var(--cy)'>"+(x.p*100).toFixed(1)+"%</td>"+
    "<td class='"+(x.p>x.m.p?"up":"dn")+"'>"+((x.p-x.m.p)>=0?"+":"")+((x.p-x.m.p)*100).toFixed(1)+"</td>"+
    "<td>"+(x.f*100).toFixed(1)+"%</td>"+
@@ -2294,6 +2319,9 @@ var TRAD={
  "IMPLEMENTADO":"YA FUNCIONA","EN COLA":"POR HACER","DESCARTADO":"NO SIRVE","CUELLO DE BOTELLA":"LO QUE FALTA"
 };
 
+// Claves ordenadas de mas larga a mas corta: la coincidencia mas especifica gana.
+var TRADK=Object.keys(TRAD).sort(function(a,b){return b.length-a.length});
+
 /* Ayudas por vista: una frase que dice para que sirve la pantalla. */
 var AYUDA={
  quant:"Aquí ves las 33 empresas con su precio y cuánto se han movido. «Fuerza» compara cada una con las demás: por encima de 0 va mejor que la media del grupo.",
@@ -2310,9 +2338,13 @@ function traducir(){
   if(el.dataset.oTxt===undefined)el.dataset.oTxt=el.innerHTML;
   var o=el.dataset.oTxt;
   if(!simple){el.innerHTML=o;return}
-  // se traduce por trozos: muchos titulos llevan contadores detras.
+  // Se traduce por trozos porque muchos titulos llevan contadores detras. Las
+  // claves van de mas larga a mas corta: si no, "6M" casa antes que
+  // "MEJOR MOMENTUM 6M" y sale "MEJOR MOMENTUM 6 meses".
   var out=o;
-  for(var k in TRAD){if(o.indexOf(k)>=0){out=out.split(k).join(TRAD[k]);break}}
+  for(var i=0;i<TRADK.length;i++){
+   var k=TRADK[i];
+   if(o.indexOf(k)>=0){out=out.split(k).join(TRAD[k]);break}}
   el.innerHTML=out});
  // ayuda por vista
  for(var v in AYUDA){
@@ -2320,6 +2352,80 @@ function traducir(){
   var a=cont.querySelector(".ayuda");
   if(!a){a=document.createElement("div");a.className="ayuda";cont.insertBefore(a,cont.firstChild)}
   a.innerHTML=AYUDA[v]}}
+
+/* ================= FONDO TOPOGRAFICO =================
+   Curvas de nivel sobre un campo de ruido suave, extraidas con marching squares.
+   Se genera una sola vez por tamano de ventana; no anima, asi que no gasta CPU.  */
+function dibujarTopo(){
+ var cv=$("topo");if(!cv)return;
+ var W=cv.width=innerWidth,H=cv.height=innerHeight;
+ var g=cv.getContext("2d");
+ g.fillStyle="#000";g.fillRect(0,0,W,H);
+
+ // --- ruido de valor: rejilla aleatoria + interpolacion suave ---
+ var sem=20260901;
+ function rnd(){sem=(sem*1664525+1013904223)&0x7fffffff;return sem/0x7fffffff}
+ function octava(cols,rows){
+  var m=[];for(var j=0;j<=rows;j++){m[j]=[];for(var i=0;i<=cols;i++)m[j][i]=rnd()}
+  return {m:m,c:cols,r:rows}}
+ function val(o,x,y){
+  var fx=x*o.c,fy=y*o.r,i=Math.floor(fx),j=Math.floor(fy);
+  var tx=fx-i,ty=fy-j;
+  // suavizado hermite: evita las aristas del bilineal puro
+  tx=tx*tx*(3-2*tx);ty=ty*ty*(3-2*ty);
+  i=Math.min(i,o.c-1);j=Math.min(j,o.r-1);
+  var a=o.m[j][i],b=o.m[j][i+1],c=o.m[j+1][i],d=o.m[j+1][i+1];
+  return (a*(1-tx)+b*tx)*(1-ty)+(c*(1-tx)+d*tx)*ty}
+
+ // Escala calibrada a ojo contra la referencia: formas amplias que cruzan la
+ // pantalla, no una malla fina. La proporcion la marca el lado mayor.
+ var ar=W/H, base=4.2;
+ var o1=octava(Math.max(3,Math.round(base*ar)),Math.round(base*1.5)),
+     o2=octava(Math.max(5,Math.round(base*2.2*ar)),Math.round(base*3.2)),
+     o3=octava(Math.max(9,Math.round(base*4.5*ar)),Math.round(base*6.5));
+
+ // muestreo del campo
+ var paso=3,nx=Math.ceil(W/paso)+1,ny=Math.ceil(H/paso)+1,campo=new Float32Array(nx*ny);
+ for(var j=0;j<ny;j++)for(var i=0;i<nx;i++){
+  var x=i*paso/W,y=j*paso/H;
+  campo[j*nx+i]=val(o1,x,y)*1 + val(o2,x,y)*0.38 + val(o3,x,y)*0.11}
+
+ // --- marching squares por nivel ---
+ var lo=Infinity,hi=-Infinity;
+ for(var k=0;k<campo.length;k++){if(campo[k]<lo)lo=campo[k];if(campo[k]>hi)hi=campo[k]}
+ var NIV=22;
+ g.lineCap="round";g.lineJoin="round";
+ for(var n2=0;n2<NIV;n2++){
+  var t=(n2+0.5)/NIV, u=lo+(hi-lo)*t;
+  // una de cada cuatro curvas resaltada: es lo que da el aspecto del mapa
+  var fuerte=(n2%3===1);
+  g.strokeStyle=fuerte?"rgba(150,235,120,.80)":"rgba(115,180,105,.13)";
+  g.lineWidth=fuerte?2.1:1;
+  g.beginPath();
+  for(var jj=0;jj<ny-1;jj++)for(var ii=0;ii<nx-1;ii++){
+   var a=campo[jj*nx+ii],b=campo[jj*nx+ii+1],c=campo[(jj+1)*nx+ii+1],d=campo[(jj+1)*nx+ii];
+   var idx=(a>u?8:0)|(b>u?4:0)|(c>u?2:0)|(d>u?1:0);
+   if(idx===0||idx===15)continue;
+   var X=ii*paso,Y=jj*paso,P=paso;
+   var ip=function(v1,v2){var den=(v2-v1);return den===0?0.5:(u-v1)/den};
+   var T=[X+P*ip(a,b),Y], R=[X+P,Y+P*ip(b,c)], B=[X+P*ip(d,c),Y+P], L=[X,Y+P*ip(a,d)];
+   var seg=null;
+   switch(idx){
+    case 1:case 14:seg=[L,B];break;  case 2:case 13:seg=[B,R];break;
+    case 3:case 12:seg=[L,R];break;  case 4:case 11:seg=[T,R];break;
+    case 6:case 9: seg=[T,B];break;  case 7:case 8: seg=[L,T];break;
+    case 5:seg=[L,T];break;          case 10:seg=[T,R];break;
+   }
+   if(seg){g.moveTo(seg[0][0],seg[0][1]);g.lineTo(seg[1][0],seg[1][1])}
+  }
+  g.stroke();
+ }
+
+ // puntos blancos dispersos, como en el mapa de referencia
+ g.fillStyle="rgba(255,255,255,.5)";
+ var np=Math.round(W*H/16000);
+ for(var q=0;q<np;q++)g.fillRect(Math.floor(rnd()*W),Math.floor(rnd()*H),1.2,1.2);
+}
 
 function aplicarModo(){
  document.body.classList.toggle("simple",MODO==="simple");
@@ -2529,6 +2635,8 @@ api("/api/estado").then(function(r){return r.json()}).then(function(j){
  $("i-keyst").textContent="Necesitas clave: "+(e.message||e)});
 if(!EDG&&!EDGL)loadEdgar();
 if(!BQ&&!BLOAD)loadBrain();
+dibujarTopo();
+window.addEventListener("resize",function(){clearTimeout(window.__t);window.__t=setTimeout(dibujarTopo,250)});
 refresh();render();
 setInterval(function(){loadPM()},120000);
 </script>
