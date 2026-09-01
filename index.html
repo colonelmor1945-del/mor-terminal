@@ -133,6 +133,24 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 .lg .pv{text-align:right;font-variant-numeric:tabular-nums;color:var(--txt)}
 .lg .sp{text-align:right;font-variant-numeric:tabular-nums;color:var(--dim);font-size:9.5px}
 .dom{display:grid;grid-template-columns:1fr 1fr;gap:9px;font-size:10.5px}
+/* ---- modo simple ---- */
+#modo{background:#0b1119;border:1px solid var(--line);color:var(--dim);padding:4px 11px;
+ font:inherit;font-size:10px;letter-spacing:.06em;cursor:pointer;white-space:nowrap}
+#modo.pro{border-color:var(--am);color:var(--am)}
+body.simple .solo-pro{display:none !important}
+.tarj{background:var(--pane);border:1px solid var(--line);border-left:3px solid var(--am);padding:14px 16px;
+ display:flex;flex-direction:column;gap:6px;min-height:0}
+.tarj.ok{border-left-color:var(--gr)} .tarj.no{border-left-color:var(--rd)} .tarj.inf{border-left-color:var(--cy)}
+.tarj .t{font-size:11px;letter-spacing:.08em;color:var(--dim);text-transform:uppercase}
+.tarj .g{font-size:26px;line-height:1.1;font-variant-numeric:tabular-nums}
+.tarj .x{font-size:12.5px;color:var(--txt);line-height:1.5}
+.tarj .y{font-size:11px;color:var(--dim);line-height:1.45}
+.expl{font-size:12.5px;line-height:1.6;color:var(--txt)}
+.expl b{color:var(--am)}
+.gloss{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+.gloss div{background:var(--pane2);border:1px solid var(--line2);padding:8px 10px}
+.gloss .k{font-size:11px;color:var(--am);margin-bottom:3px}
+.gloss .v{font-size:11.5px;color:var(--dim);line-height:1.45}
 .dom .side{display:flex;flex-direction:column;gap:2px}
 .dom .row{position:relative;display:flex;justify-content:space-between;padding:2px 6px;background:#0a0f16}
 .dom .row i{position:absolute;top:0;bottom:0;left:0;display:block}
@@ -151,6 +169,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 <div id="app">
 <div class="hdr">
   <div class="brand"><em></em>MOR TERMINAL</div>
+  <button id="modo" title="Cambia entre vista sencilla y vista completa">MODO SENCILLO</button>
   <div class="cmd"><input id="cmd" placeholder="COMANDO / BUSCAR…" autocomplete="off"><span class="hint">↵</span></div>
   <div class="lights">
     <div class="lt ld" id="L1"><b></b><span>DOD</span></div>
@@ -162,16 +181,17 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 </div>
 <div class="tape"><div class="run" id="tape"></div></div>
 <div class="nav" id="nav">
-  <button data-v="dash" class="on">F1 DASH</button>
-  <button data-v="con">F2 CONTRATOS</button>
-  <button data-v="sc">F3 SMALL CAPS</button>
-  <button data-v="pm">F4 POLYMARKET</button>
-  <button data-v="news">F5 NOTICIAS</button>
-  <button data-v="quant">F6 QUANT</button>
-  <button data-v="brain">F7 CEREBRO</button>
-  <button data-v="sim">F8 SIMULADOR</button>
-  <button data-v="cart">F9 CARTERA</button>
-  <button data-v="lib">F10 BIBLIOTECA</button>
+  <button data-v="ini" class="on">F1 INICIO</button>
+  <button data-v="dash" class="solo-pro">F2 DASH</button>
+  <button data-v="con">F3 CONTRATOS</button>
+  <button data-v="sc">F4 EMPRESAS</button>
+  <button data-v="pm">F5 APUESTAS</button>
+  <button data-v="news">F6 NOTICIAS</button>
+  <button data-v="quant" class="solo-pro">F7 QUANT</button>
+  <button data-v="brain" class="solo-pro">F8 CEREBRO</button>
+  <button data-v="sim" class="solo-pro">F9 SIMULADOR</button>
+  <button data-v="cart" class="solo-pro">F10 CARTERA</button>
+  <button data-v="lib" class="solo-pro">F11 BIBLIOTECA</button>
   <div class="sp"></div>
   <div class="meta" id="meta"></div>
 </div>
@@ -467,6 +487,59 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="st">Vender las n patas de un grupo excluyente cuesta Σ(1−pᵢ) = n − Σp e ingresa n − 1 con certeza, así que el beneficio es Σp − 1. <b>El retorno sobre capital es mucho menor que el sobre-redondeo</b>: para vender 32 patas hay que inmovilizar casi 31 unidades. Riesgos reales no simulados: el libro puede no tener profundidad para todas las patas al precio mostrado, y el capital queda inmovilizado hasta la resolución.</div>
   </div>
 </div>
+<div class="view on" id="v-ini">
+  <div class="grid g2" style="margin-bottom:9px">
+    <div class="p" style="padding:16px 18px">
+      <div class="expl" id="i-hoy">Cargando…</div>
+    </div>
+    <div class="p" style="padding:16px 18px">
+      <div class="t" style="font-size:11px;letter-spacing:.08em;color:var(--dim);text-transform:uppercase;margin-bottom:8px">Qué es esto</div>
+      <div class="expl">
+        Este terminal vigila tres cosas a la vez y busca dónde <b>se cruzan</b>:
+        los contratos que reparte el Pentágono, unas 33 empresas de defensa pequeñas
+        y poco seguidas por todo el mundo, y los mercados donde se apuesta sobre
+        acontecimientos reales.<br><br>
+        La idea es sencilla: a los grandes no les compensa cubrir una empresa coreana
+        o polaca de 200 millones. Ahí no hay competencia porque el premio les parece
+        pequeño. <b>Para ti sí es suficiente.</b>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid g4" style="margin-bottom:9px" id="i-tarj"></div>
+
+  <div class="grid g2" style="margin-bottom:9px">
+    <div class="p" style="height:250px">
+      <h3>LO QUE MERECE UN VISTAZO HOY</h3>
+      <div class="bd" style="padding:6px 10px" id="i-lista"></div>
+    </div>
+    <div class="p" style="height:250px">
+      <h3>SI TE PREGUNTAS QUÉ SIGNIFICA CADA COSA</h3>
+      <div class="bd" style="padding:9px 10px"><div class="gloss">
+        <div><div class="k">Contrato de defensa</div><div class="v">Dinero que el Pentágono adjudica a una empresa. Es público. Si la que lo gana cotiza en bolsa y es pequeña, puede notarse en su precio.</div></div>
+        <div><div class="k">Gigante</div><div class="v">Lockheed, Boeing, RTX… Se llevan casi todo, ya los cubre todo el mundo y ahí no hay nada que descubrir. El terminal los aparta.</div></div>
+        <div><div class="k">Small cap</div><div class="v">Empresa cotizada pequeña, aquí entre 50 y 500 millones. Poca gente las sigue, y por eso su precio reacciona tarde.</div></div>
+        <div><div class="k">Mercado de predicción</div><div class="v">Un sitio donde se compra y vende la probabilidad de que algo pase. Si algo cotiza a 30, el mercado cree que hay un 30% de que ocurra.</div></div>
+        <div><div class="k">Arbitraje</div><div class="v">Cuando las cuentas no cuadran solas. Si las opciones de un mismo suceso suman más de 100%, sobra dinero en la mesa sin tener que adivinar nada.</div></div>
+        <div><div class="k">8-K</div><div class="v">Un aviso que una empresa estadounidense está OBLIGADA a publicar cuando le pasa algo importante. Es el momento exacto en que deja de ser secreto.</div></div>
+        <div><div class="k">Cruce</div><div class="v">La señal estrella: una empresa de tu lista aparece ganando un contrato o publicando un aviso. Es lo que dispara la alerta.</div></div>
+        <div><div class="k">Verificar a mano</div><div class="v">Siempre. El terminal encuentra coincidencias, no verdades. Que un nombre coincida no significa que sea la misma empresa.</div></div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="p" style="padding:13px 16px">
+    <div class="expl" style="color:var(--dim);font-size:11.5px">
+      <b style="color:var(--rd)">Lo que este terminal NO hace:</b> no te dice dónde invertir ni predice precios.
+      Probamos las estrategias con 4.010 millones de operaciones simuladas y <b style="color:var(--txt)">ninguna
+      superó al azar</b>. Lo que sí hace es enseñarte información pública antes de que
+      la mire nadie más, y marcar cuando las cuentas de un mercado no cuadran.
+      Nada de esto es recomendación de inversión.
+      <span class="solo-pro"> · En modo completo tienes el detalle técnico de todo: F7 a F11.</span>
+    </div>
+  </div>
+</div>
+
 <div class="view" id="v-lib">
   <div class="grid g4" style="margin-bottom:8px">
     <div class="kpi"><div class="k">IMPLEMENTADO</div><div class="v" id="l1">—</div><div class="s">métodos en producción</div></div>
@@ -578,7 +651,7 @@ var NQ={
 var SZ=["MICRO","SMALL","MID"],SZC=["t4","t1","t3"];
 var REG=["Todas","Norteamérica","Europa","Europa Este","Oriente Medio","Asia Sur","Asia Este","Oceanía","Sudamérica"];
 
-var CON=[],PM=[],MATCH=[],NEWS={},NSRC={},ERR={},VIEW="dash",SORT={k:"amount",d:-1},FP="all",PF="all",RG="Todas",WO=false,NR="Pentágono";
+var CON=[],PM=[],MATCH=[],NEWS={},NSRC={},ERR={},VIEW="ini",SORT={k:"amount",d:-1},FP="all",PF="all",RG="Todas",WO=false,NR="Pentágono";
 var W={};try{W=JSON.parse(localStorage.getItem("mor_w")||"{}")}catch(e){W={}}
 function sw(){try{localStorage.setItem("mor_w",JSON.stringify(W))}catch(e){}}
 function $(i){return document.getElementById(i)}
@@ -855,6 +928,7 @@ function render(){
  if(VIEW==="sim"){renderSim();renderMC();renderPaper()}
  if(VIEW==="cart"){renderCart()}
  if(VIEW==="lib"){renderLib()}
+ if(VIEW==="ini"){renderIni()}
  if(VIEW==="news"){
   $("n-chips").innerHTML=Object.keys(NQ).map(function(r){return "<button data-n='"+r+"' class='"+(r===NR?"on":"")+"'>"+r+"</button>"}).join("")+
    "<button data-nf='1' style='border-color:#4a3410;color:var(--am)'>⟳ reintentar</button>";
@@ -1888,11 +1962,100 @@ function renderEdgar(){
    "<td><span class='"+sg[1]+"'>"+sg[0]+"</span></td></tr>"}).join("")||
   "<tr><td colspan='6'>"+emp("—","Ninguna presentación relevante en la ventana.")+"</td></tr>"}
 
+/* ================= MODO SENCILLO =================
+   La portada traduce a lenguaje normal lo que el terminal encontro hoy. El modo
+   completo no se elimina: se esconde tras un interruptor.                        */
+var MODO=(function(){try{return localStorage.getItem("mor_modo")||"simple"}catch(e){return "simple"}})();
+
+function aplicarModo(){
+ document.body.classList.toggle("simple",MODO==="simple");
+ var b=$("modo");
+ b.textContent=MODO==="simple"?"MODO SENCILLO":"MODO COMPLETO";
+ b.classList.toggle("pro",MODO!=="simple");
+ try{localStorage.setItem("mor_modo",MODO)}catch(e){}
+ // Las teclas F siguen funcionando, pero el numero se oculta: a alguien no tecnico
+ // solo le anade ruido, y en modo sencillo la numeracion ademas salta huecos.
+ [].forEach.call($("nav").querySelectorAll("button[data-v]"),function(b){
+  if(!b.dataset.txt)b.dataset.txt=b.textContent;
+  b.textContent=MODO==="simple"?b.dataset.txt.replace(/^F\d+\s+/,""):b.dataset.txt});
+ // Si estabas en una vista avanzada y cambias a sencillo, te devuelve a la portada.
+ if(MODO==="simple"&&["quant","brain","sim","cart","lib","dash"].indexOf(VIEW)>=0)go("ini");}
+
+function nEmp(n,sing,plur){return n+" "+(n===1?sing:plur)}
+
+function renderIni(){
+ var hoy=[],tarj=[],lista=[];
+
+ // --- contratos ---
+ var radar=CON.filter(function(c){return !c.prime});
+ if(CON.length){
+  tarj.push({c:"",t:"Contratos vigilados",g:CON.length,
+   x:nEmp(radar.length,"no va","no van")+" a los gigantes",
+   y:"Últimos 30 días del Pentágono"});
+  hoy.push("El Pentágono ha repartido <b>"+CON.length+"</b> contratos en 30 días. "+
+   "<b>"+radar.length+"</b> no se los llevan los gigantes de siempre, que son los que pueden mover una empresa pequeña.");
+ }
+ if(MATCH&&MATCH.length){
+  tarj.push({c:"ok",t:"Cruces detectados",g:MATCH.length,
+   x:"Coinciden con tu lista de empresas",y:"Verifícalo a mano antes de nada"});
+  hoy.push("Hay <b>"+MATCH.length+"</b> "+(MATCH.length===1?"coincidencia":"coincidencias")+
+   " entre quien gana contratos y tus empresas seguidas. Es la señal más fuerte que da el terminal.");
+  MATCH.slice(0,4).forEach(function(m){
+   lista.push(["ok","Cruce",m.company+" podría estar detrás de un contrato de "+f$(m.amount),
+    "Coincide el nombre con "+m.recipient+". Compruébalo antes de dar nada por hecho."])});
+ }
+
+ // --- 8-K ---
+ if(EDG){
+  var cr=EDG.cruces.length,ca=EDG.candidatas.length;
+  tarj.push({c:cr?"ok":"inf",t:"Avisos oficiales (8-K)",g:cr+ca,
+   x:cr?nEmp(cr,"es de tu lista","son de tu lista"):"ninguno es de tu lista",
+   y:"Empresas que han comunicado algo a la SEC"});
+  if(cr) EDG.cruces.slice(0,3).forEach(function(x){
+   lista.push(["ok","Tu lista",x.universo+" ha publicado un aviso oficial el "+x.fecha,
+    "Citando al Departamento de Defensa. "+x.etiquetas.join(", ")+"."])});
+  EDG.candidatas.slice(0,3).forEach(function(x){
+   lista.push(["inf","Nueva",x.nombre+(x.tk?" ("+x.tk+")":"")+" firmó un contrato el "+x.fecha,
+    "Sector: "+x.sector+". No está en tu lista todavía; puede merecer añadirla."])});
+ }
+
+ // --- arbitraje ---
+ if(BQ){
+  var op=(BQ.groups||[]).filter(function(g){return g.net>0}).length+(BQ.mono||[]).length;
+  tarj.push({c:op?"ok":"inf",t:"Cuentas que no cuadran",g:op,
+   x:op?"apuestas donde sobra dinero":"hoy todo cuadra",
+   y:"Sin tener que adivinar nada"});
+  if(op){
+   var mej=(BQ.groups||[]).filter(function(g){return g.net>0})[0];
+   if(mej)lista.push(["ok","Arbitraje","«"+mej.ev+"» suma "+(mej.sum*100).toFixed(1)+"% en vez de 100%",
+    "Sobra un "+(mej.net*100).toFixed(2)+"% después de comisiones. Ojo: hay que poder entrar en todas las opciones a la vez."]);
+   hoy.push("En los mercados de apuestas hay <b>"+op+"</b> "+(op===1?"sitio":"sitios")+
+    " donde las probabilidades no suman lo que deberían. Ahí no hace falta acertar nada, solo que las cuentas cuadren.");
+  }
+ }else{
+  tarj.push({c:"inf",t:"Cuentas que no cuadran",g:"—",x:"pulsa para analizar",y:"Necesita cargar los mercados"});
+ }
+
+ if(!hoy.length)hoy.push("Cargando los datos del día… si tarda, pulsa <b>⟳ REFRESH</b> arriba a la derecha.");
+ $("i-hoy").innerHTML="<div class='t' style='font-size:11px;letter-spacing:.08em;color:var(--dim);text-transform:uppercase;margin-bottom:8px'>Qué ha pasado hoy</div>"+hoy.join("<br><br>");
+
+ $("i-tarj").innerHTML=tarj.map(function(t){
+  return "<div class='tarj "+t.c+"'><div class='t'>"+esc(t.t)+"</div><div class='g'>"+t.g+"</div>"+
+   "<div class='x'>"+esc(t.x)+"</div><div class='y'>"+esc(t.y)+"</div></div>"}).join("");
+
+ $("i-lista").innerHTML=lista.length?lista.map(function(l){
+  return "<div style='padding:9px 0;border-bottom:1px solid var(--line2)'>"+
+   "<span class='"+(l[0]==="ok"?"t3":"t2")+"'>"+esc(l[1])+"</span> "+
+   "<b style='font-size:12.5px'>"+esc(l[2])+"</b><br>"+
+   "<span style='font-size:11.5px;color:var(--dim)'>"+esc(l[3])+"</span></div>"}).join("")
+  :emp("👀","Nada llamativo por ahora.<br>El terminal avisa cuando algo se cruza.");}
+
 function go(v){VIEW=v;
- ["dash","con","sc","pm","news","quant","brain","sim","cart","lib"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
+ ["ini","dash","con","sc","pm","news","quant","brain","sim","cart","lib"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
  [].forEach.call($("nav").querySelectorAll("button"),function(b){b.classList.toggle("on",b.dataset.v===v)});
  if(v==="news")loadNews(NR);
  if(v==="con"&&!EDG&&!EDGL)loadEdgar();
+ if(v==="ini"){if(!EDG&&!EDGL)loadEdgar(); if(!BQ&&!BLOAD)loadBrain();}
  if((v==="brain"||v==="cart")&&!BQ&&!BLOAD)loadBrain();
  if(v==="sim"&&!PAP)loadPaper();
  render()}
@@ -1901,13 +2064,13 @@ $("cmd").addEventListener("input",function(e){e.target.dataset.q=e.target.value;
 $("cmd").addEventListener("keydown",function(e){
  if(e.key!=="Enter")return;
  var c=e.target.value.trim().toUpperCase();
- var m={CON:"con",CONTRATOS:"con",SC:"sc",SMALLCAPS:"sc",PM:"pm",POLYMARKET:"pm",NEWS:"news",NOTICIAS:"news",DASH:"dash",F1:"dash",QUANT:"quant",Q:"quant",BRAIN:"brain",CEREBRO:"brain",PQ:"brain",SIM:"sim",SIMULADOR:"sim",BT:"sim",CART:"cart",CARTERA:"cart",LIB:"lib",BIBLIOTECA:"lib"};
+ var m={CON:"con",CONTRATOS:"con",SC:"sc",SMALLCAPS:"sc",PM:"pm",POLYMARKET:"pm",NEWS:"news",NOTICIAS:"news",DASH:"dash",INICIO:"ini",INI:"ini",PORTADA:"ini",QUANT:"quant",Q:"quant",BRAIN:"brain",CEREBRO:"brain",PQ:"brain",SIM:"sim",SIMULADOR:"sim",BT:"sim",CART:"cart",CARTERA:"cart",LIB:"lib",BIBLIOTECA:"lib"};
  if(m[c]){e.target.value="";e.target.dataset.q="";go(m[c])}
  else if(c==="REFRESH"||c==="RELOAD"){e.target.value="";e.target.dataset.q="";refresh()}});
 document.addEventListener("keydown",function(e){
  if(e.key==="Escape"&&DT){dtClose();return}
  if(e.key==="/"&&document.activeElement!==$("cmd")){e.preventDefault();$("cmd").focus();return}
- var m={F1:"dash",F2:"con",F3:"sc",F4:"pm",F5:"news",F6:"quant",F7:"brain",F8:"sim",F9:"cart",F10:"lib"};
+ var m={F1:"ini",F2:"dash",F3:"con",F4:"sc",F5:"pm",F6:"news",F7:"quant",F8:"brain",F9:"sim",F10:"cart",F11:"lib"};
  if(m[e.key]){e.preventDefault();go(m[e.key])}});
 document.addEventListener("click",function(e){var t=e.target;
  if(t.classList.contains("str")){W[t.dataset.tk]=!W[t.dataset.tk];sw();render()}
@@ -1927,6 +2090,7 @@ $("bload").onclick=function(){loadBrain(true)};
 $("srun").onclick=btRun;
 [].forEach.call(document.querySelectorAll(".lf"),function(b){b.onclick=function(){
  LF=b.dataset.f;[].forEach.call(document.querySelectorAll(".lf"),function(o){o.classList.toggle("on",o===b)});render()}});
+$("modo").onclick=function(){MODO=(MODO==="simple"?"pro":"simple");aplicarModo();render()};
 $("e-load").onclick=loadEdgar;
 $("e-d").onchange=loadEdgar;
 $("mc-run").onclick=mcRun;
@@ -1959,6 +2123,9 @@ $("scsv").onclick=function(){
 function refresh(){NEWS={};NSRC={};loadCon();loadPM();loadNews("Pentágono",true);if(NR!=="Pentágono")loadNews(NR,true)}
 $("rel").onclick=refresh;
 $("qload").onclick=loadPx;
+aplicarModo();
+if(!EDG&&!EDGL)loadEdgar();
+if(!BQ&&!BLOAD)loadBrain();
 refresh();render();
 setInterval(function(){loadPM()},120000);
 </script>
