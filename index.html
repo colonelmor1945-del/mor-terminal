@@ -692,6 +692,36 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="st">Media y mediana divergen mucho a propósito: un longshot acertado a 0.02 paga 50× y arrastra la media él solo, así que la mediana dice mejor qué pasa en la apuesta típica. Retorno por unidad arriesgada: comprar SÍ a precio p paga (desenlace − p)/p. t-stat = media ÷ (desviación/√n): por encima de 2 el resultado difícilmente es azar. En divisas se muestra <b>agrupado por par y con ventanas sin solapar</b>, y debajo el «ingenuo» para que veas la diferencia: contar ventanas solapadas como si fueran independientes dispara el t-stat y hace pasar por ventaja lo que es ruido. <b>Rentabilidad pasada simulada sobre datos históricos; no predice resultados futuros y no descuenta el impacto de mercado. Informativo, no es recomendación de inversión ni de apuesta.</b></div>
   </div>
 </div>
+
+  <div class="p" style="margin-top:8px">
+    <h3>LO QUE EL TERMINAL HA APRENDIDO <span id="ap-cnt"></span>
+      <span class="st" style="font-weight:400;text-transform:none">— de su propio historial, no de la teoría</span></h3>
+    <div class="chips"><button id="ap-load">⟳ Ver aprendizaje</button>
+      <span class="st" id="ap-st">Cada día se anotan las señales y se liquidan las que resuelven. De ahí sale todo esto.</span></div>
+    <div class="grid g4" style="margin:8px 0">
+      <div class="kpi"><div class="k">CASOS LIQUIDADOS</div><div class="v" id="ap1">—</div><div class="s" id="ap1s">señales con resultado conocido</div></div>
+      <div class="kpi c2"><div class="k">λ QUE USA HOY</div><div class="v" id="ap2">—</div><div class="s" id="ap2s">mezcla de literatura y experiencia propia</div></div>
+      <div class="kpi c3"><div class="k">¿ESTÁ CALIBRADO?</div><div class="v" id="ap3">—</div><div class="s" id="ap3s">fiabilidad: 0 es perfecto</div></div>
+      <div class="kpi c4"><div class="k">¿ES PREDECIBLE?</div><div class="v" id="ap4">—</div><div class="s" id="ap4s">resolución: cuanto más alta, mejor</div></div>
+    </div>
+    <div class="bd" style="overflow:auto"><table><thead><tr>
+      <th style="width:22%">Tipo de señal</th><th style="width:9%">Casos</th><th style="width:12%">Acierto crudo</th>
+      <th style="width:14%">Acierto corregido</th><th style="width:20%">Intervalo (90%)</th>
+      <th style="width:11%">Retorno medio</th><th>Cuánto pesa lo vivido</th>
+    </tr></thead><tbody id="ap-rows"><tr><td colspan="7"><div class="emp"><b>🎓</b>Pulsa <b>⟳ Ver aprendizaje</b>.</div></td></tr></tbody></table></div>
+    <div class="st" id="ap-nota">El acierto corregido encoge el crudo hacia el 50% mientras haya pocos casos: acertar 3 de 4 no es un 75%, son cuatro datos. El intervalo es lo que de verdad sabes. Nada de esto se usa para dimensionar posiciones hasta que el intervalo se estreche.</div>
+  </div>
+  <div class="p" style="margin-top:8px">
+    <h3>PRUEBA CONTRA EL AUTOENGAÑO <span class="st" style="font-weight:400;text-transform:none">— test SPA de Hansen con remuestreo por bloques</span></h3>
+    <div class="chips"><button id="spa-run">▶ Ejecutar</button>
+      <span class="st" id="spa-st">Necesita una simulación ejecutada. Corrige el sesgo de haber probado varias estrategias y quedarse con la mejor.</span></div>
+    <div class="bd" style="overflow:auto"><table><thead><tr>
+      <th style="width:34%">Estrategia</th><th style="width:14%">Exceso sobre referencia</th><th style="width:12%">p individual</th>
+      <th style="width:14%">p corregido (SPA)</th><th>Lectura</th>
+    </tr></thead><tbody id="spa-rows"><tr><td colspan="5"><div class="emp"><b>🎯</b>Pulsa <b>▶ Ejecutar</b> tras una simulación.</div></td></tr></tbody></table></div>
+    <div class="st">El t-stat agrupado corrige que las ventanas se solapen. Esto corrige otra cosa distinta: que hayas mirado varias estrategias y te quedes con la que mejor salió. Si pruebas seis, la mejor parece buena por puro azar. El p corregido es el que cuenta.</div>
+  </div>
+</div>
 <div class="view" id="v-cart">
   <div class="grid g4" style="margin-bottom:8px">
     <div class="kpi"><div class="k">CAPITAL COMPROMETIDO</div><div class="v" id="c1">—</div><div class="s" id="c1s">de tu capital</div></div>
@@ -1982,7 +2012,9 @@ function btStats(name,trades){
  var eq=[],c=0,pk=0,dd=0;
  for(var i=0;i<r.length;i++){c+=r[i];eq.push(c);if(c>pk)pk=c;if(pk-c>dd)dd=pk-c}
  var t=s>0?m/(s/Math.sqrt(n)):0;
- return {name:name,n:n,win:wins/n,mean:m,med:med,total:c,dd:dd,t:t,eq:eq}}
+ /* rs = retornos por operacion. El test SPA los necesita para remuestrear por
+    bloques; antes solo se guardaba el resumen y no habia con que remuestrear. */
+ return {name:name,n:n,win:wins/n,mean:m,med:med,total:c,dd:dd,t:t,eq:eq,rs:r}}
 
 function btMetrics(S,H){
  // Brier: media de (p - desenlace)². 0.25 es lanzar una moneda.
@@ -3674,6 +3706,160 @@ function go(v,sinApilar){
 [].forEach.call($("nav").querySelectorAll("button[data-v]"),function(b){b.onclick=function(){go(b.dataset.v)}});
 
 
+
+
+/* ===================== APRENDIZAJE: PANEL ===================== */
+var APR=null;
+function apCargar(){
+ $("ap-st").textContent=T("Recontando el historial…","Recounting the record…");
+ api("/api/aprendizaje",{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){ if(j.error)throw new Error(j.error); APR=j; apPintar() })
+  .catch(function(e){ $("ap-st").textContent="Error: "+(e.message||e) });
+}
+function apPintar(){
+ if(!APR)return;
+ var j=APR;
+ $("ap1").textContent=j.totalLiquidadas;
+ $("ap-cnt").textContent="("+j.totalLiquidadas+")";
+ var L=j.lambda||{};
+ $("ap2").textContent=(typeof L.lam==="number")?L.lam.toFixed(3):"—";
+ $("ap2s").textContent=(L.peso>0)
+  ? T("un "+(L.peso*100).toFixed(0)+"% viene de tus "+L.n+" casos; el resto, de la literatura",
+      (L.peso*100).toFixed(0)+"% from your "+L.n+" cases; the rest from the literature")
+  : T("todavía toda de la literatura: hacen falta casos propios","still all from the literature: needs own cases");
+ var c=j.calibracion;
+ $("ap3").textContent=c?(c.fiabilidad<0.01?T("sí","yes"):(c.fiabilidad<0.04?T("casi","nearly"):T("no","no"))):"—";
+ $("ap3s").textContent=c?T("fiabilidad "+c.fiabilidad.toFixed(4)+" · 0 sería perfecto","reliability "+c.fiabilidad.toFixed(4)):T("faltan casos","not enough cases");
+ $("ap4").textContent=c?(c.resolucion>0.05?T("bastante","fairly"):(c.resolucion>0.02?T("algo","somewhat"):T("poco","barely"))):"—";
+ $("ap4s").textContent=c?T("resolución "+c.resolucion.toFixed(4)+" · si es baja, el suceso es impredecible y no hay nada que arreglar",
+   "resolution "+c.resolucion.toFixed(4)):T("faltan casos","not enough cases");
+
+ var NOM={momentum:T("Momentum de precio","Price momentum"),arb_suma:T("Arbitraje por suma","Sum arbitrage"),
+  arb_mono:T("Arbitraje por monotonía","Monotonicity arbitrage"),otro:T("Otras","Other")};
+ var ks=Object.keys(j.tipos||{});
+ $("ap-rows").innerHTML=ks.length?ks.map(function(k){
+  var t=j.tipos[k], ancho=(t.hi-t.lo);
+  return "<tr><td><b>"+(NOM[k]||k)+"</b></td><td>"+t.n+"</td>"+
+   "<td class='dim'>"+(t.crudo===null?"—":(t.crudo*100).toFixed(0)+"%")+"</td>"+
+   "<td class='"+(t.media>0.5?"up":"dn")+"'><b>"+(t.media*100).toFixed(1)+"%</b></td>"+
+   "<td>"+(t.lo*100).toFixed(0)+"–"+(t.hi*100).toFixed(0)+"%"+
+     (ancho>0.3?" <span class='t2'>"+T("muy ancho","very wide")+"</span>":"")+"</td>"+
+   "<td class='"+(t.retornoMedio>0?"up":"dn")+"'>"+(t.retornoMedio===null?"—":((t.retornoMedio>=0?"+":"")+(t.retornoMedio*100).toFixed(1)+"%"))+"</td>"+
+   "<td><div class='tr' style='height:6px'><i style='width:"+(t.peso*100).toFixed(0)+"%'></i></div>"+
+     "<span class='dsc'>"+(t.peso*100).toFixed(0)+"%</span></td></tr>"}).join("")
+  :"<tr><td colspan='7'>"+emp("🎓",T("Todavía no hay ninguna señal liquidada. El terminal anota las de cada día y las liquida cuando el mercado resuelve; hasta entonces no ha aprendido nada y no se lo inventa.",
+    "No settled signals yet. The terminal logs each day's signals and settles them when markets resolve; until then it has learned nothing and will not pretend otherwise."))+"</td></tr>";
+ $("ap-st").textContent=T("Actualizado "+new Date(j.ts).toLocaleString(),"Updated "+new Date(j.ts).toLocaleString());
+}
+
+/* ===================== TEST SPA DE HANSEN =====================
+   El t-stat agrupado corrige que las ventanas se solapen. Esto corrige un sesgo
+   DISTINTO y normalmente mayor: haber probado varias estrategias y quedarse con
+   la que mejor salio. Con seis estrategias, la mejor parece buena por azar.
+
+   Remuestreo estacionario de Politis y Romano: en vez de remuestrear
+   observaciones sueltas -que destruiria la dependencia temporal- se remuestrean
+   bloques de longitud aleatoria geometrica, que la conservan. Sobre esa
+   distribucion nula se mide cuantas veces el azar iguala a la mejor estrategia.  */
+function bloqueEstacionario(x,rnd,pGeom){
+ var N=x.length,out=[],i=Math.floor(rnd()*N);
+ while(out.length<N){
+  out.push(x[i]);
+  if(rnd()<pGeom)i=Math.floor(rnd()*N); else i=(i+1)%N;
+ }
+ return out;
+}
+/* La primera version contrastaba contra CERO y daba p=0,004 diciendo que el
+   momentum "sobrevivia" -y marcaba como superviviente hasta a la propia
+   referencia, que no puede superarse a si misma-. Contra cero, cualquier
+   estrategia que este comprada en un mercado que sube sale significativa: eso no
+   es una ventaja, es la deriva del mercado.
+
+   Lo que hay que contrastar es superioridad SOBRE LA REFERENCIA, que es el
+   planteamiento de Hansen. La nula es "esta estrategia rinde igual que comprar y
+   ya esta". Como las series tienen distinta longitud -cada estrategia opera en
+   sus propias ventanas- no se pueden emparejar operacion a operacion, asi que se
+   compara la media contra la de la referencia y se remuestrea cada serie por
+   bloques para construir la nula.                                              */
+function spaTest(series,B,pGeom,iRef){
+ var k=series.length; if(k<2||iRef==null)return null;
+ var medias=series.map(function(x){return mean(x)});
+ var sds=series.map(function(x){return sd(x)||1e-9});
+ var ns=series.map(function(x){return x.length});
+ var mRef=medias[iRef];
+ // Estadistico por estrategia: exceso sobre la referencia, estandarizado.
+ var t=medias.map(function(m,i){return i===iRef?null:(m-mRef)/(sds[i]/Math.sqrt(ns[i]))});
+ var cand=[]; for(var i=0;i<k;i++)if(i!==iRef)cand.push(i);
+ var tMax=Math.max.apply(null,cand.map(function(i){return t[i]}));
+ var seed=987654321;
+ var rnd=function(){seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;return (seed>>>0)/4294967296};
+ var gana=0, ganaIndiv={};
+ cand.forEach(function(i){ganaIndiv[i]=0});
+ for(var b=0;b<B;b++){
+  var peor=-Infinity;
+  // La referencia tambien se remuestrea: su media tiene su propio error.
+  var rRef=bloqueEstacionario(series[iRef],rnd,pGeom);
+  var dRef=mean(rRef)-mRef;
+  for(var j=0;j<cand.length;j++){
+   var i=cand[j];
+   var r=bloqueEstacionario(series[i],rnd,pGeom);
+   // Bajo la nula el exceso es cero: se centra restando lo observado.
+   var tb=((mean(r)-medias[i])-dRef)/(sds[i]/Math.sqrt(ns[i]));
+   if(tb>=t[i])ganaIndiv[i]++;
+   if(tb>peor)peor=tb;
+  }
+  if(peor>=tMax)gana++;
+ }
+ var pI={}; cand.forEach(function(i){pI[i]=ganaIndiv[i]/B});
+ return {pSPA:gana/B, pIndiv:pI, t:t, iRef:iRef, mRef:mRef};
+}
+function spaEjecutar(){
+ if(!BT||!BT.strats||!BT.strats.length){
+  $("spa-st").textContent=T("Ejecuta antes una simulación en esta misma pantalla.","Run a simulation on this screen first.");return}
+ // Se necesitan los retornos, no solo el resumen.
+ var series=[],noms=[];
+ BT.strats.forEach(function(s){ if(s.rs&&s.rs.length>=15){series.push(s.rs);noms.push(s.name)} });
+ if(series.length<2){
+  $("spa-st").textContent=T("Esta simulación no guarda los retornos por operación, que es lo que necesita la prueba.",
+                            "This simulation does not keep per-trade returns, which the test needs.");
+  $("spa-rows").innerHTML="<tr><td colspan='5'>"+emp("—",T("Vuelve a ejecutar la simulación para que guarde los retornos.","Re-run the simulation so it stores returns."))+"</td></tr>";
+  return}
+ /* Referencia: la estrategia pasiva. Sin ella no hay contra que comparar. */
+ var iRef=-1;
+ for(var i=0;i<noms.length;i++)if(/referencia|siempre|comprar todo|benchmark/i.test(noms[i])){iRef=i;break}
+ if(iRef<0){
+  $("spa-st").textContent=T("Esta simulación no incluye una estrategia de referencia pasiva, así que no hay contra qué comparar.",
+                            "This simulation has no passive benchmark to compare against.");
+  return}
+ $("spa-st").textContent=T("Remuestreando por bloques…","Block-resampling…");
+ setTimeout(function(){
+  // Bloque medio de 5 observaciones: p = 1/5.
+  var r=spaTest(series,2000,0.2,iRef);
+  var primera=true;
+  $("spa-rows").innerHTML=series.map(function(x,i){
+   if(i===iRef)return "<tr><td>"+esc(noms[i])+" <span class='t2'>"+T("referencia","benchmark")+"</span></td>"+
+    "<td class='"+(mean(x)>=0?"up":"dn")+"'>"+(mean(x)>=0?"+":"")+(mean(x)*100).toFixed(2)+"%</td>"+
+    "<td class='dim'>—</td><td class='dim'>—</td><td class='dim'>"+T("es el listón, no compite","this is the bar")+"</td></tr>";
+   var exceso=mean(x)-r.mRef;
+   var pi=r.pIndiv[i];
+   var sig=(r.pSPA<0.05&&pi<0.05)?["bate a la referencia","t3"]
+          :(pi<0.05?["parece mejor, pero no sobrevive a haber probado varias","t2"]
+                   :["no bate a la referencia","t4"]);
+   var fila="<tr><td>"+esc(noms[i])+"</td>"+
+    "<td class='"+(exceso>=0?"up":"dn")+"'>"+(exceso>=0?"+":"")+(exceso*100).toFixed(2)+"%"+
+     "<div class='dsc'>"+T("sobre la referencia","over benchmark")+"</div></td>"+
+    "<td>"+pi.toFixed(3)+"</td>"+
+    "<td><b>"+(primera?r.pSPA.toFixed(3):"—")+"</b></td>"+
+    "<td><span class='"+sig[1]+"'>"+sig[0]+"</span></td></tr>";
+   primera=false; return fila}).join("");
+  $("spa-st").textContent=T("2.000 remuestreos por bloques, contra «"+noms[iRef]+"» · p corregido = "+r.pSPA.toFixed(3)+
+    (r.pSPA<0.05?": alguna estrategia bate de verdad a la referencia."
+                : ": ninguna bate a la referencia una vez descontado que probaste varias."),
+    "2000 block resamples vs benchmark · corrected p = "+r.pSPA.toFixed(3));
+ },30);
+}
+(function(){ $("ap-load").onclick=apCargar; $("spa-run").onclick=spaEjecutar; })();
 
 /* ===================== VEREDICTO ===================== */
 /* Movimiento tipico de una sesion: media del cambio absoluto de cierre a cierre

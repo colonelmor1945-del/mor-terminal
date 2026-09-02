@@ -581,6 +581,8 @@ function pmMonoCadena(ev, arr, tipo, cadena, live) {
    se marca como de menor confianza: hay que decirlo, no disimularlo.            */
 
 const LAMBDA_LIT = 0.183;   // oracle3, 291k contratos resueltos
+/* Referencia al KV para las funciones que no reciben env. Se fija en el fetch. */
+let ENV_KV = null;
 
 function pmSemaforo(m) {
   const av = [];
@@ -699,18 +701,27 @@ async function fetchPMQ(pages = 3) {
      desplazamiento de nivel -que diria "vender todo"- en el sesgo relativo que
      de verdad se observa: las patas improbables caras frente a las favoritas.
      Fuera de un grupo completo no hay con que comparar y se deja sin estimar. */
+  /* Lambda aprendida: arranca en la de la literatura y se va desplazando hacia
+     la propia segun se acumulan mercados resueltos. Guardada por el cron para
+     no rehacer el recuento en cada peticion. */
+  let LAM = { lam: LAMBDA_LIT, peso: 0, n: 0, fuente: "literatura" };
+  try {
+    const g = ENV_KV && await ENV_KV.get("aprendido:lambda", "json");
+    if (g && isFinite(g.lam)) LAM = g;
+  } catch (e) {}
+
   markets.forEach(m => { m.fair = null; m.edge = null; });
   let nFair = 0;
   for (const ev of evs) {
     if (!ev.negRisk) continue;
     const ms = markets.filter(m => m.evSlug === (ev.slug || "") && m.live);
     if (ms.length < 2 || ms.length !== (ev.markets || []).length) continue;
-    const cru = ms.map(m => wangInv(m.p, LAMBDA_LIT));
+    const cru = ms.map(m => wangInv(m.p, LAM.lam));
     const tot = cru.reduce((a, x) => a + x, 0);
     if (!(tot > 0)) continue;
     ms.forEach((m, i) => { m.fair = cru[i] / tot; m.edge = m.p - m.fair; nFair++; });
   }
-  const lam = LAMBDA_LIT;
+  const lam = LAM.lam;
 
   // z-scores de momentum a 3 horizontes (mismo motor que la vista QUANT de acciones).
   ["c1d", "c1w", "c1m"].forEach(k => {
@@ -752,7 +763,8 @@ async function fetchPMQ(pages = 3) {
     ts: new Date().toISOString(),
     fee: PM_FEE,
     nEvents: evs.length,
-    lam: lam, nLam: markets.slice(0, 400).filter(m => m.fair !== null).length, lamFuente: "literatura",
+    lam: lam, nLam: markets.slice(0, 400).filter(m => m.fair !== null).length,
+    lamFuente: LAM.fuente, lamPeso: LAM.peso, lamN: LAM.n, lamPropia: LAM.propia,
     // Curva de distorsion lista para pintar: el cliente no recalcula nada.
     curva: (function () { const c = []; for (let i = 1; i < 100; i++) { const p = i / 100; c.push([p, nCdf(nPpf(p) + lam)]); } return c; })(),
     markets: markets.slice(0, 400),
@@ -1818,6 +1830,167 @@ const PAPER_MAX = 400;   // tope de posiciones abiertas en KV
 
 function paperId(tipo, id, ts) { return "paper:" + tipo + ":" + id + ":" + ts; }
 
+
+/* ---------- Encogimiento Beta-Binomial (Bayes empirico) ----------
+   La tasa de acierto observada se mezcla con una previa Beta(a,b). Con pocos
+   casos el resultado se queda pegado a la previa; segun llegan datos se
+   despega. Es lo que evita anunciar un 75% de acierto con cuatro operaciones.
+   Se devuelve tambien el intervalo creible al 90%, que con n pequeno sale
+   ancho, y eso es exactamente la informacion util.                            */
+function betaEncoger(aciertos, total, aPrev, bPrev) {
+  const a = aciertos + (aPrev || 2), b = (total - aciertos) + (bPrev || 2);
+  const media = a / (a + b);
+  // Desviacion de la Beta; con a+b grande la normal aproxima de sobra.
+  const va = (a * b) / ((a + b) * (a + b) * (a + b + 1));
+  const sd = Math.sqrt(va);
+  return {
+    n: total, crudo: total ? aciertos / total : null, media: media,
+    lo: Math.max(0, media - 1.645 * sd), hi: Math.min(1, media + 1.645 * sd),
+    // Cuanto pesa lo observado frente a la previa: 0 = todo previa, 1 = todo datos.
+    peso: total / (total + (aPrev || 2) + (bPrev || 2))
+  };
+}
+
+/* ---------- Lambda que se va aprendiendo ----------
+   El valor justo usaba 0,183 de la literatura, pero los mercados resueltos del
+   propio terminal apuntaban al signo contrario. Ni ignorarlo ni darle la vuelta
+   por una muestra corta: se encoge. Con pocos casos manda la literatura; con
+   muchos, manda lo propio. N_PREVIA es cuantos casos propios harian falta para
+   empatar con la literatura, y se fija alto a proposito porque la literatura
+   viene de 291.000 contratos.                                                 */
+const LAMBDA_N_PREVIA = 150;
+function lambdaAprendida(lamPropia, nPropia) {
+  if (lamPropia === null || !isFinite(lamPropia) || !nPropia) {
+    return { lam: LAMBDA_LIT, n: 0, peso: 0, fuente: "literatura" };
+  }
+  const peso = nPropia / (nPropia + LAMBDA_N_PREVIA);
+  return {
+    lam: (1 - peso) * LAMBDA_LIT + peso * lamPropia,
+    n: nPropia, peso: peso, propia: lamPropia,
+    fuente: peso < 0.15 ? "literatura" : (peso > 0.6 ? "propia" : "mezcla")
+  };
+}
+
+/* ---------- Calibracion por tramos (PAVA / regresion isotonica) ----------
+   Pool Adjacent Violators: la version de scikit-learn (BSD-3). Ordena por
+   probabilidad anunciada y fuerza que la frecuencia observada no baje nunca al
+   subir el precio, promediando los tramos que se contradicen. Sirve para ver
+   DONDE falla el mercado, no para recalibrar: con esta muestra recalibrar seria
+   sobreajustar, y asi se dice en la interfaz.                                 */
+function pava(ys, ws) {
+  const y = ys.slice(), wgt = (ws || ys.map(() => 1)).slice();
+  const val = [], pes = [], tam = [];
+  for (let i = 0; i < y.length; i++) {
+    let v = y[i], p = wgt[i], t = 1;
+    while (val.length && val[val.length - 1] > v) {
+      const v0 = val.pop(), p0 = pes.pop(), t0 = tam.pop();
+      v = (v0 * p0 + v * p) / (p0 + p); p = p0 + p; t = t0 + t;
+    }
+    val.push(v); pes.push(p); tam.push(t);
+  }
+  const out = [];
+  for (let i = 0; i < val.length; i++) for (let j = 0; j < tam[i]; j++) out.push(val[i]);
+  return out;
+}
+
+/* ---------- Descomposicion de Murphy del Brier ----------
+   Brier = fiabilidad - resolucion + incertidumbre. Responde a algo que un Brier
+   suelto no responde: si el numero es malo porque el mercado esta descalibrado
+   -fiabilidad alta, se arregla- o porque el suceso es intrinsecamente
+   impredecible -resolucion baja, no se arregla-.                              */
+function murphy(ps, os) {
+  const N = ps.length;
+  if (!N) return null;
+  const base = os.reduce((a, b) => a + b, 0) / N;
+  // Diez tramos de ancho fijo; con pocos datos, mas tramos serian ruido.
+  const T = 10, sum = [], cnt = [], acc = [];
+  for (let i = 0; i < T; i++) { sum.push(0); cnt.push(0); acc.push(0); }
+  for (let i = 0; i < N; i++) {
+    const k = Math.min(T - 1, Math.floor(ps[i] * T));
+    sum[k] += ps[i]; cnt[k]++; acc[k] += os[i];
+  }
+  let fiab = 0, reso = 0;
+  const tramos = [];
+  for (let k = 0; k < T; k++) {
+    if (!cnt[k]) continue;
+    const pMed = sum[k] / cnt[k], oMed = acc[k] / cnt[k];
+    fiab += cnt[k] * (pMed - oMed) * (pMed - oMed);
+    reso += cnt[k] * (oMed - base) * (oMed - base);
+    tramos.push({ tramo: k * 10, n: cnt[k], anunciado: pMed, observado: oMed });
+  }
+  return {
+    fiabilidad: fiab / N, resolucion: reso / N, incertidumbre: base * (1 - base),
+    base: base, tramos: tramos
+  };
+}
+
+/* ---------- Lo que el terminal ha aprendido hasta hoy ---------- */
+async function aprendizaje(env) {
+  if (!env.RADAR) return { error: "KV no configurado" };
+  const lista = await env.RADAR.list({ prefix: "paper:done:", limit: 1000 });
+  const porTipo = {}, ps = [], os = [];
+  let total = 0;
+
+  for (const k of lista.keys) {
+    const p = await env.RADAR.get(k.name, "json");
+    if (!p || typeof p.r !== "number") continue;
+    total++;
+    const t = p.tipo || "otro";
+    if (!porTipo[t]) porTipo[t] = { n: 0, aciertos: 0, sumR: 0 };
+    porTipo[t].n++; porTipo[t].sumR += p.r;
+    if (p.r > 0) porTipo[t].aciertos++;
+    // Para calibracion: probabilidad que implicaba la senal y lo que paso.
+    if (typeof p.p === "number" && (p.o === 0 || p.o === 1)) {
+      const pr = p.senal === "SI" ? p.p : 1 - p.p;
+      const ob = p.senal === "SI" ? p.o : 1 - p.o;
+      ps.push(pr); os.push(ob);
+    }
+  }
+
+  const tipos = {};
+  Object.keys(porTipo).forEach(t => {
+    const v = porTipo[t];
+    tipos[t] = Object.assign(betaEncoger(v.aciertos, v.n, 2, 2),
+      { retornoMedio: v.n ? v.sumR / v.n : null });
+  });
+
+  // Lambda aprendida a partir de la calibracion propia.
+  let lamPropia = null;
+  if (ps.length >= 12) {
+    // Lambda que mejor explica la diferencia entre lo anunciado y lo observado.
+    let mejor = null, mejorErr = Infinity;
+    for (let l = -1.2; l <= 1.2; l += 0.01) {
+      let e = 0;
+      for (let i = 0; i < ps.length; i++) {
+        const aj = nCdf(nPpf(Math.min(0.999, Math.max(0.001, ps[i]))) - l);
+        e += (aj - os[i]) * (aj - os[i]);
+      }
+      if (e < mejorErr) { mejorErr = e; mejor = l; }
+    }
+    lamPropia = mejor;
+  }
+
+  // Calibracion ordenada por probabilidad anunciada, para el PAVA.
+  let iso = null;
+  if (ps.length >= 12) {
+    const idx = ps.map((p, i) => i).sort((a, b) => ps[a] - ps[b]);
+    const yOrd = idx.map(i => os[i]);
+    const aj = pava(yOrd);
+    iso = idx.map((i, j) => ({ p: ps[i], ajustado: aj[j] }))
+             .filter((x, j) => j % Math.max(1, Math.floor(idx.length / 12)) === 0);
+  }
+
+  return {
+    ts: new Date().toISOString(),
+    totalLiquidadas: total,
+    tipos: tipos,
+    lambda: lambdaAprendida(lamPropia, ps.length),
+    calibracion: murphy(ps, os),
+    isotonica: iso,
+    nCalibracion: ps.length
+  };
+}
+
 async function paperSnap(env, q) {
   if (!env.RADAR) return { error: "KV no configurado" };
   const datos = q || await fetchPMQ(3);
@@ -2641,6 +2814,36 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
       <th class="mates" style="width:9%">t-stat</th><th style="width:18%">¿Significativo?</th>
     </tr></thead><tbody id="sim-rows"></tbody></table></div>
     <div class="st">Media y mediana divergen mucho a propósito: un longshot acertado a 0.02 paga 50× y arrastra la media él solo, así que la mediana dice mejor qué pasa en la apuesta típica. Retorno por unidad arriesgada: comprar SÍ a precio p paga (desenlace − p)/p. t-stat = media ÷ (desviación/√n): por encima de 2 el resultado difícilmente es azar. En divisas se muestra <b>agrupado por par y con ventanas sin solapar</b>, y debajo el «ingenuo» para que veas la diferencia: contar ventanas solapadas como si fueran independientes dispara el t-stat y hace pasar por ventaja lo que es ruido. <b>Rentabilidad pasada simulada sobre datos históricos; no predice resultados futuros y no descuenta el impacto de mercado. Informativo, no es recomendación de inversión ni de apuesta.</b></div>
+  </div>
+</div>
+
+  <div class="p" style="margin-top:8px">
+    <h3>LO QUE EL TERMINAL HA APRENDIDO <span id="ap-cnt"></span>
+      <span class="st" style="font-weight:400;text-transform:none">— de su propio historial, no de la teoría</span></h3>
+    <div class="chips"><button id="ap-load">⟳ Ver aprendizaje</button>
+      <span class="st" id="ap-st">Cada día se anotan las señales y se liquidan las que resuelven. De ahí sale todo esto.</span></div>
+    <div class="grid g4" style="margin:8px 0">
+      <div class="kpi"><div class="k">CASOS LIQUIDADOS</div><div class="v" id="ap1">—</div><div class="s" id="ap1s">señales con resultado conocido</div></div>
+      <div class="kpi c2"><div class="k">λ QUE USA HOY</div><div class="v" id="ap2">—</div><div class="s" id="ap2s">mezcla de literatura y experiencia propia</div></div>
+      <div class="kpi c3"><div class="k">¿ESTÁ CALIBRADO?</div><div class="v" id="ap3">—</div><div class="s" id="ap3s">fiabilidad: 0 es perfecto</div></div>
+      <div class="kpi c4"><div class="k">¿ES PREDECIBLE?</div><div class="v" id="ap4">—</div><div class="s" id="ap4s">resolución: cuanto más alta, mejor</div></div>
+    </div>
+    <div class="bd" style="overflow:auto"><table><thead><tr>
+      <th style="width:22%">Tipo de señal</th><th style="width:9%">Casos</th><th style="width:12%">Acierto crudo</th>
+      <th style="width:14%">Acierto corregido</th><th style="width:20%">Intervalo (90%)</th>
+      <th style="width:11%">Retorno medio</th><th>Cuánto pesa lo vivido</th>
+    </tr></thead><tbody id="ap-rows"><tr><td colspan="7"><div class="emp"><b>🎓</b>Pulsa <b>⟳ Ver aprendizaje</b>.</div></td></tr></tbody></table></div>
+    <div class="st" id="ap-nota">El acierto corregido encoge el crudo hacia el 50% mientras haya pocos casos: acertar 3 de 4 no es un 75%, son cuatro datos. El intervalo es lo que de verdad sabes. Nada de esto se usa para dimensionar posiciones hasta que el intervalo se estreche.</div>
+  </div>
+  <div class="p" style="margin-top:8px">
+    <h3>PRUEBA CONTRA EL AUTOENGAÑO <span class="st" style="font-weight:400;text-transform:none">— test SPA de Hansen con remuestreo por bloques</span></h3>
+    <div class="chips"><button id="spa-run">▶ Ejecutar</button>
+      <span class="st" id="spa-st">Necesita una simulación ejecutada. Corrige el sesgo de haber probado varias estrategias y quedarse con la mejor.</span></div>
+    <div class="bd" style="overflow:auto"><table><thead><tr>
+      <th style="width:34%">Estrategia</th><th style="width:14%">Exceso sobre referencia</th><th style="width:12%">p individual</th>
+      <th style="width:14%">p corregido (SPA)</th><th>Lectura</th>
+    </tr></thead><tbody id="spa-rows"><tr><td colspan="5"><div class="emp"><b>🎯</b>Pulsa <b>▶ Ejecutar</b> tras una simulación.</div></td></tr></tbody></table></div>
+    <div class="st">El t-stat agrupado corrige que las ventanas se solapen. Esto corrige otra cosa distinta: que hayas mirado varias estrategias y te quedes con la que mejor salió. Si pruebas seis, la mejor parece buena por puro azar. El p corregido es el que cuenta.</div>
   </div>
 </div>
 <div class="view" id="v-cart">
@@ -3933,7 +4136,9 @@ function btStats(name,trades){
  var eq=[],c=0,pk=0,dd=0;
  for(var i=0;i<r.length;i++){c+=r[i];eq.push(c);if(c>pk)pk=c;if(pk-c>dd)dd=pk-c}
  var t=s>0?m/(s/Math.sqrt(n)):0;
- return {name:name,n:n,win:wins/n,mean:m,med:med,total:c,dd:dd,t:t,eq:eq}}
+ /* rs = retornos por operacion. El test SPA los necesita para remuestrear por
+    bloques; antes solo se guardaba el resumen y no habia con que remuestrear. */
+ return {name:name,n:n,win:wins/n,mean:m,med:med,total:c,dd:dd,t:t,eq:eq,rs:r}}
 
 function btMetrics(S,H){
  // Brier: media de (p - desenlace)². 0.25 es lanzar una moneda.
@@ -5626,6 +5831,160 @@ function go(v,sinApilar){
 
 
 
+
+/* ===================== APRENDIZAJE: PANEL ===================== */
+var APR=null;
+function apCargar(){
+ $("ap-st").textContent=T("Recontando el historial…","Recounting the record…");
+ api("/api/aprendizaje",{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){ if(j.error)throw new Error(j.error); APR=j; apPintar() })
+  .catch(function(e){ $("ap-st").textContent="Error: "+(e.message||e) });
+}
+function apPintar(){
+ if(!APR)return;
+ var j=APR;
+ $("ap1").textContent=j.totalLiquidadas;
+ $("ap-cnt").textContent="("+j.totalLiquidadas+")";
+ var L=j.lambda||{};
+ $("ap2").textContent=(typeof L.lam==="number")?L.lam.toFixed(3):"—";
+ $("ap2s").textContent=(L.peso>0)
+  ? T("un "+(L.peso*100).toFixed(0)+"% viene de tus "+L.n+" casos; el resto, de la literatura",
+      (L.peso*100).toFixed(0)+"% from your "+L.n+" cases; the rest from the literature")
+  : T("todavía toda de la literatura: hacen falta casos propios","still all from the literature: needs own cases");
+ var c=j.calibracion;
+ $("ap3").textContent=c?(c.fiabilidad<0.01?T("sí","yes"):(c.fiabilidad<0.04?T("casi","nearly"):T("no","no"))):"—";
+ $("ap3s").textContent=c?T("fiabilidad "+c.fiabilidad.toFixed(4)+" · 0 sería perfecto","reliability "+c.fiabilidad.toFixed(4)):T("faltan casos","not enough cases");
+ $("ap4").textContent=c?(c.resolucion>0.05?T("bastante","fairly"):(c.resolucion>0.02?T("algo","somewhat"):T("poco","barely"))):"—";
+ $("ap4s").textContent=c?T("resolución "+c.resolucion.toFixed(4)+" · si es baja, el suceso es impredecible y no hay nada que arreglar",
+   "resolution "+c.resolucion.toFixed(4)):T("faltan casos","not enough cases");
+
+ var NOM={momentum:T("Momentum de precio","Price momentum"),arb_suma:T("Arbitraje por suma","Sum arbitrage"),
+  arb_mono:T("Arbitraje por monotonía","Monotonicity arbitrage"),otro:T("Otras","Other")};
+ var ks=Object.keys(j.tipos||{});
+ $("ap-rows").innerHTML=ks.length?ks.map(function(k){
+  var t=j.tipos[k], ancho=(t.hi-t.lo);
+  return "<tr><td><b>"+(NOM[k]||k)+"</b></td><td>"+t.n+"</td>"+
+   "<td class='dim'>"+(t.crudo===null?"—":(t.crudo*100).toFixed(0)+"%")+"</td>"+
+   "<td class='"+(t.media>0.5?"up":"dn")+"'><b>"+(t.media*100).toFixed(1)+"%</b></td>"+
+   "<td>"+(t.lo*100).toFixed(0)+"–"+(t.hi*100).toFixed(0)+"%"+
+     (ancho>0.3?" <span class='t2'>"+T("muy ancho","very wide")+"</span>":"")+"</td>"+
+   "<td class='"+(t.retornoMedio>0?"up":"dn")+"'>"+(t.retornoMedio===null?"—":((t.retornoMedio>=0?"+":"")+(t.retornoMedio*100).toFixed(1)+"%"))+"</td>"+
+   "<td><div class='tr' style='height:6px'><i style='width:"+(t.peso*100).toFixed(0)+"%'></i></div>"+
+     "<span class='dsc'>"+(t.peso*100).toFixed(0)+"%</span></td></tr>"}).join("")
+  :"<tr><td colspan='7'>"+emp("🎓",T("Todavía no hay ninguna señal liquidada. El terminal anota las de cada día y las liquida cuando el mercado resuelve; hasta entonces no ha aprendido nada y no se lo inventa.",
+    "No settled signals yet. The terminal logs each day's signals and settles them when markets resolve; until then it has learned nothing and will not pretend otherwise."))+"</td></tr>";
+ $("ap-st").textContent=T("Actualizado "+new Date(j.ts).toLocaleString(),"Updated "+new Date(j.ts).toLocaleString());
+}
+
+/* ===================== TEST SPA DE HANSEN =====================
+   El t-stat agrupado corrige que las ventanas se solapen. Esto corrige un sesgo
+   DISTINTO y normalmente mayor: haber probado varias estrategias y quedarse con
+   la que mejor salio. Con seis estrategias, la mejor parece buena por azar.
+
+   Remuestreo estacionario de Politis y Romano: en vez de remuestrear
+   observaciones sueltas -que destruiria la dependencia temporal- se remuestrean
+   bloques de longitud aleatoria geometrica, que la conservan. Sobre esa
+   distribucion nula se mide cuantas veces el azar iguala a la mejor estrategia.  */
+function bloqueEstacionario(x,rnd,pGeom){
+ var N=x.length,out=[],i=Math.floor(rnd()*N);
+ while(out.length<N){
+  out.push(x[i]);
+  if(rnd()<pGeom)i=Math.floor(rnd()*N); else i=(i+1)%N;
+ }
+ return out;
+}
+/* La primera version contrastaba contra CERO y daba p=0,004 diciendo que el
+   momentum "sobrevivia" -y marcaba como superviviente hasta a la propia
+   referencia, que no puede superarse a si misma-. Contra cero, cualquier
+   estrategia que este comprada en un mercado que sube sale significativa: eso no
+   es una ventaja, es la deriva del mercado.
+
+   Lo que hay que contrastar es superioridad SOBRE LA REFERENCIA, que es el
+   planteamiento de Hansen. La nula es "esta estrategia rinde igual que comprar y
+   ya esta". Como las series tienen distinta longitud -cada estrategia opera en
+   sus propias ventanas- no se pueden emparejar operacion a operacion, asi que se
+   compara la media contra la de la referencia y se remuestrea cada serie por
+   bloques para construir la nula.                                              */
+function spaTest(series,B,pGeom,iRef){
+ var k=series.length; if(k<2||iRef==null)return null;
+ var medias=series.map(function(x){return mean(x)});
+ var sds=series.map(function(x){return sd(x)||1e-9});
+ var ns=series.map(function(x){return x.length});
+ var mRef=medias[iRef];
+ // Estadistico por estrategia: exceso sobre la referencia, estandarizado.
+ var t=medias.map(function(m,i){return i===iRef?null:(m-mRef)/(sds[i]/Math.sqrt(ns[i]))});
+ var cand=[]; for(var i=0;i<k;i++)if(i!==iRef)cand.push(i);
+ var tMax=Math.max.apply(null,cand.map(function(i){return t[i]}));
+ var seed=987654321;
+ var rnd=function(){seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;return (seed>>>0)/4294967296};
+ var gana=0, ganaIndiv={};
+ cand.forEach(function(i){ganaIndiv[i]=0});
+ for(var b=0;b<B;b++){
+  var peor=-Infinity;
+  // La referencia tambien se remuestrea: su media tiene su propio error.
+  var rRef=bloqueEstacionario(series[iRef],rnd,pGeom);
+  var dRef=mean(rRef)-mRef;
+  for(var j=0;j<cand.length;j++){
+   var i=cand[j];
+   var r=bloqueEstacionario(series[i],rnd,pGeom);
+   // Bajo la nula el exceso es cero: se centra restando lo observado.
+   var tb=((mean(r)-medias[i])-dRef)/(sds[i]/Math.sqrt(ns[i]));
+   if(tb>=t[i])ganaIndiv[i]++;
+   if(tb>peor)peor=tb;
+  }
+  if(peor>=tMax)gana++;
+ }
+ var pI={}; cand.forEach(function(i){pI[i]=ganaIndiv[i]/B});
+ return {pSPA:gana/B, pIndiv:pI, t:t, iRef:iRef, mRef:mRef};
+}
+function spaEjecutar(){
+ if(!BT||!BT.strats||!BT.strats.length){
+  $("spa-st").textContent=T("Ejecuta antes una simulación en esta misma pantalla.","Run a simulation on this screen first.");return}
+ // Se necesitan los retornos, no solo el resumen.
+ var series=[],noms=[];
+ BT.strats.forEach(function(s){ if(s.rs&&s.rs.length>=15){series.push(s.rs);noms.push(s.name)} });
+ if(series.length<2){
+  $("spa-st").textContent=T("Esta simulación no guarda los retornos por operación, que es lo que necesita la prueba.",
+                            "This simulation does not keep per-trade returns, which the test needs.");
+  $("spa-rows").innerHTML="<tr><td colspan='5'>"+emp("—",T("Vuelve a ejecutar la simulación para que guarde los retornos.","Re-run the simulation so it stores returns."))+"</td></tr>";
+  return}
+ /* Referencia: la estrategia pasiva. Sin ella no hay contra que comparar. */
+ var iRef=-1;
+ for(var i=0;i<noms.length;i++)if(/referencia|siempre|comprar todo|benchmark/i.test(noms[i])){iRef=i;break}
+ if(iRef<0){
+  $("spa-st").textContent=T("Esta simulación no incluye una estrategia de referencia pasiva, así que no hay contra qué comparar.",
+                            "This simulation has no passive benchmark to compare against.");
+  return}
+ $("spa-st").textContent=T("Remuestreando por bloques…","Block-resampling…");
+ setTimeout(function(){
+  // Bloque medio de 5 observaciones: p = 1/5.
+  var r=spaTest(series,2000,0.2,iRef);
+  var primera=true;
+  $("spa-rows").innerHTML=series.map(function(x,i){
+   if(i===iRef)return "<tr><td>"+esc(noms[i])+" <span class='t2'>"+T("referencia","benchmark")+"</span></td>"+
+    "<td class='"+(mean(x)>=0?"up":"dn")+"'>"+(mean(x)>=0?"+":"")+(mean(x)*100).toFixed(2)+"%</td>"+
+    "<td class='dim'>—</td><td class='dim'>—</td><td class='dim'>"+T("es el listón, no compite","this is the bar")+"</td></tr>";
+   var exceso=mean(x)-r.mRef;
+   var pi=r.pIndiv[i];
+   var sig=(r.pSPA<0.05&&pi<0.05)?["bate a la referencia","t3"]
+          :(pi<0.05?["parece mejor, pero no sobrevive a haber probado varias","t2"]
+                   :["no bate a la referencia","t4"]);
+   var fila="<tr><td>"+esc(noms[i])+"</td>"+
+    "<td class='"+(exceso>=0?"up":"dn")+"'>"+(exceso>=0?"+":"")+(exceso*100).toFixed(2)+"%"+
+     "<div class='dsc'>"+T("sobre la referencia","over benchmark")+"</div></td>"+
+    "<td>"+pi.toFixed(3)+"</td>"+
+    "<td><b>"+(primera?r.pSPA.toFixed(3):"—")+"</b></td>"+
+    "<td><span class='"+sig[1]+"'>"+sig[0]+"</span></td></tr>";
+   primera=false; return fila}).join("");
+  $("spa-st").textContent=T("2.000 remuestreos por bloques, contra «"+noms[iRef]+"» · p corregido = "+r.pSPA.toFixed(3)+
+    (r.pSPA<0.05?": alguna estrategia bate de verdad a la referencia."
+                : ": ninguna bate a la referencia una vez descontado que probaste varias."),
+    "2000 block resamples vs benchmark · corrected p = "+r.pSPA.toFixed(3));
+ },30);
+}
+(function(){ $("ap-load").onclick=apCargar; $("spa-run").onclick=spaEjecutar; })();
+
 /* ===================== VEREDICTO ===================== */
 /* Movimiento tipico de una sesion: media del cambio absoluto de cierre a cierre
    en 14 sesiones. Es el ATR sin maximos ni minimos, que la API no da. */
@@ -6409,6 +6768,7 @@ function json(d, extra) {
 
 export default {
   async fetch(request, env, ctx) {
+    ENV_KV = env.RADAR || null;   // para las funciones que no reciben env
     const url = new URL(request.url);
     const p = url.pathname;
     try {
@@ -6447,6 +6807,7 @@ export default {
       if (p === "/api/litigios") return json(await fetchLitigios(Number(url.searchParams.get("d")) || 365, url.searchParams.get("tk")), cab);
       if (p === "/api/edgar") return json(await fetchEdgar(Number(url.searchParams.get("d")) || 30), cab);
       if (p === "/api/paper") return json(await paperState(env), cab);
+      if (p === "/api/aprendizaje") return json(await aprendizaje(env), cab);
       if (p === "/api/paper/snap") return json(await paperSnap(env));
       if (p === "/api/paper/settle") return json(await paperSettle(env, Number(url.searchParams.get("n")) || 60));
       if (p === "/api/history") return json(await getHistory(env), cab);
@@ -6466,8 +6827,27 @@ export default {
       try { await edgarJob(env); } catch (e) {}
       // Agente de barrido logico: avanza un trozo del grafo cada dia.
       try { await relAgente(env); } catch (e) {}
+      ENV_KV = env.RADAR || null;
       try { await paperSnap(env); } catch (e) {}
       try { await paperSettle(env, 40); } catch (e) {}
+      /* Reaprender despues de liquidar: es el unico momento en que hay datos
+         nuevos. Se guarda para que /api/pmq no tenga que recontar en cada
+         peticion, que con 1000 claves de KV seria carisimo. */
+      try {
+        const ap = await aprendizaje(env);
+        if (ap && ap.lambda && isFinite(ap.lambda.lam)) {
+          await env.RADAR.put("aprendido:lambda", JSON.stringify(ap.lambda));
+          await env.RADAR.put("aprendido:resumen", JSON.stringify({
+            ts: ap.ts, totalLiquidadas: ap.totalLiquidadas, tipos: ap.tipos,
+            nCalibracion: ap.nCalibracion,
+            calibracion: ap.calibracion ? {
+              fiabilidad: ap.calibracion.fiabilidad,
+              resolucion: ap.calibracion.resolucion,
+              incertidumbre: ap.calibracion.incertidumbre
+            } : null
+          }));
+        }
+      } catch (e) {}
     })());
   }
 };

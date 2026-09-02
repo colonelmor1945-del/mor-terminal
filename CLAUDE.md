@@ -282,3 +282,41 @@ supera 2 pero contra la referencia no aporta nada, y el total son +0,4 unidades
 en 137 ventanas, que el spread se come. Falta el test SPA de Hansen para
 corregir el sesgo de haber buscado entre varias estrategias; el agrupado por par
 solo corrige el solapamiento de ventanas, que es otro sesgo distinto.
+
+## Aprendizaje y test SPA (2 de septiembre de 2026)
+
+**El terminal aprende de su propio historial.** El registro en papel ya guardaba
+señales y las liquidaba, pero eso no cambiaba nada. Ahora `/api/aprendizaje`
+recorre `paper:done:*` y el cron guarda el resultado en `aprendido:lambda`, que
+es lo que lee `fetchPMQ` para el valor justo.
+
+Todo lo aprendido pasa por un **encogimiento**, porque con pocos casos una tasa
+cruda es ruido:
+
+- **Beta-Binomial** con previa Beta(2,2) por tipo de señal. Verificado: 3/4
+  aciertos da 62,5% (no 75%) con intervalo 36–89%; 300/400 da 74,8%.
+- **λ con encogimiento** hacia la literatura, con `LAMBDA_N_PREVIA = 150`.
+  Arranca en +0,183 y solo cruza a negativo con ~150 casos propios. Esto resuelve
+  el conflicto documentado arriba sin darle la vuelta al signo por una muestra
+  corta.
+- **PAVA** (regresión isotónica, algoritmo de scikit-learn, BSD-3) y
+  **descomposición de Murphy** del Brier en fiabilidad, resolución e
+  incertidumbre. Verificado que la identidad se cumple. Se usa para *ver* dónde
+  falla, no para recalibrar: con esta muestra recalibrar sería sobreajustar.
+
+**Test SPA de Hansen con remuestreo estacionario por bloques** (Politis-Romano),
+en la vista del simulador. Corrige un sesgo DISTINTO del t-stat agrupado: el
+agrupado corrige que las ventanas se solapen, el SPA corrige haber probado
+varias estrategias y quedarse con la mejor.
+
+**Trampa que ya cayó una vez aquí:** la primera versión contrastaba contra CERO
+y daba p=0,004 anunciando que el momentum "sobrevive", marcando como
+superviviente hasta a la propia referencia. Contra cero, cualquier estrategia
+comprada en un mercado que sube sale significativa: eso es la deriva, no una
+ventaja. Contrastando contra la referencia pasiva, que es el planteamiento de
+Hansen, sale **p = 0,223: ninguna bate a comprar y ya está**, que coincide con
+el análisis manual (momentum t=2,07 frente a referencia t=2,01). Si alguien
+vuelve a tocar `spaTest`, el contraste es contra `iRef`, nunca contra cero.
+
+Los retornos por operación se guardan en `btStats` como `rs`: sin ellos no hay
+con qué remuestrear.
