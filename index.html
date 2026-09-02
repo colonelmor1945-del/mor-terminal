@@ -335,6 +335,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   <button data-v="pm">F5 APUESTAS</button>
   <button data-v="news">F6 NOTICIAS</button>
   <button data-v="quant">F7 QUANT</button>
+  <button data-v="ver">VEREDICTO</button>
   <button data-v="brain">F8 CEREBRO</button>
   <button data-v="sim">F9 SIMULADOR</button>
   <button data-v="cart">F10 CARTERA</button>
@@ -500,12 +501,36 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   </div>
 </div>
 
+
+<div class="view" id="v-ver">
+  <div class="ayuda-fija" style="border:1px solid var(--line);border-left:3px solid var(--am);border-radius:6px;padding:9px 12px;margin-bottom:8px;font-size:12px;color:var(--dim)">
+   <b style="color:var(--txt)">Lectura del terminal con los datos de ahora mismo.</b> Posición alcista = comprar; bajista = vender o no entrar. El <b>stop</b> es donde el terminal admite que se equivocó (dos veces el movimiento típico de 14 sesiones) y el <b>objetivo</b> el doble de esa distancia, para que la operación sea 2:1. <b>Cuánto</b> es medio Kelly, entre el 1% y el 10% del capital. <b>Neto tras coste</b> descuenta el spread efectivo real estimado del propio precio (método EDGE de Ardia, Guidotti y Kroencke): si sale en rojo, la idea no paga ni el peaje de entrar y salir. No es consejo: <b>tú decides</b>.
+  </div>
+  <div class="grid g4" style="margin-bottom:8px">
+    <div class="kpi c2"><div class="k">ALCISTAS</div><div class="v" id="ve1">—</div><div class="s" id="ve1s">empresas y divisas para comprar</div></div>
+    <div class="kpi c4"><div class="k">BAJISTAS</div><div class="v" id="ve2">—</div><div class="s" id="ve2s">para vender o no entrar</div></div>
+    <div class="kpi c3"><div class="k">APUESTAS CON VENTAJA</div><div class="v" id="ve3">—</div><div class="s" id="ve3s">precio lejos de lo justo</div></div>
+    <div class="kpi"><div class="k">ARBITRAJES</div><div class="v" id="ve4">—</div><div class="s" id="ve4s">cuentas que no cuadran</div></div>
+  </div>
+  <div class="chips" style="margin-bottom:8px"><button id="ver-calc">⟳ Recalcular todo</button><span class="st" id="ver-st">Carga precios, cerebro y divisas y vuelve a decidir.</span></div>
+  <div class="p" style="margin-bottom:8px"><h3>EMPRESAS <span id="ver-emp-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— clic para la ficha</span></h3>
+    <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:22%">Empresa</th><th style="width:10%">Posición</th><th style="width:10%">Entrada</th><th style="width:10%">Stop</th><th style="width:10%">Objetivo</th><th style="width:8%">Cuánto</th><th style="width:11%">Neto tras coste</th><th>Por qué</th></tr></thead><tbody id="ver-emp"></tbody></table></div></div>
+  <div class="p" style="margin-bottom:8px"><h3>APUESTAS <span id="ver-pm-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— clic para el mercado</span></h3>
+    <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:34%">Mercado</th><th style="width:9%">Posición</th><th style="width:9%">Entrada</th><th style="width:9%">Salir si</th><th style="width:9%">Objetivo</th><th style="width:8%">Cuánto</th><th>Por qué</th></tr></thead><tbody id="ver-pm"></tbody></table></div></div>
+  <div class="grid g2" style="margin-bottom:8px">
+    <div class="p"><h3>DIVISAS <span id="ver-fx-cnt"></span></h3>
+      <div class="bd" style="overflow:auto"><table><thead><tr><th>Par</th><th>Posición</th><th>Entrada</th><th>Stop</th><th>Objetivo</th><th>Cuánto</th></tr></thead><tbody id="ver-fx"></tbody></table></div></div>
+    <div class="p"><h3>ARBITRAJES <span id="ver-arb-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— aritmética, no predicción</span></h3>
+      <div class="bd" style="overflow:auto"><table><thead><tr><th>Grupo</th><th>Qué hacer</th><th>Neto</th></tr></thead><tbody id="ver-arb"></tbody></table></div></div>
+  </div>
+</div>
+
 <div class="view" id="v-brain">
   <div class="grid g4" style="margin-bottom:8px">
     <div class="kpi"><div class="k">MERCADOS ANALIZADOS</div><div class="v" id="b1">—</div><div class="s" id="b1s">de eventos activos</div></div>
     <div class="kpi c2"><div class="k">GRUPOS CON VENTAJA</div><div class="v" id="b2">—</div><div class="s" id="b2s">neta tras costes</div></div>
     <div class="kpi c3"><div class="k">MEJOR VENTAJA NETA</div><div class="v" id="b3">—</div><div class="s" id="b3s">—</div></div>
-    <div class="kpi c4"><div class="k">SESGO FAVORITO-LONGSHOT</div><div class="v" id="b4">—</div><div class="s" id="b4s">λ de Wang (mediana)</div></div>
+    <div class="kpi c4"><div class="k">SESGO FAVORITO-LONGSHOT</div><div class="v" id="b4">—</div><div class="s" id="b4s">λ = 0,183 · oracle3, 291.000 contratos resueltos</div></div>
   </div>
 
   <div class="grid g2" style="margin-bottom:8px">
@@ -1373,6 +1398,7 @@ function render(){
  }
 
  if(VIEW==="quant"){renderQuant()}
+ if(VIEW==="ver"){renderVer()}
  if(VIEW==="brain"){renderBrain()}
  if(VIEW==="inv"){renderRel()}
  if(VIEW==="sim"){renderSim();renderMC();renderPaper()}
@@ -1427,7 +1453,7 @@ function loadPx(){
  list.forEach(function(s){
   api("/api/px?s="+encodeURIComponent(SMAP[s.tk]),{cache:"no-store"})
    .then(function(r){return r.json()})
-   .then(function(j){if(j&&j.c&&j.c.length>30)PX[s.tk]={c:j.c,d:j.d}})
+   .then(function(j){if(j&&j.c&&j.c.length>30)PX[s.tk]={c:j.c,d:j.d,spread:j.spread}})
    .catch(function(){})
    .then(function(){done++;if(done===list.length){QLOAD=false;computeQuant();render()}
     else{$("q-st").textContent="Descargando… "+done+"/"+list.length}})});
@@ -1694,9 +1720,12 @@ function renderBrain(){
  $("b3s").textContent=mej?mej.ev.slice(0,42):"ninguno cubre costes";
  /* La lambda es un numero que no dice nada a nadie sin contexto. En modo sencillo
     se muestra la conclusion; en completo, la cifra. */
+ /* BNLAM es ahora cuantos mercados tienen valor justo, no cuantos ajustes. */
  $("b4").textContent = (MODO==="simple")
-   ? (BNLAM<3 ? "sin datos" : (BLAM>0.02 ? "sí" : (BLAM<-0.02 ? "al revés" : "no")))
+   ? (BNLAM<2 ? "sin grupos" : "sí")
    : BLAM.toFixed(3);
+ var b4s=$("b4s"); if(b4s&&BNLAM)b4s.textContent=T(BNLAM+" mercados con valor justo (dentro de su grupo)",
+   BNLAM+" markets with a fair value (within their group)");
  $("b4s").textContent=(BNLAM<3?"muestra insuficiente ("+BNLAM+" grupos)":
    (BLAM>0.02?"longshots caros · "+BNLAM+" grupos":(BLAM<-0.02?"sesgo invertido · "+BNLAM+" grupos":"sin sesgo apreciable · "+BNLAM+" grupos")));
 
@@ -1745,7 +1774,7 @@ function renderBrain(){
    "<td><b>"+bfmt(m.p,1)+"</b></td>"+
    "<td title='"+esc(es.como)+"'>"+bfmt(es.est,1)+
      "<br><span class='conf'>"+esc(es.confianza)+"</span></td>"+
-   "<td class='mates "+(es.dif>0?"up":"dn")+"'>"+(es.dif>=0?"+":"")+(es.dif*100).toFixed(1)+"</td>"+
+   "<td class='mates "+(es.dif===null||es.dif===undefined?"":(es.dif>0?"up":"dn"))+"'>"+(es.dif===null||es.dif===undefined?"—":((es.dif>=0?"+":"")+(es.dif*100).toFixed(1)))+"</td>"+
    "<td class='mates "+(m.spreadRel>0.1?"dn":"")+"'>"+bfmt(m.spreadRel,1)+"</td>"+
    "<td class='mates "+(m.turn!==null&&m.turn<0.02?"dn":"")+"'>"+(m.turn===null?"—":m.turn.toFixed(2))+"</td>"+
    "<td class='mates'>"+(m.snorm===null?"<span class='dim'>—</span>":m.snorm.toFixed(2))+"</td>"+
@@ -2264,7 +2293,7 @@ function feAbrir(tk,sinApilar){
     .then(function(r){return r.json()})
     .then(function(j){
      if(!j||!j.c||j.c.length<5)throw 0;
-     PX[e.tk]={c:j.c,d:j.d};
+     PX[e.tk]={c:j.c,d:j.d,spread:j.spread};
      if(!FE||FE.tk!==e.tk)return;
      precioChart($("fe-px"),j.c);
      var u=j.c[j.c.length-1];
@@ -2417,8 +2446,8 @@ function dtMetrics(m){
   sugMercado(m)+
   k("PRECIO",bfmt(m.p,1))+
   k("CUOTA",(1/m.p).toFixed(2)+"×")+
-  k("JUSTO (WANG)",bfmt(m.fair,1))+
-  k("SESGO",(m.edge>=0?"+":"")+(m.edge*100).toFixed(1),m.edge>0?"dn":"up")+
+  k("JUSTO (WANG)",m.fair===null?"<span class='dim'>sin grupo</span>":bfmt(m.fair,1))+
+  k("SESGO",m.edge===null?"—":((m.edge>=0?"+":"")+(m.edge*100).toFixed(1)),m.edge===null?"":(m.edge>0?"dn":"up"))+
   k("SPREAD REL.",bfmt(m.spreadRel,1),m.spreadRel>0.1?"dn":"")+
   k("LIQUIDEZ",f$(m.liq))+
   k("VOL. 24H",f$(m.vol24))+
@@ -2750,7 +2779,7 @@ var EN={
  "Inicio":"Home","Mercado":"Market","Análisis":"Analysis","Herramientas":"Tools",
  "F1 INICIO":"F1 HOME","F2 DASH":"F2 OVERVIEW","F2 RESUMEN":"F2 OVERVIEW",
  "F3 CONTRATOS":"F3 CONTRACTS","F4 EMPRESAS":"F4 COMPANIES","F5 APUESTAS":"F5 MARKETS",
- "F6 NOTICIAS":"F6 NEWS","F7 QUANT":"F7 QUANT","F7 ANÁLISIS DE EMPRESAS":"F7 STOCK ANALYSIS",
+ "F6 NOTICIAS":"F6 NEWS","F7 QUANT":"F7 QUANT","F7 ANÁLISIS DE EMPRESAS":"F7 STOCK ANALYSIS","VEREDICTO":"VERDICT","COMPRAR O VENDER":"BUY OR SELL",
  "F8 CEREBRO":"F8 EDGE","F8 OPORTUNIDADES":"F8 OPPORTUNITIES",
  "F9 SIMULADOR":"F9 BACKTEST","F9 ¿ESTO FUNCIONA?":"F9 DOES IT WORK?",
  "F10 CARTERA":"F10 SIZING","F10 CUÁNTO APOSTAR":"F10 POSITION SIZING",
@@ -2864,7 +2893,7 @@ var IDIOMA=(function(){try{return localStorage.getItem("mor_lang")||"es"}catch(e
 
 var TRAD={
  // navegacion
- "F2 DASH":"F2 RESUMEN","F7 QUANT":"F7 ANÁLISIS DE EMPRESAS","F8 CEREBRO":"F8 OPORTUNIDADES",
+ "F2 DASH":"F2 RESUMEN","F7 QUANT":"F7 ANÁLISIS DE EMPRESAS","VEREDICTO":"COMPRAR O VENDER","F8 CEREBRO":"F8 OPORTUNIDADES",
  "F9 SIMULADOR":"F9 ¿ESTO FUNCIONA?","F10 CARTERA":"F10 CUÁNTO APOSTAR","F11 BIBLIOTECA":"F11 MÉTODOS",
  // columnas de acciones
  "Vol.anual":"Cuánto se mueve","Max DD":"Peor caída","Z-score":"Fuerza","1M":"1 mes","3M":"3 meses","6M":"6 meses",
@@ -3066,6 +3095,11 @@ function iaEstado(){
    p.push("DIVISAS, MEJOR MOMENTUM: "+fz.slice(0,3).map(function(x){return x.n+" z="+x.z.toFixed(2)+" 6M "+(x.r6*100).toFixed(1)+"%"}).join(", "));
    p.push("DIVISAS EN TENSION: "+(FXQ.filter(function(x){return x.reg>1.25}).map(function(x){return x.n}).join(", ")||"ninguna"));
   }
+  try{
+   var vAl=QUANT.filter(function(q){return q.z>0.5&&q.s50>q.s200&&q.dd>-0.4}).map(function(q){return q.s.name}).slice(0,4);
+   var vBa=QUANT.filter(function(q){return q.z<-0.5&&q.s50<q.s200}).map(function(q){return q.s.name}).slice(0,4);
+   if(vAl.length||vBa.length)p.push("VEREDICTO EMPRESAS: alcistas "+(vAl.join(", ")||"ninguna")+" · bajistas "+(vBa.join(", ")||"ninguna"));
+  }catch(e){}
   if(FE)p.push("FICHA ABIERTA: "+FE.name+" ("+FE.tk+")");
   if(DT)p.push("MERCADO ABIERTO: "+DT.q);
   var wl=SC.filter(function(x){return W[x.tk]});
@@ -3077,7 +3111,7 @@ function iaEjecutar(a){
  if(!a)return null;
  var V={ver_inicio:["ini","a la portada"],ver_contratos:["con","a contratos y avisos 8-K"],
   ver_empresas:["sc","al listado de empresas"],ver_apuestas:["pm","a los mercados"],
-  ver_noticias:["news","a las noticias"],ver_analisis:["quant","al análisis de empresas"],
+  ver_noticias:["news","a las noticias"],ver_analisis:["quant","al análisis de empresas"],ver_veredicto:["ver","al veredicto: dónde comprar o vender"],
   ver_oportunidades:["brain","a las oportunidades"],ver_simulador:["sim","al simulador"],
   ver_cartera:["cart","a la calculadora"],ver_metodos:["lib","a los métodos"]};
  if(V[a]){go(V[a][0]);return "Te he llevado "+V[a][1]+"."}
@@ -3163,7 +3197,7 @@ function iaAbrir(v){
 var GRUPOS=[
  {id:"g1",t:"Inicio",  v:["ini"]},
  {id:"g2",t:"Mercado", v:["dash","con","sc","pm","news"]},
- {id:"g3",t:"Análisis",v:["quant","brain"]},
+ {id:"g3",t:"Análisis",v:["quant","ver","brain"]},
  {id:"g4",t:"Herramientas",v:["sim","cart"]},
  {id:"g5",t:"Investigación",v:["inv","lib"]}
 ];
@@ -3214,6 +3248,9 @@ function renderIni(){
  // --- contratos ---
  var radar=CON.filter(function(c){return !c.prime});
  if(CON.length){
+  tarj.push({v:"ver",c:"ok",t:T("Dónde comprar o vender","Where to buy or sell"),g:"→",
+   x:T("posición, entrada, stop y objetivo","position, entry, stop and target"),
+   y:T("Lectura del terminal · tú decides","The terminal's read · you decide")});
   tarj.push({v:"con",c:"",t:T("Contratos vigilados","Contracts tracked"),g:CON.length,
    x:T(nEmp(radar.length,"no va","no van")+" a los gigantes", radar.length+" not going to the primes"),
    y:T("Últimos 30 días del Pentágono","Pentagon, last 30 days")});
@@ -3310,7 +3347,7 @@ function apilar(){
 function go(v,sinApilar){
  if(!sinApilar&&v!==VIEW)apilar();
  VIEW=v;
- ["ini","dash","con","sc","pm","news","quant","brain","sim","cart","inv","lib"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
+ ["ini","dash","con","sc","pm","news","quant","ver","brain","sim","cart","inv","lib"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
  [].forEach.call($("nav").querySelectorAll("button[data-v]"),function(b){b.classList.toggle("on",b.dataset.v===v)});
  if(typeof rutaEscribe==="function")setTimeout(rutaEscribe,0);
  if(typeof GACT!=="undefined"&&grupoDe(v)!==GACT){GACT=grupoDe(v);pintarNav()}
@@ -3318,11 +3355,109 @@ function go(v,sinApilar){
  if(v==="con"&&!EDG&&!EDGL)loadEdgar();
  if(v==="ini"){if(!EDG&&!EDGL)loadEdgar(); if(!BQ&&!BLOAD)loadBrain();}
  if(v==="quant"&&!Object.keys(PX).length&&!QLOAD)loadPx();
+ if(v==="ver"){ if(!QUANT.length&&!QLOAD)loadPx(); if(!BQ&&!BLOAD)loadBrain(); if(!FXQ.length&&!FXQLOAD)fxLoad(); }
  if((v==="brain"||v==="cart")&&!BQ&&!BLOAD)loadBrain();
  if(v==="sim"&&!PAP)loadPaper();
  render()}
 [].forEach.call($("nav").querySelectorAll("button[data-v]"),function(b){b.onclick=function(){go(b.dataset.v)}});
 
+
+
+/* ===================== VEREDICTO ===================== */
+/* Movimiento tipico de una sesion: media del cambio absoluto de cierre a cierre
+   en 14 sesiones. Es el ATR sin maximos ni minimos, que la API no da. */
+function atrProxy(c,nn){nn=nn||14;var t=0,k=0;for(var i=Math.max(1,c.length-nn);i<c.length;i++){t+=Math.abs(c[i]-c[i-1]);k++}return k?t/k:0}
+function nivelesDe(c,dir){var u=c[c.length-1],a=atrProxy(c,14);return {ent:u,stop:u-dir*2*a,obj:u+dir*4*a,atr:a}}
+function kellyDe(c){var r=fxRets(c.slice(-121)),mu=mean(r),va=Math.pow(sd(r),2);return va>0?mu/va:0}
+function cuanto(k){return Math.min(0.10,Math.max(0.01,Math.max(0,k)*0.5))}
+function fP(v,ref){return v.toFixed(ref<10?4:(ref<1000?2:0))}
+function posTag(dir){return dir>0?"<span class='t3'>"+T("ALCISTA","LONG")+"</span>":"<span class='t4'>"+T("BAJISTA","SHORT")+"</span>"}
+
+function renderVer(){
+ var al=[],ba=[];
+ QUANT.forEach(function(q){
+  if(!q.c||q.c.length<60)return;
+  var dir=0;
+  if(q.z>0.5&&q.s50>q.s200&&q.dd>-0.4)dir=1; else if(q.z<-0.5&&q.s50<q.s200)dir=-1;
+  if(!dir)return;
+  var nv=nivelesDe(q.c,dir),k=dir*kellyDe(q.c);
+  /* Coste de ida y vuelta: dos veces el medio spread efectivo. Lo que sobra tras
+     pagarlo es lo unico que se puede llamar ganancia. */
+  var spr=(PX[q.s.tk]&&typeof PX[q.s.tk].spread==="number")?PX[q.s.tk].spread:null;
+  var bruto=Math.abs(nv.obj-nv.ent)/nv.ent;
+  var neto=spr===null?null:bruto-spr;
+  var por=dir>0?T("momentum z "+q.z.toFixed(2)+", tendencia alcista, mes "+(q.r1>=0?"+":"")+(q.r1*100).toFixed(1)+"%","momentum z "+q.z.toFixed(2)+", uptrend, month "+(q.r1>=0?"+":"")+(q.r1*100).toFixed(1)+"%")
+                 :T("momentum z "+q.z.toFixed(2)+", tendencia bajista, mes "+(q.r1*100).toFixed(1)+"%","momentum z "+q.z.toFixed(2)+", downtrend, month "+(q.r1*100).toFixed(1)+"%");
+  (dir>0?al:ba).push({tk:q.s.tk,n:q.s.name,dir:dir,nv:nv,k:k,z:q.z,por:por,spr:spr,bruto:bruto,neto:neto});
+ });
+ al.sort(function(a,b){return b.z-a.z});ba.sort(function(a,b){return a.z-b.z});
+ var filaE=function(x){return "<tr data-tk='"+esc(x.tk)+"' style='cursor:pointer'><td><b>"+esc(x.n)+"</b><div class='dsc'>"+esc(x.tk)+"</div></td>"+
+  "<td>"+posTag(x.dir)+"</td><td>"+fP(x.nv.ent,x.nv.ent)+"</td><td class='dn'>"+fP(x.nv.stop,x.nv.ent)+"</td><td class='up'>"+fP(x.nv.obj,x.nv.ent)+"</td>"+
+  "<td>"+(cuanto(x.k)*100).toFixed(0)+"%</td>"+
+  "<td>"+(x.spr===null?"<span class='dim'>—</span>":
+    "<span class='"+(x.neto>0?"up":"dn")+"'>"+(x.neto>0?"+":"")+(x.neto*100).toFixed(1)+"%</span>"+
+    "<div class='dsc'>"+T("bruto ","gross ")+(x.bruto*100).toFixed(1)+"% − "+T("coste ","cost ")+(x.spr*100).toFixed(2)+"%</div>")+"</td>"+
+  "<td class='dim'>"+x.por+"</td></tr>"};
+ var tE=al.concat(ba);
+ $("ver-emp").innerHTML=tE.length?tE.map(filaE).join("")
+  :"<tr><td colspan='8'>"+(QUANT.length?emp("🤷",T("Ninguna empresa da señal clara ahora mismo.","No company gives a clear signal right now."))
+   :emp("⏳",T("Cargando precios de las empresas…","Loading company prices…")))+"</td></tr>";
+ $("ver-emp-cnt").textContent=tE.length?"("+al.length+" ↑ / "+ba.length+" ↓)":"";
+
+ // --- apuestas ---
+ var ap=[];
+ if(BQ&&BQ.markets)BQ.markets.forEach(function(m){
+  if(typeof m.edge!=="number"||typeof m.spreadRel!=="number"||typeof m.fair!=="number")return;
+  if(m.spreadRel>0.15||m.p<0.03||m.p>0.97)return;
+  var um=Math.max(0.03,m.spreadRel);
+  if(m.edge<-um){
+   var ent=(typeof m.ask==="number"&&m.ask>0&&m.ask<1)?m.ask:m.p;
+   ap.push({id:m.id,q:m.q,ev:m.ev,lado:"SÍ",ent:ent,obj:m.fair,stop:Math.max(0.01,ent-0.08),k:(m.fair-ent)/(1-ent),e:Math.abs(m.edge),dias:m.days});
+  } else if(m.edge>um){
+   var pNo=(typeof m.bid==="number"&&m.bid>0&&m.bid<1)?1-m.bid:1-m.p,fNo=1-m.fair;
+   ap.push({id:m.id,q:m.q,ev:m.ev,lado:"NO",ent:pNo,obj:fNo,stop:Math.max(0.01,pNo-0.08),k:(fNo-pNo)/(1-pNo),e:Math.abs(m.edge),dias:m.days});
+  }
+ });
+ ap.sort(function(a,b){return b.e-a.e});ap=ap.slice(0,14);
+ $("ver-pm").innerHTML=ap.length?ap.map(function(x){
+  return "<tr data-mid='"+esc(String(x.id))+"' style='cursor:pointer'><td title='"+esc(x.q)+"'>"+esc(x.q.slice(0,60))+(x.ev&&x.ev!==x.q?"<div class='dsc'>"+esc(x.ev.slice(0,50))+"</div>":"")+"</td>"+
+   "<td><span class='"+(x.lado==="SÍ"?"t3":"t4")+"'>"+T("COMPRAR ","BUY ")+x.lado+"</span></td>"+
+   "<td>"+(x.ent*100).toFixed(1)+"%</td><td class='dn'>"+(x.stop*100).toFixed(1)+"%</td><td class='up'>"+(x.obj*100).toFixed(1)+"%</td>"+
+   "<td>"+(Math.min(0.05,Math.max(0.005,x.k*0.25))*100).toFixed(1)+"%</td>"+
+   "<td class='dim'>"+T("precio a "+(x.e*100).toFixed(1)+" puntos de lo justo","price "+(x.e*100).toFixed(1)+" points from fair")+(typeof x.dias==="number"?" · "+Math.round(x.dias)+T(" días"," days"):"")+"</td></tr>"}).join("")
+  :"<tr><td colspan='7'>"+(BQ?emp("🤷",T("Ningún mercado con precio lejos de lo justo y spread razonable.","No market far from fair with a reasonable spread.")):emp("⏳",T("Cargando el cerebro…","Loading the engine…")))+"</td></tr>";
+ $("ver-pm-cnt").textContent=ap.length?"("+ap.length+")":"";
+
+ // --- divisas ---
+ var fx=[];
+ FXQ.forEach(function(x){
+  var dir=x.sig==="COMPRA"?1:(x.sig==="VENTA"?-1:0); if(!dir)return;
+  fx.push({n:x.n,dir:dir,nv:nivelesDe(x.c,dir),k:dir*x.kelly,z:x.z});
+ });
+ fx.sort(function(a,b){return Math.abs(b.z)-Math.abs(a.z)});
+ $("ver-fx").innerHTML=fx.length?fx.map(function(x){
+  return "<tr data-fx='"+esc(x.n)+"' style='cursor:pointer'><td><b>"+esc(x.n)+"</b></td><td>"+posTag(x.dir)+"</td>"+
+   "<td>"+fP(x.nv.ent,x.nv.ent)+"</td><td class='dn'>"+fP(x.nv.stop,x.nv.ent)+"</td><td class='up'>"+fP(x.nv.obj,x.nv.ent)+"</td><td>"+(cuanto(x.k)*100).toFixed(0)+"%</td></tr>"}).join("")
+  :"<tr><td colspan='6'>"+(FXQ.length?emp("🤷",T("Ningún par con momentum y tendencia de acuerdo.","No pair with momentum and trend agreeing.")):emp("⏳",T("Cargando divisas…","Loading currencies…")))+"</td></tr>";
+ $("ver-fx-cnt").textContent=fx.length?"("+fx.length+")":"";
+
+ // --- arbitrajes ---
+ var ar=(BQ&&BQ.groups?BQ.groups:[]).filter(function(g){return g.net>0}).sort(function(a,b){return b.net-a.net}).slice(0,10);
+ $("ver-arb").innerHTML=ar.length?ar.map(function(g){
+  var vender=/vend|sell/i.test(g.side||"");
+  return "<tr data-ev='"+esc(g.ev)+"' style='cursor:pointer'><td title='"+esc(g.ev)+"'>"+esc(String(g.ev).slice(0,54))+"</td>"+
+   "<td><span class='"+(vender?"t4":"t3")+"'>"+(vender?T("VENDER TODAS","SELL ALL"):T("COMPRAR TODAS","BUY ALL"))+"</span></td>"+
+   "<td class='up'>+"+(g.net*100).toFixed(2)+"%</td></tr>"}).join("")
+  :"<tr><td colspan='3'>"+(BQ?emp("✅",T("Hoy las cuentas cuadran.","Everything adds up today.")):emp("⏳",T("Cargando…","Loading…")))+"</td></tr>";
+ $("ver-arb-cnt").textContent=ar.length?"("+ar.length+")":"";
+
+ $("ve1").textContent=al.length+fx.filter(function(x){return x.dir>0}).length;
+ $("ve2").textContent=ba.length+fx.filter(function(x){return x.dir<0}).length;
+ $("ve3").textContent=ap.length;$("ve4").textContent=ar.length;
+ var falta=[];if(!QUANT.length)falta.push(T("precios","prices"));if(!BQ)falta.push(T("cerebro","engine"));if(!FXQ.length)falta.push(T("divisas","currencies"));
+ $("ver-st").textContent=falta.length?T("Cargando: ","Loading: ")+falta.join(", ")+"…":T("Todo cargado. Lectura de hace un instante.","All loaded. Read from a moment ago.");
+}
+(function(){ $("ver-calc").onclick=function(){loadPx();loadBrain(true);fxLoad();renderVer()}; })();
 
 /* ===================== DIVISAS · QUANT ===================== */
 var FXQ=[],FXQLOAD=false,FXSEL=null;
@@ -3405,7 +3540,7 @@ function fxLoad(){
   $("fx-st").textContent=out.length+T(" pares · ",": pairs · ")+T("calculado en tu navegador","computed in your browser");
  })
  .catch(function(e){$("fx-st").textContent="Error: "+(e.message||e)})
- .then(function(){FXQLOAD=false;fxRender()});
+ .then(function(){FXQLOAD=false;fxRender();if(VIEW==="ver")renderVer()});
 }
 
 function fxRender(){
@@ -3477,7 +3612,7 @@ var PAL_VISTAS=[
  ["ini","Inicio","resumen del dia"],["dash","Resumen","todo de un vistazo"],
  ["con","Contratos","adjudicaciones del Pentágono"],["sc","Empresas","tu lista de valores"],
  ["pm","Apuestas","mercados de Polymarket"],["news","Noticias","titulares del sector"],
- ["quant","Análisis de empresas","momentum y riesgo"],["brain","Oportunidades","arbitraje y señales"],
+ ["quant","Análisis de empresas","momentum y riesgo"],["ver","Veredicto","dónde comprar o vender, con entrada y salida"],["brain","Oportunidades","arbitraje y señales"],
  ["sim","¿Esto funciona?","simulaciones y pruebas"],["cart","Cuánto apostar","tamaño de posición"],
  ["inv","Investigación","ideas sin validar"],["lib","Biblioteca","métodos y fuentes"]];
 
@@ -3638,6 +3773,11 @@ document.addEventListener("click",function(e){var t=e.target;
   // Grupo/evento: al cerebro con el buscador global relleno.
   var te=t.closest("[data-ev]");
   if(te&&t.tagName!=="A"){go("brain");buscarGlobal(te.dataset.ev);return}
+  // Par de divisas desde fuera de su tabla: a ANALISIS con su grafico.
+  var tfx=t.closest("[data-fx]");
+  if(tfx&&!t.closest("#fx-rows")){go("quant");var nm=tfx.dataset.fx;
+   setTimeout(function(){for(var i=0;i<FXQ.length;i++)if(FXQ[i].n===nm){fxChart(FXQ[i]);break}
+    var e=$("fx-chart");if(e&&e.scrollIntoView)e.scrollIntoView({block:"center"})},120);return}
   // Region: a EMPRESAS filtrado.
   var trg=t.closest("[data-reg]");
   if(trg){RG=trg.dataset.reg;go("sc");render();return}
@@ -3661,7 +3801,8 @@ document.addEventListener("click",function(e){var t=e.target;
   b1:["brain","b-rows"],b2:["brain","b-arb"],b3:["brain","b-arb"],b4:["brain","b-wang"],
   s1:["sim","sim-rows"],s2:["sim","s-cal"],s3:["sim","s-cal"],s4:["sim","sim-rows"],
   c1:["cart","ca-rows"],c2:["cart","ca-rows"],c3:["cart","ca-rows"],c4:["cart","ca-arb"],
-  l1:["lib","l-rows"],l2:["lib","l-rows"],l3:["lib","l-rows"],l4:["lib","l-rows"]};
+  l1:["lib","l-rows"],l2:["lib","l-rows"],l3:["lib","l-rows"],l4:["lib","l-rows"],
+  ve1:["ver","ver-emp"],ve2:["ver","ver-emp"],ve3:["ver","ver-pm"],ve4:["ver","ver-arb"]};
  Object.keys(K).forEach(function(id){
   var v=$(id),k=v&&v.closest?v.closest(".kpi"):null; if(!k)return;
   k.dataset.go=K[id][0];k.dataset.scroll=K[id][1];k.style.cursor="pointer";
