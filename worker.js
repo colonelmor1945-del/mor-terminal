@@ -1179,6 +1179,40 @@ async function chatContexto(pregunta) {
         g.ev + ": " + g.caro + " no puede superar a " + g.barato).join(" | "));
   } else partes.push("ARBITRAJE: no se pudo consultar ahora mismo");
 
+  // Mercados que encajan con la pregunta.
+  if (pmq && Array.isArray(pmq.markets)) {
+    const sinAcentos = t => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    // Sinonimos minimos castellano -> ingles, que es el idioma de los mercados.
+    const SIN = { tipos: "rate", tipo: "rate", bajar: "cut", baje: "cut", bajen: "cut", subir: "hike",
+                  suba: "hike", elecciones: "election", eleccion: "election", guerra: "war", paz: "ceasefire",
+                  alto: "ceasefire", fuego: "ceasefire", petroleo: "oil", oro: "gold", presidente: "president",
+                  gane: "win", ganar: "win", gana: "win", campeon: "champion", precio: "price",
+                  septiembre: "september", octubre: "october", noviembre: "november", diciembre: "december",
+                  enero: "january", febrero: "february", marzo: "march", abril: "april", mayo: "may",
+                  junio: "june", julio: "july", agosto: "august" };
+    const PARA = new Set(["mercado", "market", "entro", "entrar", "apuesta", "apostar", "compro", "comprar",
+                          "vender", "vendo", "sobre", "para", "esta", "este", "esto", "hago", "debo",
+                          "que", "con", "del", "las", "los", "una", "uno", "the", "will", "and", "para",
+                          "hay", "como", "cual", "cuanto", "donde", "cuando", "puede", "pueden"]);
+    const pal = sinAcentos(q).split(/[^a-z0-9]+/).filter(x => x.length >= 3 && !PARA.has(x));
+    const claves = [];
+    pal.forEach(x => { claves.push(x); if (SIN[x]) claves.push(SIN[x]); });
+    if (claves.length) {
+      const punt = pmq.markets.map(m => {
+        const t = sinAcentos((m.q || "") + " " + (m.ev || ""));
+        let s = 0; claves.forEach(k => { if (t.includes(k)) s += (k.length >= 5 ? 2 : 1); });
+        return [s, m];
+      }).filter(x => x[0] >= 2).sort((a, b) => b[0] - a[0]).slice(0, 3);
+      if (punt.length) partes.push("MERCADOS QUE ENCAJAN CON LA PREGUNTA: " + punt.map(([s, m]) =>
+        (m.q || "") + (m.ev && m.ev !== m.q ? " [" + m.ev + "]" : "") +
+        ": precio " + (m.p * 100).toFixed(1) + "%" +
+        (typeof m.fair === "number" ? ", justo " + (m.fair * 100).toFixed(1) + "%" : "") +
+        (typeof m.spreadRel === "number" ? ", spread " + (m.spreadRel * 100).toFixed(0) + "%" : "") +
+        (typeof m.days === "number" ? ", " + Math.round(m.days) + " dias" : "")
+      ).join(" | "));
+    }
+  }
+
   if (ed) {
     partes.push("AVISOS 8-K (30 dias): " + ed.n + " presentaciones, " + ed.descartadas +
       " descartadas por sector. Cruces con el universo: " + (ed.cruces.length
