@@ -307,7 +307,8 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   <button data-v="brain">F8 CEREBRO</button>
   <button data-v="sim">F9 SIMULADOR</button>
   <button data-v="cart">F10 CARTERA</button>
-  <button data-v="lib">F11 BIBLIOTECA</button>
+  <button data-v="inv">F11 INVESTIGACIÓN</button>
+  <button data-v="lib">F12 BIBLIOTECA</button>
   <div class="sp"></div>
   <div class="meta" id="meta"></div>
 </div>
@@ -455,24 +456,6 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
       <h3>DISTORSIÓN DE WANG · PRECIO vs PROBABILIDAD REAL</h3>
       <div class="bd" id="b-wang"></div>
     </div>
-  </div>
-
-  <div class="p" style="margin-bottom:8px">
-    <h3>CONTRADICCIONES ENTRE MERCADOS <span id="rl-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— apuestas de eventos distintos que se contradicen entre sí</span></h3>
-    <div class="st" style="padding:6px 10px 0">Un agente barre un trozo cada día con el cron y guarda lo que encuentra. Como la lógica entre dos preguntas no cambia nunca, lo ya clasificado no se vuelve a consultar: el grafo se llena solo y sale gratis.</div>
-    <div class="chips" style="align-items:center;gap:8px">
-      <label class="st">Amplitud <select id="rl-a">
-        <option value="estricto" selected>estricta · ~65 pares</option>
-        <option value="medio">media · ~120 pares</option>
-        <option value="amplio">amplia · ~1.070 pares</option>
-      </select></label>
-      <label class="st">Por pasada <select id="rl-n"><option value="8">8</option><option value="14" selected>14</option><option value="18">18</option></select></label>
-      <button id="rl-run">⟳ Buscar contradicciones</button>
-      <span class="st" id="rl-st">Polymarket trata cada evento por separado, así que nadie comprueba si se contradicen entre sí.</span>
-    </div>
-    <div class="bd" style="max-height:250px;padding:0 4px" id="rl-res"></div>
-    <div class="st"><b>Cómo funciona:</b> la IA solo propone la relación lógica («A implica B», «no pueden pasar las dos»); la ventaja la calcula la <b>aritmética</b>, así que el modelo nunca se la puede inventar. Si propone una relación falsa, sale un falso positivo, no una pérdida.<br>
-    <b class="dn">Verifícalo siempre a mano.</b> En pruebas, un modelo marcó como excluyentes «gana las elecciones de Brasil» y «queda segundo en la <b>primera vuelta</b>» — y no lo son, porque hay segunda vuelta. Lee las dos preguntas enteras.</div>
   </div>
 
   <div class="p" style="margin-bottom:8px">
@@ -735,6 +718,41 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 
     </div>
   </div>
+</div>
+
+<div class="view" id="v-inv">
+  <div class="p" style="padding:15px 17px;margin-bottom:9px">
+    <div class="t" style="font-size:11px;letter-spacing:.08em;color:var(--am);text-transform:uppercase;margin-bottom:8px">Zona de investigación</div>
+    <div class="expl">
+      Lo que hay aquí <b>no está validado</b>. Son ideas en prueba que aún no han
+      demostrado nada, separadas a propósito del resto del terminal para que no se
+      confundan con lo que sí está comprobado.<br><br>
+      El arbitraje de la pantalla de oportunidades es <b>aritmética cerrada</b>: si las
+      probabilidades de un grupo suman 1,05, sobra un 5% y punto. Lo de aquí depende de
+      que una IA clasifique bien una relación lógica, y eso <b>puede fallar</b> — abajo
+      tienes un caso real en el que falló.
+    </div>
+  </div>
+
+  <div class="p" style="margin-bottom:8px">
+    <h3>CONTRADICCIONES ENTRE MERCADOS <span id="rl-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— apuestas de eventos distintos que se contradicen entre sí</span></h3>
+    <div class="st" style="padding:6px 10px 0">Un agente barre un trozo cada día con el cron y guarda lo que encuentra. Como la lógica entre dos preguntas no cambia nunca, lo ya clasificado no se vuelve a consultar: el grafo se llena solo y sale gratis.</div>
+    <div class="chips" style="align-items:center;gap:8px">
+      <label class="st">Amplitud <select id="rl-a">
+        <option value="estricto" selected>estricta · ~65 pares</option>
+        <option value="medio">media · ~120 pares</option>
+        <option value="amplio">amplia · ~1.070 pares</option>
+      </select></label>
+      <label class="st">Por pasada <select id="rl-n"><option value="8">8</option><option value="14" selected>14</option><option value="18">18</option></select></label>
+      <button id="rl-run">⟳ Buscar contradicciones</button>
+      <span class="st" id="rl-st">Polymarket trata cada evento por separado, así que nadie comprueba si se contradicen entre sí.</span>
+    </div>
+    <div class="bd" style="max-height:250px;padding:0 4px" id="rl-res"></div>
+    <div class="st"><b>Cómo funciona:</b> la IA solo propone la relación lógica («A implica B», «no pueden pasar las dos»); la ventaja la calcula la <b>aritmética</b>, así que el modelo nunca se la puede inventar. Si propone una relación falsa, sale un falso positivo, no una pérdida.<br>
+    <b class="dn">Verifícalo siempre a mano.</b> En pruebas, un modelo marcó como excluyentes «gana las elecciones de Brasil» y «queda segundo en la <b>primera vuelta</b>» — y no lo son, porque hay segunda vuelta. Lee las dos preguntas enteras.</div>
+  </div>
+
+
 </div>
 
 <div class="view" id="v-lib">
@@ -1152,7 +1170,8 @@ function render(){
    :"<tr><td colspan='7'>"+(PM.length?emp("🔍","Ningún mercado con esos filtros"):(ERR.pm?emp("⚠","Polymarket no responde"):sk(5)))+"</td></tr>"}
 
  if(VIEW==="quant"){renderQuant()}
- if(VIEW==="brain"){renderBrain();renderRel()}
+ if(VIEW==="brain"){renderBrain()}
+ if(VIEW==="inv"){renderRel()}
  if(VIEW==="sim"){renderSim();renderMC();renderPaper()}
  if(VIEW==="cart"){renderCart()}
  if(VIEW==="lib"){renderLib()}
@@ -2457,7 +2476,8 @@ var EN={
  "F8 CEREBRO":"F8 EDGE","F8 OPORTUNIDADES":"F8 OPPORTUNITIES",
  "F9 SIMULADOR":"F9 BACKTEST","F9 ¿ESTO FUNCIONA?":"F9 DOES IT WORK?",
  "F10 CARTERA":"F10 SIZING","F10 CUÁNTO APOSTAR":"F10 POSITION SIZING",
- "F11 BIBLIOTECA":"F11 METHODS","F11 MÉTODOS":"F11 METHODS",
+ "F11 INVESTIGACIÓN":"F11 RESEARCH","F12 BIBLIOTECA":"F12 METHODS","F12 MÉTODOS":"F12 METHODS",
+ "Investigación":"Research","CONTRADICCIONES ENTRE MERCADOS":"CROSS-MARKET CONTRADICTIONS",
  // KPIs y titulos
  "DOD 30D · VALOR":"DOD 30D · VALUE","FUERA DE GIGANTES":"OUTSIDE PRIMES",
  "CRUCES":"MATCHES","CRUCES DETECTADOS":"MATCHES DETECTED",
@@ -2768,8 +2788,9 @@ function iaAbrir(v){
 var GRUPOS=[
  {id:"g1",t:"Inicio",  v:["ini"]},
  {id:"g2",t:"Mercado", v:["dash","con","sc","pm","news"]},
- {id:"g3",t:"Análisis",v:["quant","brain","lib"]},
- {id:"g4",t:"Herramientas",v:["sim","cart"]}
+ {id:"g3",t:"Análisis",v:["quant","brain"]},
+ {id:"g4",t:"Herramientas",v:["sim","cart"]},
+ {id:"g5",t:"Investigación",v:["inv","lib"]}
 ];
 var GACT="g1";
 
@@ -2903,7 +2924,7 @@ function apilar(){
 function go(v,sinApilar){
  if(!sinApilar&&v!==VIEW)apilar();
  VIEW=v;
- ["ini","dash","con","sc","pm","news","quant","brain","sim","cart","lib"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
+ ["ini","dash","con","sc","pm","news","quant","brain","sim","cart","inv","lib"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
  [].forEach.call($("nav").querySelectorAll("button[data-v]"),function(b){b.classList.toggle("on",b.dataset.v===v)});
  if(typeof GACT!=="undefined"&&grupoDe(v)!==GACT){GACT=grupoDe(v);pintarNav()}
  if(v==="news")loadNews(NR);
@@ -2919,7 +2940,7 @@ $("cmd").addEventListener("input",function(e){e.target.dataset.q=e.target.value;
 $("cmd").addEventListener("keydown",function(e){
  if(e.key!=="Enter")return;
  var c=e.target.value.trim().toUpperCase();
- var m={CON:"con",CONTRATOS:"con",SC:"sc",SMALLCAPS:"sc",PM:"pm",POLYMARKET:"pm",NEWS:"news",NOTICIAS:"news",DASH:"dash",INICIO:"ini",INI:"ini",PORTADA:"ini",QUANT:"quant",Q:"quant",BRAIN:"brain",CEREBRO:"brain",PQ:"brain",SIM:"sim",SIMULADOR:"sim",BT:"sim",CART:"cart",CARTERA:"cart",LIB:"lib",BIBLIOTECA:"lib"};
+ var m={CON:"con",CONTRATOS:"con",SC:"sc",SMALLCAPS:"sc",PM:"pm",POLYMARKET:"pm",NEWS:"news",NOTICIAS:"news",DASH:"dash",INICIO:"ini",INI:"ini",PORTADA:"ini",QUANT:"quant",Q:"quant",BRAIN:"brain",CEREBRO:"brain",PQ:"brain",SIM:"sim",SIMULADOR:"sim",BT:"sim",CART:"cart",CARTERA:"cart",LIB:"lib",BIBLIOTECA:"lib",INV:"inv",INVESTIGACION:"inv",LAB:"inv"};
  if(m[c]){e.target.value="";e.target.dataset.q="";go(m[c])}
  else if(c==="REFRESH"||c==="RELOAD"){e.target.value="";e.target.dataset.q="";refresh()}});
 document.addEventListener("keydown",function(e){
@@ -2927,7 +2948,7 @@ document.addEventListener("keydown",function(e){
  if(e.key==="Escape"&&FE){feCerrar();return}
  if(e.key==="Escape"&&DT){dtClose();return}
  if(e.key==="/"&&document.activeElement!==$("cmd")){e.preventDefault();$("cmd").focus();return}
- var m={F1:"ini",F2:"dash",F3:"con",F4:"sc",F5:"pm",F6:"news",F7:"quant",F8:"brain",F9:"sim",F10:"cart",F11:"lib"};
+ var m={F1:"ini",F2:"dash",F3:"con",F4:"sc",F5:"pm",F6:"news",F7:"quant",F8:"brain",F9:"sim",F10:"cart",F11:"inv",F12:"lib"};
  if(m[e.key]){e.preventDefault();go(m[e.key])}});
 document.addEventListener("click",function(e){var t=e.target;
  if(t.classList.contains("str")){W[t.dataset.tk]=!W[t.dataset.tk];sw();render()}
