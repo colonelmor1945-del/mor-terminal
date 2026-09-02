@@ -247,3 +247,38 @@ con el tiempo. Segunda ejecución: 0 consultas al modelo.
   `resize_window preset:desktop` antes de juzgar el diseño.
 - **El buscador Ctrl+K y las rutas `#emp/…`, `#mer/…`, `#vista`** viven al final del
   script principal; `go()`, `feAbrir()`, `dtOpen()` y sus cierres escriben la ruta.
+
+## Run-test del 2 de septiembre de 2026 (cifras reales de producción)
+
+**Polymarket — 107 mercados resueltos, ventana de 7 días.**
+Ninguna estrategia supera al azar. Monte Carlo de 1.000.000 de simulaciones con
+hipótesis nula Bernoulli(precio de entrada):
+
+| Estrategia | n | Total | p | Veredicto |
+|---|---|---|---|---|
+| Comprar longshots (p≤10%) | 59 | +45,2u | 0,206 | indistinguible del azar |
+| Comprar todo (referencia) | 107 | +61,2u | 0,169 | dudoso |
+| Zona media 10–90% | 39 | +15,4u | 0,065 | dudoso |
+| Vender longshots | 59 | −2,6u | 0,969 | indistinguible del azar |
+
+Brier 0,110 frente a tasa base 0,213: **el mercado está bien calibrado**, que es
+la razón de fondo por la que no hay estrategia que lo bata.
+
+**λ empírica = −0,366, signo CONTRARIO al +0,183 de la literatura** que usa el
+valor justo. No se le da la vuelta (n=107, nada significativo, sería ajustar a
+la muestra) pero se avisa en el VEREDICTO con las dos cifras. Si alguien vuelve
+a tocar el valor justo, este conflicto sigue abierto.
+
+**Divisas — 10 pares, 370 ventanas sin solapar, mantener 10 días.**
+
+| Estrategia | n | Acierto | t agrupado | t ingenuo |
+|---|---|---|---|---|
+| Momentum 20d | 137 | 65,7% | 2,07 | 2,78 |
+| Comprar siempre (referencia) | 370 | 60,8% | 2,01 | 2,56 |
+| Reversión 20d | 69 | 62,3% | 1,72 | 0,93 |
+
+**Trampa: el momentum (t=2,07) no bate a comprar y ya está (t=2,01).** El t
+supera 2 pero contra la referencia no aporta nada, y el total son +0,4 unidades
+en 137 ventanas, que el spread se come. Falta el test SPA de Hansen para
+corregir el sesgo de haber buscado entre varias estrategias; el agrupado por par
+solo corrige el solapamiento de ventanas, que es otro sesgo distinto.

@@ -2353,6 +2353,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   <div class="chips" style="margin-bottom:8px"><button id="ver-calc">⟳ Recalcular todo</button><span class="st" id="ver-st">Carga precios, cerebro y divisas y vuelve a decidir.</span></div>
   <div class="p" style="margin-bottom:8px"><h3>EMPRESAS <span id="ver-emp-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— clic para la ficha</span></h3>
     <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:22%">Empresa</th><th style="width:10%">Posición</th><th style="width:10%">Entrada</th><th style="width:10%">Stop</th><th style="width:10%">Objetivo</th><th style="width:8%">Cuánto</th><th style="width:11%">Neto tras coste</th><th>Por qué</th></tr></thead><tbody id="ver-emp"></tbody></table></div></div>
+  <div id="ver-aviso" style="display:none;border:1px solid var(--rd);border-left:3px solid var(--rd);border-radius:6px;padding:9px 12px;margin-bottom:8px;font-size:12px;color:var(--dim);background:rgba(240,96,93,.06)"></div>
   <div class="p" style="margin-bottom:8px"><h3>APUESTAS <span id="ver-pm-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— clic para el mercado</span></h3>
     <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:34%">Mercado</th><th style="width:9%">Posición</th><th style="width:9%">Entrada</th><th style="width:9%">Salir si</th><th style="width:9%">Objetivo</th><th style="width:8%">Cuánto</th><th>Por qué</th></tr></thead><tbody id="ver-pm"></tbody></table></div></div>
   <div class="grid g2" style="margin-bottom:8px">
@@ -5211,6 +5212,20 @@ function cuanto(k){return Math.min(0.10,Math.max(0.01,Math.max(0,k)*0.5))}
 function fP(v,ref){return v.toFixed(ref<10?4:(ref<1000?2:0))}
 function posTag(dir){return dir>0?"<span class='t3'>"+T("ALCISTA","LONG")+"</span>":"<span class='t4'>"+T("BAJISTA","SHORT")+"</span>"}
 
+/* Aviso cuando la muestra propia contradice la lambda de la literatura. */
+function avisoLambda(){
+ var el=$("ver-aviso"); if(!el)return;
+ if(!BT||BT.fx||BT.lam===null||!isFinite(BT.lam)){el.style.display="none";return}
+ var lit=0.183, choca=(BT.lam*lit)<0;
+ el.style.display="";
+ el.innerHTML= choca
+  ? "<b>"+T("Aviso: tu propia muestra contradice el valor justo.","Warning: your own sample contradicts the fair value.")+"</b> "+
+    T("El valor justo de las apuestas corrige el sesgo favorito-longshot con λ = +0,183, medido sobre 291.000 contratos ya resueltos. Pero los "+BT.S.length+" mercados resueltos que ha medido este terminal dan λ = "+BT.lam.toFixed(3)+", con el signo contrario: aquí los favoritos salen caros y los improbables baratos, al revés. No se le da la vuelta al signo porque con "+BT.S.length+" casos y ninguna estrategia significativa esa cifra es demasiado ruidosa para fiarse. Trátalo como una señal débil, no como un precio de referencia.",
+      "The fair value corrects favourite-longshot bias with λ = +0.183, measured on 291,000 resolved contracts. But the "+BT.S.length+" resolved markets this terminal measured give λ = "+BT.lam.toFixed(3)+", the opposite sign. The sign is not flipped because with "+BT.S.length+" cases and no significant strategy that figure is too noisy to trust. Treat this as a weak signal, not a reference price.")
+  : "<b>"+T("Tu muestra concuerda con el valor justo.","Your sample agrees with the fair value.")+"</b> "+
+    T("λ de la literatura +0,183; λ medida aquí sobre "+BT.S.length+" mercados resueltos: "+BT.lam.toFixed(3)+".",
+      "Literature λ +0.183; λ measured here on "+BT.S.length+" resolved markets: "+BT.lam.toFixed(3)+".");
+}
 function renderVer(){
  var al=[],ba=[];
  QUANT.forEach(function(q){
@@ -5265,6 +5280,7 @@ function renderVer(){
    "<td class='dim'>"+T("precio a "+(x.e*100).toFixed(1)+" puntos de lo justo","price "+(x.e*100).toFixed(1)+" points from fair")+(typeof x.dias==="number"?" · "+Math.round(x.dias)+T(" días"," days"):"")+"</td></tr>"}).join("")
   :"<tr><td colspan='7'>"+(BQ?emp("🤷",T("Ningún mercado con precio lejos de lo justo y spread razonable.","No market far from fair with a reasonable spread.")):emp("⏳",T("Cargando el cerebro…","Loading the engine…")))+"</td></tr>";
  $("ver-pm-cnt").textContent=ap.length?"("+ap.length+")":"";
+ avisoLambda();
 
  // --- divisas ---
  var fx=[];
