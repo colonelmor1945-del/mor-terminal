@@ -263,6 +263,9 @@ kbd{border:1px solid var(--line);padding:0 4px;color:var(--dim);font-size:9px}
 svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 .lg{display:flex;gap:12px;padding:4px 10px;font-size:9.5px;color:var(--dim);flex-wrap:wrap}
 .lg i{display:inline-block;width:8px;height:8px;margin-right:4px}
+/* --- inclinacion del terminal --- */
+.sug{grid-column:1/-1;border:1px solid var(--line);border-left:3px solid var(--am);border-radius:6px;padding:8px 12px;margin-bottom:6px;background:rgba(227,164,74,.05)}
+.sug .v{font-size:15px;font-weight:700;letter-spacing:.02em;margin:2px 0}
 /* --- buscador global --- */
 #pal{position:fixed;inset:0;z-index:200;background:rgba(3,5,8,.72);backdrop-filter:blur(3px);display:none}
 #pal.on{display:block}
@@ -1291,7 +1294,7 @@ function render(){
  var cn={};SC.forEach(function(s){cn[s.r]=(cn[s.r]||0)+1});
  var ks2=Object.keys(cn).sort(function(a,b){return cn[b]-cn[a]}),mxr=cn[ks2[0]]||1;
  $("d-reg").innerHTML=ks2.map(function(r){var w=Math.round(100*cn[r]/mxr);
-  return "<div class='hb'><div class='nm'>"+r+"</div><div class='tr'><i style='width:"+w+"%'></i></div><div class='vl' style='color:var(--txt)'>"+cn[r]+"</div></div>"}).join("");
+  return "<div class='hb' data-reg='"+esc(r)+"' style='cursor:pointer' title='"+T("Ver las empresas de ","See companies in ")+esc(r)+"'><div class='nm'>"+r+"</div><div class='tr'><i style='width:"+w+"%'></i></div><div class='vl' style='color:var(--txt)'>"+cn[r]+"</div></div>"}).join("");
 
  var dn=(NEWS["Pentágono"]||[]).slice(0,7);
  $("h-news").textContent=NSRC["Pentágono"]?("vía "+NSRC["Pentágono"]):"";
@@ -1472,7 +1475,7 @@ function renderQuant(){
  var mz=Math.max.apply(null,QUANT.map(function(q){return Math.abs(q.z)}))||1;
  $("q-rank").innerHTML=QUANT.slice(0,14).map(function(q){
   var w=Math.round(50+50*q.z/mz),col=q.z>=0?"var(--gr)":"var(--rd)";
-  return "<div class='hb'><div class='nm' title='"+esc(q.s.name)+"'>"+esc(q.s.name)+"</div>"+
+  return "<div class='hb' data-tk='"+esc(q.s.tk)+"' style='cursor:pointer'><div class='nm' title='"+esc(q.s.name)+"'>"+esc(q.s.name)+"</div>"+
   "<div class='tr'><i style='left:50%;width:"+Math.abs(w-50)+"%;"+(q.z<0?"left:"+w+"%;":"")+"background:"+col+"'></i></div>"+
   "<div class='vl' style='color:"+col+"'>"+q.z.toFixed(2)+"</div></div>"}).join("");
 
@@ -2238,6 +2241,7 @@ function feAbrir(tk,sinApilar){
  var q=null;for(var j=0;j<QUANT.length;j++)if(QUANT[j].s.tk===e.tk){q=QUANT[j];break}
  var k=function(l,v,c){return "<div><div class='l'>"+l+"</div><div class='v "+(c||"")+"'>"+v+"</div></div>"};
  $("fe-met").innerHTML=
+  sugEmpresa(e,q)+
   k(MODO==="simple"?"TAMAÑO":"CAPITALIZACIÓN",["micro","pequeña","mediana"][e.z]||"—")+
   k("REGIÓN",esc(e.r))+
   (q?k(MODO==="simple"?"ÚLTIMO MES":"1M",pct(q.r1),pcl(q.r1))+
@@ -2410,6 +2414,7 @@ function dtMetrics(m){
  var k=function(l,v,c){return "<div><div class='l'>"+l+"</div><div class='v "+(c||"")+"'>"+v+"</div></div>"};
  var b=(1-m.p)/m.p;
  $("dt-met").innerHTML=
+  sugMercado(m)+
   k("PRECIO",bfmt(m.p,1))+
   k("CUOTA",(1/m.p).toFixed(2)+"×")+
   k("JUSTO (WANG)",bfmt(m.fair,1))+
@@ -2684,7 +2689,10 @@ function renderLib(){
  f.sort(function(a,b){return (a.pri===null?99:a.pri)-(b.pri===null?99:b.pri)});
  $("l-rows").innerHTML=f.map(function(x){
   var st=E[x.e];
-  return "<tr>"+
+  var LIBV={"Arbitraje estadístico":"brain","Microestructura":"pm","Matemática financiera":"sim",
+   "Anomalías ocultas":"quant","Machine learning":"sim","Crypto quant":"inv","Experimental":"inv"};
+  var lv=LIBV[x.fam]||"inv";
+  return "<tr data-go='"+lv+"' style='cursor:pointer' title='"+T("Ver dónde se aplica","See where it is applied")+"'>"+
    "<td class='dim'>"+x.i+"</td>"+
    "<td><b>"+esc(x.fam)+"</b><br><span class='dim' style='font-size:10px'>"+esc(x.tema)+"</span></td>"+
    "<td><span class='"+st[1]+"'>"+st[0]+"</span>"+(x.pri?"<br><span class='dim' style='font-size:10px'>prioridad "+x.pri+"</span>":"")+"</td>"+
@@ -3206,7 +3214,7 @@ function renderIni(){
  // --- contratos ---
  var radar=CON.filter(function(c){return !c.prime});
  if(CON.length){
-  tarj.push({c:"",t:T("Contratos vigilados","Contracts tracked"),g:CON.length,
+  tarj.push({v:"con",c:"",t:T("Contratos vigilados","Contracts tracked"),g:CON.length,
    x:T(nEmp(radar.length,"no va","no van")+" a los gigantes", radar.length+" not going to the primes"),
    y:T("Últimos 30 días del Pentágono","Pentagon, last 30 days")});
   hoy.push(T("El Pentágono ha repartido <b>"+CON.length+"</b> contratos en 30 días. "+
@@ -3215,7 +3223,7 @@ function renderIni(){
    "</b> did not go to the usual primes — those are the ones that can move a small company."));
  }
  if(MATCH&&MATCH.length){
-  tarj.push({c:"ok",t:T("Cruces detectados","Matches found"),g:MATCH.length,
+  tarj.push({v:"dash",sc:"d-match",c:"ok",t:T("Cruces detectados","Matches found"),g:MATCH.length,
    x:T("Coinciden con tu lista de empresas","Match your company list"),
    y:T("Verifícalo a mano antes de nada","Verify by hand before anything else")});
   hoy.push(T("Hay <b>"+MATCH.length+"</b> "+(MATCH.length===1?"coincidencia":"coincidencias")+
@@ -3230,7 +3238,7 @@ function renderIni(){
  // --- 8-K ---
  if(EDG){
   var cr=EDG.cruces.length,ca=EDG.candidatas.length;
-  tarj.push({c:cr?"ok":"inf",t:T("Avisos oficiales (8-K)","Official filings (8-K)"),g:cr+ca,
+  tarj.push({v:"con",sc:"e-rows",c:cr?"ok":"inf",t:T("Avisos oficiales (8-K)","Official filings (8-K)"),g:cr+ca,
    x:cr?T(nEmp(cr,"es de tu lista","son de tu lista"), cr+" from your list"):T("ninguno es de tu lista","none from your list"),
    y:T("Empresas que han comunicado algo a la SEC","Companies that filed something with the SEC")});
   if(cr) EDG.cruces.slice(0,3).forEach(function(x){
@@ -3244,7 +3252,7 @@ function renderIni(){
  // --- arbitraje ---
  if(BQ){
   var op=(BQ.groups||[]).filter(function(g){return g.net>0}).length+(BQ.mono||[]).length;
-  tarj.push({c:op?"ok":"inf",t:T("Cuentas que no cuadran","Math that doesn't add up"),g:op,
+  tarj.push({v:"brain",sc:"b-arb",c:op?"ok":"inf",t:T("Cuentas que no cuadran","Math that doesn't add up"),g:op,
    x:op?T("apuestas donde sobra dinero","markets with money left over"):T("hoy todo cuadra","everything adds up today"),
    y:T("Sin tener que adivinar nada","No forecasting required")});
   if(op){
@@ -3257,7 +3265,7 @@ function renderIni(){
     " where probabilities do not add up as they should. No forecasting needed there — just arithmetic."));
   }
  }else{
-  tarj.push({c:"inf",t:"Cuentas que no cuadran",g:"—",x:"pulsa para analizar",y:"Necesita cargar los mercados"});
+  tarj.push({v:"brain",sc:"b-arb",c:"inf",t:"Cuentas que no cuadran",g:"—",x:"pulsa para analizar",y:"Necesita cargar los mercados"});
  }
 
  if(!hoy.length)hoy.push(T("Cargando los datos del día… si tarda, pulsa <b>⟳ REFRESH</b> arriba a la derecha.",
@@ -3266,7 +3274,7 @@ function renderIni(){
   T("Qué ha pasado hoy","What happened today")+"</div>"+hoy.join("<br><br>");
 
  $("i-tarj").innerHTML=tarj.map(function(t){
-  return "<div class='tarj "+t.c+"'><div class='t'>"+esc(t.t)+"</div><div class='g'>"+t.g+"</div>"+
+  return "<div class='tarj "+t.c+"'"+(t.v?" data-go='"+t.v+"'"+(t.sc?" data-scroll='"+t.sc+"'":"")+" style='cursor:pointer'":"")+"><div class='t'>"+esc(t.t)+"</div><div class='g'>"+t.g+"</div>"+
    "<div class='x'>"+esc(t.x)+"</div><div class='y'>"+esc(t.y)+"</div></div>"}).join("");
 
  $("i-lista").innerHTML=lista.length?lista.map(function(l){
@@ -3616,7 +3624,7 @@ document.addEventListener("click",function(e){var t=e.target;
  if(t.dataset&&t.dataset.nf){loadNews(NR,true)}
  if(t.dataset&&t.dataset.del){POS=POS.filter(function(x){return String(x.id)!==String(t.dataset.del)});render();return}
  if(t.closest){
-  var fr=t.closest("tr[data-tk]");
+  var fr=t.closest("[data-tk]");
   if(fr&&t.tagName!=="A"&&!t.classList.contains("str")){feAbrir(fr.dataset.tk);return}
   var ec=t.closest("[data-emp]");
   if(ec&&ec.dataset.emp){feAbrir(ec.dataset.emp);return}
@@ -3629,9 +3637,64 @@ document.addEventListener("click",function(e){var t=e.target;
   if(tq&&t.tagName!=="A"){pmIrA(null,tq.dataset.q);return}
   // Grupo/evento: al cerebro con el buscador global relleno.
   var te=t.closest("[data-ev]");
-  if(te&&t.tagName!=="A"){go("brain");buscarGlobal(te.dataset.ev);return}}});
+  if(te&&t.tagName!=="A"){go("brain");buscarGlobal(te.dataset.ev);return}
+  // Region: a EMPRESAS filtrado.
+  var trg=t.closest("[data-reg]");
+  if(trg){RG=trg.dataset.reg;go("sc");render();return}
+  // Destino generico: vista y, opcionalmente, elemento al que bajar.
+  var tg=t.closest("[data-go]");
+  if(tg&&t.tagName!=="A"&&!t.closest("button,input,select")){
+   go(tg.dataset.go);
+   var sc=tg.dataset.scroll;
+   if(sc)setTimeout(function(){var e=$(sc);if(e&&e.scrollIntoView)e.scrollIntoView({block:"start",behavior:"smooth"})},80);
+   return}
+  // Glosario: abre el buscador con el termino, que ensena donde aparece.
+  var tgl=t.closest(".gloss>div");
+  if(tgl){var kk=tgl.querySelector(".k");palAbrir();if(kk){$("palq").value=kk.textContent.trim();$("palq").oninput.call($("palq"))}return}}});
+
+/* KPI: cada tarjeta de cifras lleva a la tabla que la explica. Se asigna por el
+   id del valor para no tocar 27 lineas de HTML. */
+(function(){
+ var K={k1:["con","c-rows"],k2:["con","c-rows"],k3:["pm","p-rows"],k4:["dash","d-match"],
+  q1:["quant","q-rows"],q2:["quant","q-rank"],q3:["quant","q-rr"],q4:["quant","q-rows"],
+  fx1:["quant","fx-rows"],fx2:["quant","fx-rows"],fx3:["quant","fx-rows"],fx4:["quant","fx-coint"],
+  b1:["brain","b-rows"],b2:["brain","b-arb"],b3:["brain","b-arb"],b4:["brain","b-wang"],
+  s1:["sim","sim-rows"],s2:["sim","s-cal"],s3:["sim","s-cal"],s4:["sim","sim-rows"],
+  c1:["cart","ca-rows"],c2:["cart","ca-rows"],c3:["cart","ca-rows"],c4:["cart","ca-arb"],
+  l1:["lib","l-rows"],l2:["lib","l-rows"],l3:["lib","l-rows"],l4:["lib","l-rows"]};
+ Object.keys(K).forEach(function(id){
+  var v=$(id),k=v&&v.closest?v.closest(".kpi"):null; if(!k)return;
+  k.dataset.go=K[id][0];k.dataset.scroll=K[id][1];k.style.cursor="pointer";
+  k.title=T("Ver el detalle","See details");
+ });
+ [].forEach.call(document.querySelectorAll(".gloss>div"),function(d){d.style.cursor="pointer";d.title=T("Buscar este término en el terminal","Search this term in the terminal")});
+})();
 
 /* Ticker corto de EDGAR ("AVAV") -> ticker completo de la lista ("NASDAQ:AVAV"). */
+
+/* ---- Inclinacion del terminal. Calculada de lo que hay en pantalla; el que
+   decide es el usuario y asi se dice en la propia linea. ---- */
+function sugEmpresa(e,q){
+ var txt,cl,por;
+ if(!q){txt=T("sin precios cargados","no prices loaded");cl="dim";por=T("carga los precios para tener una lectura","load prices to get a read")}
+ else if(q.z>0.5&&q.s50>q.s200){txt=T("VIGILAR / ENTRAR CON POCO","WATCH / SMALL ENTRY");cl="up";por=T("momentum alto (z "+q.z.toFixed(2)+") y tendencia alcista","strong momentum (z "+q.z.toFixed(2)+") and uptrend")}
+ else if(q.z<-0.5&&q.s50<q.s200){txt=T("EVITAR POR AHORA","AVOID FOR NOW");cl="dn";por=T("momentum negativo (z "+q.z.toFixed(2)+") y tendencia bajista","negative momentum (z "+q.z.toFixed(2)+") and downtrend")}
+ else if(q.dd<-0.4){txt=T("ESPERAR","WAIT");cl="";por=T("ha caído un "+Math.abs(q.dd*100).toFixed(0)+"% desde máximos: alto riesgo","down "+Math.abs(q.dd*100).toFixed(0)+"% from the high: high risk")}
+ else {txt=T("ESPERAR","WAIT");cl="";por=T("sin señal clara (z "+q.z.toFixed(2)+")","no clear signal (z "+q.z.toFixed(2)+")")}
+ var kk=function(l,v,c){return "<div class='sug'><div class='l'>"+l+"</div><div class='v "+(c||"")+"'>"+v+"</div><div class='l' style='text-transform:none;letter-spacing:0'>"+por+" · <b>"+T("tú decides","you decide")+"</b></div></div>"};
+ return kk(T("EL TERMINAL SE INCLINA POR","THE TERMINAL LEANS"),txt,cl);
+}
+function sugMercado(m){
+ var txt,cl,por;
+ var edge=(typeof m.edge==="number")?m.edge:null, sr=(typeof m.spreadRel==="number")?m.spreadRel:0;
+ if(edge===null){txt=T("SIN LECTURA","NO READ");cl="dim";por=T("no hay estimación para este mercado","no estimate for this market")}
+ else if(sr>0.15){txt=T("NO TOCAR","STAY OUT");cl="dn";por=T("el spread se come cualquier ventaja ("+(sr*100).toFixed(0)+"%)","the spread eats any edge ("+(sr*100).toFixed(0)+"%)")}
+ else if(edge<-Math.max(0.03,sr)){txt=T("SÍ PARECE BARATO","YES LOOKS CHEAP");cl="up";por=T("el precio está "+(Math.abs(edge)*100).toFixed(1)+" puntos por debajo del justo","price is "+(Math.abs(edge)*100).toFixed(1)+" points below fair")}
+ else if(edge>Math.max(0.03,sr)){txt=T("SÍ PARECE CARO","YES LOOKS RICH");cl="dn";por=T("el precio está "+(edge*100).toFixed(1)+" puntos por encima del justo: si acaso, el NO","price is "+(edge*100).toFixed(1)+" points above fair: if anything, NO")}
+ else {txt=T("NADA QUE HACER","NOTHING TO DO");cl="";por=T("el precio ya refleja lo que se sabe (sesgo "+(edge*100).toFixed(1)+")","price already reflects what is known (bias "+(edge*100).toFixed(1)+")")}
+ return "<div class='sug'><div class='l'>"+T("EL TERMINAL SE INCLINA POR","THE TERMINAL LEANS")+"</div><div class='v "+cl+"'>"+txt+"</div><div class='l' style='text-transform:none;letter-spacing:0'>"+por+" · <b>"+T("tú decides","you decide")+"</b></div></div>";
+}
+
 function tkCompleto(tk){
  if(!tk)return "";
  tk=String(tk).toUpperCase();
