@@ -7,6 +7,15 @@ ya lleva `index.html` dentro. Se despliega copiando y pegando en el panel de
 Cloudflare. Tamaño actual: **76 KB comprimidos**, contra el límite de 1 MB del plan
 gratuito.
 
+Para cargarlo en el portapapeles de una vez:
+
+```bash
+cd C:\Users\colon\Proyectos\mor-terminal; node sync.mjs; cmd /c "type worker.js | clip"
+```
+
+Usa `type ... | clip`, no `Set-Clipboard`: con archivos de este tamano el segundo
+falla en silencio y deja el portapapeles vacio.
+
 ---
 
 ## Antes de pegar: sincronizar
@@ -43,7 +52,8 @@ Eso es todo. La interfaz nueva sale al recargar.
 
 ### Alternativa con wrangler (si prefieres línea de comandos)
 
-Hace falta crear `wrangler.toml`, que ahora mismo **no existe** en el repositorio:
+`wrangler.toml` **ya esta en el repositorio**, con tu binding real, tu cron y tu
+fecha de compatibilidad leidos del Worker en produccion. Solo hace falta:
 
 ```toml
 name = "mor-terminal"
@@ -64,8 +74,11 @@ Y luego:
 npx wrangler deploy
 ```
 
-La primera vez abre el navegador para autorizar. El `id` del namespace lo ves en
-*Workers & Pages → KV*.
+La primera vez abre el navegador para autorizar.
+
+⚠️ Probado en este equipo y **falla**: `wrangler login` se cae con `Assertion
+failed` de libuv en Windows y nunca recibe el testigo. La via recomendada sigue
+siendo copiar y pegar.
 
 ---
 
@@ -88,6 +101,12 @@ memoria del vigilante de 8-K.
 
 Cada día a las 07:00 hace el snapshot de contratos, revisa los 8-K nuevos, anota
 las señales del día y liquida las que ya hayan resuelto.
+
+### Asistente (Workers AI)
+
+*Settings → Bindings → Add → Workers AI*, con nombre exactamente `AI`.
+Sin esto el asistente responde con un error explicando que falta; el resto del
+terminal funciona igual.
 
 ### Variables opcionales
 
