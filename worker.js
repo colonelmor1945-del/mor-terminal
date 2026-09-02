@@ -2562,7 +2562,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="kpi"><div class="k">IMPLEMENTADO</div><div class="v" id="l1">—</div><div class="s">métodos en producción</div></div>
     <div class="kpi c2"><div class="k">EN COLA</div><div class="v" id="l2">—</div><div class="s">por orden de prioridad</div></div>
     <div class="kpi c3"><div class="k">DESCARTADO</div><div class="v" id="l3">—</div><div class="s">no aplica a binarios</div></div>
-    <div class="kpi c4"><div class="k">CUELLO DE BOTELLA</div><div class="v" style="font-size:15px">muestra</div><div class="s">no faltan métodos, falta evidencia</div></div>
+    <div class="kpi c4"><div class="k">CUELLO DE BOTELLA</div><div class="v" id="l4" style="font-size:15px">muestra</div><div class="s">no faltan métodos, falta evidencia</div></div>
   </div>
 
   <div class="p" style="margin-bottom:8px">
