@@ -231,6 +231,8 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 /* El modo sencillo NO esconde herramientas: las traduce. Solo se oculta el
    comando de texto, que es para teclear ordenes tipo terminal.                  */
 body.simple .solo-cmd{display:none !important}
+/* Columnas y celdas de matematica: fuera en modo sencillo. */
+body.simple .mates{display:none !important}
 body.simple .ayuda{display:block}
 .ayuda{display:none;font-size:12px;line-height:1.55;color:var(--txt);background:rgba(255,159,26,.06);
  border-left:2px solid var(--am);padding:8px 11px;margin:0 0 8px}
@@ -261,6 +263,28 @@ kbd{border:1px solid var(--line);padding:0 4px;color:var(--dim);font-size:9px}
 svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 .lg{display:flex;gap:12px;padding:4px 10px;font-size:9.5px;color:var(--dim);flex-wrap:wrap}
 .lg i{display:inline-block;width:8px;height:8px;margin-right:4px}
+/* --- buscador global --- */
+#pal{position:fixed;inset:0;z-index:200;background:rgba(3,5,8,.72);backdrop-filter:blur(3px);display:none}
+#pal.on{display:block}
+#palc{max-width:640px;margin:9vh auto 0;background:var(--pane);border:1px solid var(--line);
+ border-radius:10px;box-shadow:0 24px 70px rgba(0,0,0,.6);overflow:hidden}
+#palq{width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);color:var(--txt);
+ font:600 15px/1 inherit;padding:15px 17px;outline:none;letter-spacing:.01em}
+#palr{max-height:56vh;overflow:auto}
+#palr .it{display:flex;align-items:center;gap:10px;padding:9px 17px;cursor:pointer;border-left:2px solid transparent}
+#palr .it.sel{background:var(--pane2);border-left-color:var(--am)}
+#palr .it .tg{font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--bg);
+ background:var(--dim);border-radius:3px;padding:2px 5px;flex:none;min-width:64px;text-align:center;font-weight:700}
+#palr .it .tg.v{background:var(--am)} #palr .it .tg.e{background:var(--cy)}
+#palr .it .tg.m{background:var(--vi)} #palr .it .tg.c{background:var(--gr)}
+#palr .it .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px}
+#palr .it .d{font-size:10px;color:var(--dim2);flex:none}
+#palf{padding:7px 17px;border-top:1px solid var(--line);font-size:10px;color:var(--dim2);display:flex;gap:14px}
+#palf kbd{background:var(--pane2);border:1px solid var(--line);border-radius:3px;padding:1px 5px;font-size:9px}
+#buscar{display:flex;align-items:center;gap:7px;background:var(--pane2);border:1px solid var(--line);
+ border-radius:6px;padding:5px 10px;cursor:pointer;color:var(--dim);font-size:11px;margin-left:10px}
+#buscar:hover{border-color:var(--am);color:var(--txt)}
+#buscar kbd{background:var(--bg);border:1px solid var(--line);border-radius:3px;padding:1px 4px;font-size:9px}
 </style>
 </head>
 <body>
@@ -293,9 +317,11 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="lt ld" id="L2"><b></b><span>PM</span></div>
     <div class="lt ld" id="L3"><b></b><span>NEWS</span></div>
   </div>
+  <div id="buscar" title="Buscar en todo el terminal"><span>⌕</span><span id="buscar-t">Buscar…</span><kbd>Ctrl K</kbd></div>
   <button class="rl" id="rel">⟳ REFRESH</button>
   <div class="clk" id="clk"></div>
 </div>
+<div id="pal"><div id="palc"><input id="palq" autocomplete="off" spellcheck="false" placeholder="Ir a una vista, empresa, mercado o contrato…"><div id="palr"></div><div id="palf"><span><kbd>↑↓</kbd> moverse</span><span><kbd>↵</kbd> abrir</span><span><kbd>Esc</kbd> cerrar</span></div></div></div>
 <div class="tape"><div class="run" id="tape"></div></div>
 <div class="nav2" id="nav2"></div>
 <div class="nav" id="nav">
@@ -404,7 +430,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="bd"><table><thead><tr>
       <th style="width:9%">Fiabilidad</th><th data-k="q">Mercado</th>
       <th data-k="p" style="width:8%">Prob.</th><th style="width:8%">Estimado</th>
-      <th data-k="c1d" style="width:7%">Δ24h</th><th data-k="vol24" style="width:9%">Vol 24h</th>
+      <th class="mates" data-k="c1d" style="width:7%">Δ24h</th><th data-k="vol24" style="width:9%">Vol 24h</th>
       <th data-k="liq" style="width:9%">Liquidez</th><th style="width:16%">Señales</th>
     </tr></thead><tbody id="p-rows"></tbody></table></div>
   </div>
@@ -436,8 +462,8 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="bd"><table><thead><tr>
       <th data-k="name" style="width:17%">Empresa</th><th style="width:9%">Precio</th>
       <th data-k="r1" style="width:7%">1M</th><th data-k="r3" style="width:7%">3M</th><th data-k="r6" style="width:7%">6M</th>
-      <th data-k="vol" style="width:8%">Vol.anual</th><th data-k="dd" style="width:8%">Max DD</th>
-      <th data-k="z" style="width:8%">Z-score</th><th style="width:13%">Tendencia</th><th style="width:12%">Señal</th>
+      <th class="mates" data-k="vol" style="width:8%">Vol.anual</th><th class="mates" data-k="dd" style="width:8%">Max DD</th>
+      <th class="mates" data-k="z" style="width:8%">Z-score</th><th style="width:13%">Tendencia</th><th style="width:12%">Señal</th>
     </tr></thead><tbody id="q-rows"></tbody></table></div>
     <div class="st">Z-score = media de los z de los retornos 1M/3M/6M (momentum compuesto transversal). Vol. anual = desviación típica de retornos diarios × √252. Max DD = mayor caída desde máximo. Informativo, no es recomendación.</div>
   </div>
@@ -488,10 +514,10 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="bd"><table><thead><tr>
       <th style="width:9%">Fiabilidad</th>
       <th data-k="q" style="width:22%">Mercado</th><th data-k="p" style="width:7%">Precio</th>
-      <th style="width:9%">Estimado</th><th data-k="edge" style="width:7%">Sesgo</th>
+      <th style="width:9%">Estimado</th><th class="mates" data-k="edge" style="width:7%">Sesgo</th>
       <th data-k="spreadRel" style="width:8%">Spread rel.</th><th data-k="turn" style="width:7%">Rotación</th>
-      <th data-k="snorm" style="width:8%">σ norm.</th><th data-k="urg" style="width:7%">Urgencia</th>
-      <th data-k="days" style="width:7%">Días</th><th data-k="z" style="width:7%">Z mom.</th><th style="width:8%">Señal</th>
+      <th class="mates" data-k="snorm" style="width:8%">σ norm.</th><th class="mates" data-k="urg" style="width:7%">Urgencia</th>
+      <th data-k="days" style="width:7%">Días</th><th class="mates" data-k="z" style="width:7%">Z mom.</th><th style="width:8%">Señal</th>
     </tr></thead><tbody id="b-rows"></tbody></table></div>
     <div class="st"><b>Fiabilidad</b> no dice si vas a ganar: dice si el mercado tiene libro, liquidez y un coste de entrar razonable, o si es una trampa donde entrar y salir te cuesta más que la ventaja. <b>Estimado</b> es la probabilidad que calcula el terminal: precio medio del libro, sin el sobre-redondeo del grupo, y corregido por el sesgo favorito-longshot con λ=0,183 — calibrada sobre 291.000 contratos resueltos, no sobre nuestra muestra, que era demasiado pequeña para fiarse. Mira siempre la confianza debajo. <b>Que el estimado difiera del precio NO es una predicción</b>: ninguna estrategia direccional superó al azar en 4.010 millones de operaciones simuladas.<br>Justo (Wang) = g⁻¹(precio) = Φ(Φ⁻¹(p) − λ), la probabilidad sin la prima de riesgo que el mercado incorpora. Sesgo = precio − justo: positivo significa longshot caro. σ norm. = volatilidad realizada ÷ √(p(1−p)), comparable entre niveles de precio. Urgencia = 2p(1−p)/√días. Informativo, no es recomendación.</div>
   </div>
@@ -604,7 +630,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="bd"><table><thead><tr>
       <th style="width:24%">Estrategia</th><th style="width:7%">Apuestas</th><th style="width:8%">Acierto</th>
       <th style="width:10%">Medio</th><th style="width:9%">Mediana</th><th style="width:10%">Total</th><th style="width:9%">Max DD</th>
-      <th style="width:9%">t-stat</th><th style="width:18%">¿Significativo?</th>
+      <th class="mates" style="width:9%">t-stat</th><th style="width:18%">¿Significativo?</th>
     </tr></thead><tbody id="sim-rows"></tbody></table></div>
     <div class="st">Media y mediana divergen mucho a propósito: un longshot acertado a 0.02 paga 50× y arrastra la media él solo, así que la mediana dice mejor qué pasa en la apuesta típica. Retorno por unidad arriesgada: comprar SÍ a precio p paga (desenlace − p)/p. t-stat = media ÷ (desviación/√n): por encima de 2 el resultado difícilmente es azar. En divisas se muestra <b>agrupado por par y con ventanas sin solapar</b>, y debajo el «ingenuo» para que veas la diferencia: contar ventanas solapadas como si fueran independientes dispara el t-stat y hace pasar por ventaja lo que es ruido. <b>Rentabilidad pasada simulada sobre datos históricos; no predice resultados futuros y no descuenta el impacto de mercado. Informativo, no es recomendación de inversión ni de apuesta.</b></div>
   </div>
@@ -928,6 +954,108 @@ function spark(el,v,c){if(!v||v.length<2){el.innerHTML="";return}
  "<polyline points='0,"+h+" "+p+" "+w+","+h+"' fill='"+c+"' opacity='.12' stroke='none'/>"+
  "<polyline points='"+p+"' fill='none' stroke='"+c+"' stroke-width='1.4' vector-effect='non-scaling-stroke'/></svg>"}
 
+/* Grafico de precio estilo mesa quant: precio, medias 50/200, retrocesos de
+   Fibonacci sobre el rango del periodo, sombreado de la maxima caida y cruceta.
+   Recibe cierres escalares -que es lo que devuelve la API- y no necesita fechas. */
+function mediaMovil(c,p){var o=[],a=0;for(var i=0;i<c.length;i++){a+=c[i];if(i>=p)a-=c[i-p];o.push(i>=p-1?a/p:null)}return o}
+function precioChart(el,c,op){
+ op=op||{};
+ if(!el)return;
+ if(!c||c.length<5){el.innerHTML=emp("\uD83D\uDCC9",T("Sin datos de precio.","No price data."));return}
+ var W=780,H=250,ml=8,mr=62,mt=14,mb=20,iw=W-ml-mr,ih=H-mt-mb;
+ var lo=Math.min.apply(null,c), hi=Math.max.apply(null,c), rg=(hi-lo)||1;
+ // Un 6% de aire arriba y abajo para que la linea no bese los bordes.
+ var y0=lo-rg*0.06, y1=hi+rg*0.06, yr=y1-y0;
+ var X=function(i){return ml+(c.length>1?i*iw/(c.length-1):0)};
+ var Y=function(v){return mt+ih-((v-y0)/yr)*ih};
+ var dec=hi<10?3:(hi<1000?2:0);
+ var f=function(v){return v.toFixed(dec)};
+
+ // --- maxima caida: del pico anterior al valle mas profundo ---
+ var pico=c[0],ipico=0,mejorPico=0,mejorValle=0,peor=0;
+ for(var i=0;i<c.length;i++){
+  if(c[i]>pico){pico=c[i];ipico=i}
+  var d=c[i]/pico-1;
+  if(d<peor){peor=d;mejorPico=ipico;mejorValle=i}
+ }
+
+ var g="";
+ // rejilla y eje de precios a la derecha
+ for(var k=0;k<=4;k++){
+  var v=y0+yr*k/4, y=Y(v);
+  g+="<line x1='"+ml+"' y1='"+y.toFixed(1)+"' x2='"+(W-mr)+"' y2='"+y.toFixed(1)+"' stroke='#161d27'/>"+
+     "<text x='"+(W-mr+6)+"' y='"+(y+3.5).toFixed(1)+"' fill='#5a636d' font-size='10'>"+f(v)+"</text>";
+ }
+ // --- retrocesos de Fibonacci sobre el rango del periodo ---
+ if(op.fib!==false){
+  [0,0.236,0.382,0.5,0.618,1].forEach(function(r){
+   var v=hi-(hi-lo)*r, y=Y(v);
+   g+="<line x1='"+ml+"' y1='"+y.toFixed(1)+"' x2='"+(W-mr)+"' y2='"+y.toFixed(1)+
+      "' stroke='#8b7fc7' stroke-width='.8' stroke-dasharray='2,4' opacity='.5'/>"+
+      "<text x='"+(ml+4)+"' y='"+(y-3).toFixed(1)+"' fill='#8b7fc7' font-size='9' opacity='.85'>"+
+      (r*100).toFixed(1).replace(".0","")+"%</text>";
+  });
+ }
+ // --- zona de maxima caida ---
+ if(peor<-0.05&&mejorValle>mejorPico){
+  g+="<rect x='"+X(mejorPico).toFixed(1)+"' y='"+mt+"' width='"+(X(mejorValle)-X(mejorPico)).toFixed(1)+
+     "' height='"+ih+"' fill='#f0605d' opacity='.07'/>"+
+     "<text x='"+((X(mejorPico)+X(mejorValle))/2).toFixed(1)+"' y='"+(mt+12)+
+     "' text-anchor='middle' fill='#f0605d' font-size='9' opacity='.9'>"+(peor*100).toFixed(0)+"%</text>";
+ }
+ // --- area y linea de precio ---
+ var pts=c.map(function(v,i){return X(i).toFixed(1)+","+Y(v).toFixed(1)}).join(" ");
+ g+="<polygon points='"+ml+","+(mt+ih)+" "+pts+" "+X(c.length-1).toFixed(1)+","+(mt+ih)+
+    "' fill='url(#gpx)' opacity='.5'/>"+
+    "<polyline points='"+pts+"' fill='none' stroke='#5aa8c7' stroke-width='1.5' vector-effect='non-scaling-stroke'/>";
+ // --- medias moviles ---
+ [[50,"#e3a44a"],[200,"#8b7fc7"]].forEach(function(m){
+  if(c.length<m[0]+2)return;
+  var mm=mediaMovil(c,m[0]),p=[];
+  for(var i=0;i<mm.length;i++)if(mm[i]!==null)p.push(X(i).toFixed(1)+","+Y(mm[i]).toFixed(1));
+  if(p.length>1)g+="<polyline points='"+p.join(" ")+"' fill='none' stroke='"+m[1]+
+   "' stroke-width='1.1' opacity='.8' vector-effect='non-scaling-stroke'/>";
+ });
+ // --- ultimo precio, con su etiqueta en el eje ---
+ var uv=c[c.length-1],uy=Y(uv);
+ g+="<line x1='"+ml+"' y1='"+uy.toFixed(1)+"' x2='"+(W-mr)+"' y2='"+uy.toFixed(1)+
+    "' stroke='#e6edf3' stroke-width='.7' stroke-dasharray='3,3' opacity='.55'/>"+
+    "<circle cx='"+X(c.length-1).toFixed(1)+"' cy='"+uy.toFixed(1)+"' r='3' fill='#e6edf3'/>"+
+    "<rect x='"+(W-mr+2)+"' y='"+(uy-8).toFixed(1)+"' width='56' height='16' rx='2' fill='#e6edf3'/>"+
+    "<text x='"+(W-mr+8)+"' y='"+(uy+3.5).toFixed(1)+"' fill='#07090c' font-size='10' font-weight='700'>"+f(uv)+"</text>";
+
+ el.innerHTML=
+  "<div style='display:flex;gap:12px;font-size:9px;color:var(--dim2);padding:0 4px 3px;flex-wrap:wrap'>"+
+   "<span><b style='color:#5aa8c7'>&#9473;</b> "+T("precio","price")+"</span>"+
+   "<span><b style='color:#e3a44a'>&#9473;</b> "+T("media 50","50-day avg")+"</span>"+
+   "<span><b style='color:#8b7fc7'>&#9473;</b> "+T("media 200","200-day avg")+"</span>"+
+   "<span><b style='color:#8b7fc7'>&#9476;</b> Fibonacci</span>"+
+   "<span><b style='color:#f0605d'>&#9608;</b> "+T("peor caída","max drawdown")+"</span>"+
+  "</div>"+
+  "<svg viewBox='0 0 "+W+" "+H+"' style='width:100%;height:calc(100% - 14px)' preserveAspectRatio='none'>"+
+   "<defs><linearGradient id='gpx' x1='0' y1='0' x2='0' y2='1'>"+
+    "<stop offset='0%' stop-color='#5aa8c7' stop-opacity='.34'/>"+
+    "<stop offset='100%' stop-color='#5aa8c7' stop-opacity='0'/></linearGradient></defs>"+
+   g+"<g class='cruz'></g></svg>";
+
+ // --- cruceta: lee el precio del punto que senala el raton ---
+ var svg=el.querySelector("svg"),cruz=svg.querySelector(".cruz");
+ svg.addEventListener("mousemove",function(ev){
+  var r=svg.getBoundingClientRect();
+  var i=Math.round(((ev.clientX-r.left)/r.width*W-ml)/(iw||1)*(c.length-1));
+  if(i<0||i>=c.length){cruz.innerHTML="";return}
+  var x=X(i),y=Y(c[i]),izq=x>W*0.6;
+  cruz.innerHTML="<line x1='"+x.toFixed(1)+"' y1='"+mt+"' x2='"+x.toFixed(1)+"' y2='"+(mt+ih)+
+   "' stroke='#e6edf3' stroke-width='.7' opacity='.45'/>"+
+   "<circle cx='"+x.toFixed(1)+"' cy='"+y.toFixed(1)+"' r='3.5' fill='#e6edf3'/>"+
+   "<text x='"+(izq?x-8:x+8).toFixed(1)+"' y='"+(y-9).toFixed(1)+"' fill='#e6edf3' font-size='11' font-weight='700' text-anchor='"+
+   (izq?"end":"start")+"'>"+f(c[i])+"</text>"+
+   "<text x='"+(izq?x-8:x+8).toFixed(1)+"' y='"+(y+4).toFixed(1)+"' fill='#8b949e' font-size='9' text-anchor='"+
+   (izq?"end":"start")+"'>"+(c.length-1-i)+T(" sesiones atrás"," sessions ago")+"</text>";
+ });
+ svg.addEventListener("mouseleave",function(){cruz.innerHTML=""});
+}
+
 function areaChart(el,pts,col,fmtY){
  if(!pts.length){el.innerHTML=emp("📉","Sin datos");return}
  var W=760,H=190,ml=52,mb=22,mt=10,mr=8;
@@ -1201,7 +1329,7 @@ function render(){
        (m.ev ? "<div class='dsc'>" + esc(m.ev.slice(0,50)) + "</div>" : "") + "</td>" +
      "<td class='n'>" + p + "%<div class='pbar'><i style='width:" + p + "%'></i></div></td>" +
      "<td class='n'>" + (es.est*100).toFixed(1) + "%<div class='conf'>" + esc(es.confianza) + "</div></td>" +
-     "<td class='n " + ((m.c1d||0) >= 0 ? "up" : "dn") + "'>" +
+     "<td class='n mates " + ((m.c1d||0) >= 0 ? "up" : "dn") + "'>" +
        ((m.c1d||0) >= 0 ? "+" : "") + ((m.c1d||0)*100).toFixed(1) + "</td>" +
      "<td class='n'>" + f$(m.vol24||0) + "</td>" +
      "<td class='n dsc'>" + f$(m.liq||0) + "</td>" +
@@ -1529,7 +1657,11 @@ function renderBrain(){
  var mej=conV.slice().sort(function(a,b){return (b.net||b.neto)-(a.net||a.neto)})[0];
  $("b3").textContent=mej?bfmt(mej.net!==undefined?mej.net:mej.neto,2):"—";
  $("b3s").textContent=mej?mej.ev.slice(0,42):"ninguno cubre costes";
- $("b4").textContent=BLAM.toFixed(3);
+ /* La lambda es un numero que no dice nada a nadie sin contexto. En modo sencillo
+    se muestra la conclusion; en completo, la cifra. */
+ $("b4").textContent = (MODO==="simple")
+   ? (BNLAM<3 ? "sin datos" : (BLAM>0.02 ? "sí" : (BLAM<-0.02 ? "al revés" : "no")))
+   : BLAM.toFixed(3);
  $("b4s").textContent=(BNLAM<3?"muestra insuficiente ("+BNLAM+" grupos)":
    (BLAM>0.02?"longshots caros · "+BNLAM+" grupos":(BLAM<-0.02?"sesgo invertido · "+BNLAM+" grupos":"sin sesgo apreciable · "+BNLAM+" grupos")));
 
@@ -1578,13 +1710,13 @@ function renderBrain(){
    "<td><b>"+bfmt(m.p,1)+"</b></td>"+
    "<td title='"+esc(es.como)+"'>"+bfmt(es.est,1)+
      "<br><span class='conf'>"+esc(es.confianza)+"</span></td>"+
-   "<td class='"+(es.dif>0?"up":"dn")+"'>"+(es.dif>=0?"+":"")+(es.dif*100).toFixed(1)+"</td>"+
-   "<td class='"+(m.spreadRel>0.1?"dn":"")+"'>"+bfmt(m.spreadRel,1)+"</td>"+
-   "<td class='"+(m.turn!==null&&m.turn<0.02?"dn":"")+"'>"+(m.turn===null?"—":m.turn.toFixed(2))+"</td>"+
-   "<td>"+(m.snorm===null?"<span class='dim'>—</span>":m.snorm.toFixed(2))+"</td>"+
-   "<td>"+(m.urg===null?"—":m.urg.toFixed(3))+"</td>"+
+   "<td class='mates "+(es.dif>0?"up":"dn")+"'>"+(es.dif>=0?"+":"")+(es.dif*100).toFixed(1)+"</td>"+
+   "<td class='mates "+(m.spreadRel>0.1?"dn":"")+"'>"+bfmt(m.spreadRel,1)+"</td>"+
+   "<td class='mates "+(m.turn!==null&&m.turn<0.02?"dn":"")+"'>"+(m.turn===null?"—":m.turn.toFixed(2))+"</td>"+
+   "<td class='mates'>"+(m.snorm===null?"<span class='dim'>—</span>":m.snorm.toFixed(2))+"</td>"+
+   "<td class='mates'>"+(m.urg===null?"—":m.urg.toFixed(3))+"</td>"+
    "<td class='dim'>"+(m.days===null?"—":Math.round(m.days))+"</td>"+
-   "<td class='"+(m.z>0?"up":"dn")+"'>"+m.z.toFixed(2)+"</td>"+
+   "<td class='mates "+(m.z>0?"up":"dn")+"'>"+m.z.toFixed(2)+"</td>"+
    "<td>"+m.sg.map(function(s){return "<span class='"+s[1]+"'>"+s[0]+"</span>"}).join(" ")+"</td>"+
   "</tr>"}).join("")||"<tr><td colspan='11'>"+emp("🔍","Sin resultados para ese filtro.")+"</td></tr>"}
 
@@ -2009,9 +2141,13 @@ function renderSim(){
  var b=BT,best=b.strats[0];
  $("s1").textContent=b.S.length;
  $("s1s").textContent=b.fx?(b.series+" pares · mantener "+b.H+" días"):("entrada a "+b.H+" días del cierre");
- $("s2").textContent=b.brier===null?"—":b.brier.toFixed(4);
+ $("s2").textContent = b.brier===null ? "—"
+   : (MODO==="simple" ? (b.brier<b.brierBase ? "mejor que el azar" : "peor que el azar")
+                      : b.brier.toFixed(4));
  $("s2s").textContent=b.brier===null?"no aplica a divisas":((b.brier<b.brierBase?"mejor":"peor")+" que la tasa base ("+b.brierBase.toFixed(4)+")");
- $("s3").textContent=b.lam===null?"—":b.lam.toFixed(3);
+ $("s3").textContent = b.lam===null ? "—"
+   : (MODO==="simple" ? (b.lam>0.02 ? "sí, los hay" : (b.lam<-0.02 ? "al revés" : "no se aprecia"))
+                      : b.lam.toFixed(3));
  $("s3s").textContent=b.lam===null?(b.fx?"no aplica a divisas":"no converge"):(b.lam>0.02?"longshots caros de verdad":(b.lam<-0.02?"sesgo invertido":"sin sesgo medible"));
  $("s4").textContent=best?((best.total>=0?"+":"")+best.total.toFixed(1)+"u"):"—";
  $("s4s").textContent=best?best.name:"—";
@@ -2027,7 +2163,7 @@ function renderSim(){
    "<td class='"+(s.med>=0?"up":"dn")+"'>"+(s.med>=0?"+":"")+(s.med*100).toFixed(1)+"%</td>"+
    "<td class='"+(s.total>=0?"up":"dn")+"'><b>"+(s.total>=0?"+":"")+s.total.toFixed(1)+"u</b></td>"+
    "<td class='dn'>−"+s.dd.toFixed(1)+"u</td>"+
-   "<td>"+s.t.toFixed(2)+(s.tIng!==undefined?"<br><span class='dim' style='font-size:9px'>ingenuo "+s.tIng.toFixed(2)+"</span>":"")+"</td>"+
+   "<td class='mates'>"+s.t.toFixed(2)+(s.tIng!==undefined?"<br><span class='dim' style='font-size:9px'>ingenuo "+s.tIng.toFixed(2)+"</span>":"")+"</td>"+
    "<td><span class='"+sig[1]+"'>"+sig[0]+"</span></td></tr>"}).join("")}
 
 /* ================= DETALLE DE MERCADO =================
@@ -2046,7 +2182,7 @@ function feAbrir(tk,sinApilar){
  var e=null;
  for(var i=0;i<SC.length;i++)if(SC[i].tk===tk){e=SC[i];break}
  if(!e)return;
- FE=e;$("fe").classList.add("on");
+ FE=e;$("fe").classList.add("on");if(typeof rutaEscribe=="function")setTimeout(rutaEscribe,0);
  $("fe-n").textContent=e.name;
  var tkc=e.tk.split(":").pop();
  /* Enlaces al exterior. Robinhood solo lista valores de EE.UU., asi que solo se
@@ -2083,7 +2219,7 @@ function feAbrir(tk,sinApilar){
   (sim?k("SÍMBOLO",esc(sim)):"");
 
  // --- precio ---
- if(q&&q.c){ $("fe-px").innerHTML=areaChart(q.c) }
+ if(q&&q.c){ precioChart($("fe-px"),q.c) }
  else {
   $("fe-px").innerHTML=emp("&#9203;","Descargando el precio\u2026");
   // Se descarga SOLO el de esta empresa: cargar las 33 aqui seria absurdo.
@@ -2094,7 +2230,7 @@ function feAbrir(tk,sinApilar){
      if(!j||!j.c||j.c.length<5)throw 0;
      PX[e.tk]={c:j.c,d:j.d};
      if(!FE||FE.tk!==e.tk)return;
-     $("fe-px").innerHTML=areaChart(j.c);
+     precioChart($("fe-px"),j.c);
      var u=j.c[j.c.length-1];
      var m1=j.c.length>21?((u/j.c[j.c.length-22]-1)*100):null;
      var celda=$("fe-met").querySelector(".pxlive");
@@ -2181,14 +2317,14 @@ function conAbrir(nombre){
    "<div class='m'>"+esc((c.desc||"").slice(0,150))+"</div></div>"}).join("")||
   emp("—","Sin detalle.");}
 
-function feCerrar(){$("fe").classList.remove("on");FE=null}
+function feCerrar(){$("fe").classList.remove("on");FE=null;if(typeof rutaEscribe=="function")rutaEscribe()}
 
 function dtOpen(id,sinApilar){
  if(!sinApilar)apilar();
  var m=null;
  if(BQ)for(var i=0;i<BQ.markets.length;i++)if(String(BQ.markets[i].id)===String(id)){m=BQ.markets[i];break}
  if(!m)return;
- DT=m;$("dt").classList.add("on");
+ DT=m;$("dt").classList.add("on");if(typeof rutaEscribe=="function")setTimeout(rutaEscribe,0);
  $("dt-q").textContent=m.q;
  $("dt-sub").innerHTML=(m.ev?esc(m.ev)+" · ":"")+
    "<a href='"+esc(m.url)+"' target='_blank' rel='noopener'>abrir en Polymarket ↗</a>"+
@@ -2236,7 +2372,7 @@ function dtOpen(id,sinApilar){
    .catch(function(){$("dt-del").innerHTML=emp("⚠️","Flujo no disponible.")})}
  else $("dt-del").innerHTML=emp("—","Sin identificador de mercado.")}
 
-function dtClose(){$("dt").classList.remove("on");DT=null}
+function dtClose(){$("dt").classList.remove("on");DT=null;if(typeof rutaEscribe=="function")rutaEscribe()}
 
 function dtMetrics(m){
  var k=function(l,v,c){return "<div><div class='l'>"+l+"</div><div class='v "+(c||"")+"'>"+v+"</div></div>"};
@@ -3103,6 +3239,7 @@ function go(v,sinApilar){
  VIEW=v;
  ["ini","dash","con","sc","pm","news","quant","brain","sim","cart","inv","lib"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
  [].forEach.call($("nav").querySelectorAll("button[data-v]"),function(b){b.classList.toggle("on",b.dataset.v===v)});
+ if(typeof rutaEscribe==="function")setTimeout(rutaEscribe,0);
  if(typeof GACT!=="undefined"&&grupoDe(v)!==GACT){GACT=grupoDe(v);pintarNav()}
  if(v==="news")loadNews(NR);
  if(v==="con"&&!EDG&&!EDGL)loadEdgar();
@@ -3112,6 +3249,123 @@ function go(v,sinApilar){
  if(v==="sim"&&!PAP)loadPaper();
  render()}
 [].forEach.call($("nav").querySelectorAll("button[data-v]"),function(b){b.onclick=function(){go(b.dataset.v)}});
+
+/* ============ BUSCADOR GLOBAL, DIRECCIONES Y BOTON ATRAS ============ */
+
+var PAL_VISTAS=[
+ ["ini","Inicio","resumen del dia"],["dash","Resumen","todo de un vistazo"],
+ ["con","Contratos","adjudicaciones del Pentágono"],["sc","Empresas","tu lista de valores"],
+ ["pm","Apuestas","mercados de Polymarket"],["news","Noticias","titulares del sector"],
+ ["quant","Análisis de empresas","momentum y riesgo"],["brain","Oportunidades","arbitraje y señales"],
+ ["sim","¿Esto funciona?","simulaciones y pruebas"],["cart","Cuánto apostar","tamaño de posición"],
+ ["inv","Investigación","ideas sin validar"],["lib","Biblioteca","métodos y fuentes"]];
+
+/* Coincidencia por subsecuencia: "avav" encuentra "AeroVironment (AVAV)" y
+   "lokh" encuentra "Lockheed". Puntua mejor lo que empieza igual. */
+function palPunt(txt,q){
+ var t=txt.toLowerCase(), i=t.indexOf(q);
+ if(i===0)return 1000; if(i>0)return 700-i;
+ var pi=0,pt=0,ini=-1;
+ while(pi<q.length&&pt<t.length){ if(t[pt]===q[pi]){ if(ini<0)ini=pt; pi++ } pt++ }
+ return pi===q.length?300-Math.min(ini,60):-1;
+}
+
+function palBuscar(q){
+ q=(q||"").trim().toLowerCase();
+ var r=[];
+ var mete=function(tipo,tg,nom,det,acc){
+  var p=q?palPunt(nom+" "+det,q):500;
+  if(p<0)return; r.push({p:p,tg:tg,cl:tipo,n:nom,d:det,acc:acc});
+ };
+ PAL_VISTAS.forEach(function(v){ mete("v",T("VISTA","VIEW"),v[1],v[2],function(){go(v[0])}) });
+ // Empresas: siempre disponibles, la lista es fija.
+ if(q)SC.forEach(function(e){
+  mete("e",T("EMPRESA","COMPANY"),e.name+" ("+e.tk+")",e.n||"",function(){go("sc");feAbrir(e.tk)});
+ });
+ // Mercados: solo si el cerebro esta cargado; si no, no hay nada que indexar.
+ if(q&&typeof BQ!=="undefined"&&BQ&&BQ.markets)BQ.markets.slice(0,900).forEach(function(m){
+  mete("m",T("APUESTA","MARKET"),m.q,(m.ev||"")+" · "+(m.p*100).toFixed(0)+"%",function(){go("pm");dtOpen(m.id)});
+ });
+ // Contratos del mes.
+ if(q&&typeof CON!=="undefined")CON.slice(0,400).forEach(function(c){
+  mete("c",T("CONTRATO","CONTRACT"),c.name,f$(c.amount),function(){go("con");conAbrir(c.name)});
+ });
+ r.sort(function(a,b){return b.p-a.p});
+ return r.slice(0,40);
+}
+
+var PALI=0,PALR=[];
+function palPinta(){
+ var h=PALR.map(function(x,i){
+  return "<div class='it"+(i===PALI?" sel":"")+"' data-i='"+i+"'>"+
+   "<span class='tg "+x.cl+"'>"+x.tg+"</span>"+
+   "<span class='n'>"+esc(x.n)+"</span>"+
+   "<span class='d'>"+esc(x.d||"")+"</span></div>";
+ }).join("");
+ $("palr").innerHTML=h||"<div class='it' style='color:var(--dim2)'>"+T("Nada coincide.","No matches.")+"</div>";
+ var sel=$("palr").querySelector(".sel"); if(sel&&sel.scrollIntoView)sel.scrollIntoView({block:"nearest"});
+}
+function palAbrir(){
+ $("pal").classList.add("on"); $("palq").value=""; PALI=0;
+ PALR=palBuscar(""); palPinta(); setTimeout(function(){$("palq").focus()},30);
+}
+function palCerrar(){ $("pal").classList.remove("on") }
+function palIr(i){
+ var x=PALR[i]; if(!x)return; palCerrar();
+ try{ x.acc() }catch(e){}
+}
+
+/* ---- direcciones: #sc, #emp/NASDAQ:AVAV, #pm/0x1234 ---- */
+var RUTA_INT=false;   // evita que escribir la ruta dispare el popstate
+function rutaEscribe(){
+ var h="#"+VIEW;
+ if($("fe").classList.contains("on")&&FE)h="#emp/"+FE.tk;
+ else if($("dt").classList.contains("on")&&DT)h="#mer/"+DT.id;
+ if(location.hash===h)return;
+ RUTA_INT=true; try{ history.pushState({},"",h) }catch(e){} RUTA_INT=false;
+}
+function rutaLee(){
+ var h=(location.hash||"").replace(/^#/,"");
+ if(!h){go("ini");return}
+ var pa=h.split("/");
+ if(pa[0]==="emp"&&pa[1]){ go("sc"); feAbrir(decodeURIComponent(pa[1]),true); return }
+ if(pa[0]==="mer"&&pa[1]){ go("pm"); dtOpen(decodeURIComponent(pa[1]),true); return }
+ for(var i=0;i<PAL_VISTAS.length;i++)if(PAL_VISTAS[i][0]===pa[0]){ go(pa[0],true); return }
+}
+
+(function(){
+ $("buscar").onclick=palAbrir;
+ $("pal").onclick=function(ev){ if(ev.target===$("pal"))palCerrar() };
+ $("palq").oninput=function(){ PALR=palBuscar(this.value); PALI=0; palPinta() };
+ $("palq").onkeydown=function(ev){
+  if(ev.key==="ArrowDown"){ PALI=Math.min(PALI+1,PALR.length-1); palPinta(); ev.preventDefault() }
+  else if(ev.key==="ArrowUp"){ PALI=Math.max(PALI-1,0); palPinta(); ev.preventDefault() }
+  else if(ev.key==="Enter"){ palIr(PALI); ev.preventDefault() }
+  else if(ev.key==="Escape"){ palCerrar() }
+ };
+ $("palr").onclick=function(ev){
+  var it=ev.target.closest?ev.target.closest(".it"):null;
+  if(it&&it.dataset.i!==undefined)palIr(+it.dataset.i);
+ };
+ document.addEventListener("keydown",function(ev){
+  // Ctrl+K / Cmd+K abre el buscador desde cualquier sitio.
+  if((ev.ctrlKey||ev.metaKey)&&(ev.key==="k"||ev.key==="K")){ ev.preventDefault(); palAbrir(); return }
+  if(ev.key==="Escape"){
+   if($("pal").classList.contains("on")){ palCerrar(); return }
+   // Esc cierra lo que este abierto, de dentro hacia fuera.
+   if($("fe").classList.contains("on")){ feCerrar(); rutaEscribe(); return }
+   if($("dt").classList.contains("on")){ dtClose(); rutaEscribe(); return }
+  }
+  // "/" para buscar, salvo si se esta escribiendo en un campo.
+  if(ev.key==="/"&&!/^(input|textarea|select)$/i.test((ev.target.tagName||""))){
+   ev.preventDefault(); palAbrir();
+  }
+ });
+ window.addEventListener("popstate",function(){ if(!RUTA_INT)rutaLee() });
+ // Al arrancar, respeta la direccion con la que se ha entrado.
+ if(location.hash)setTimeout(rutaLee,400);
+})();
+
 $("nav2").addEventListener("click",function(e){if(e.target.dataset&&e.target.dataset.g)irGrupo(e.target.dataset.g)});
 $("cmd").addEventListener("input",function(e){e.target.dataset.q=e.target.value;render()});
 $("cmd").addEventListener("keydown",function(e){
