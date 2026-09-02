@@ -1191,6 +1191,7 @@ const CHAT_ACCIONES = [
   ["ficha:TICKER",   "abrir la ficha de una empresa, p.ej. ficha:NASDAQ:BYRN"],
   ["cargar_precios", "descargar los precios de las 33 empresas"],
   ["cargar_divisas", "descargar y analizar las 18 divisas (momentum, regimen, cointegracion)"],
+  ["buscar_oportunidades", "PEINAR EL TERRENO: cargar lo que falte y revisar empresas, apuestas, divisas y arbitrajes, y contar lo mejor de cada uno. Usala siempre que pidan buscar oportunidades, que mires que hay, o que le eches un vistazo a todo"],
   ["simular",        "lanzar el backtest sobre Polymarket (tarda 1-3 min)"],
   ["simular_divisas","lanzar el backtest sobre divisas"],
   ["prueba_choque",  "lanzar el Monte Carlo contra el azar"],
@@ -1234,6 +1235,27 @@ const CHAT_SISTEMA =
 
 /* Reune el contexto con lo que ya calcula el terminal. Se recorta a proposito: los
    modelos gratuitos tienen ventana corta y un contexto enorme empeora la respuesta. */
+/* Que necesita esta pregunta. Barato y explicito: mejor una regla que se lee
+   que un clasificador que hay que adivinar. */
+function chatIntencion(q, hayEmpresa) {
+  const t = " " + String(q || "").toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") + " ";
+  const tiene = re => re.test(t);
+  const saludo = /^\s*(hola|buenas|hey|que tal|holi|buenos dias|buenas tardes|buenas noches|gracias|adios|ok|vale)\s*[!?.]*\s*$/i
+    .test(String(q || "").trim());
+  return {
+    saludo: saludo,
+    empresa: hayEmpresa,
+    // Apuestas: arbitraje, mercados, probabilidades.
+    pm: !saludo && (hayEmpresa === null || !hayEmpresa) &&
+        tiene(/arbitraje|apuesta|mercado|polymarket|probabilidad|prediccion|cuota|longshot|grupo|cuentas/),
+    // Presentaciones a la SEC.
+    edgar: !saludo && tiene(/8-k|8k|sec|edgar|presentacion|aviso oficial|comunicado/),
+    // Contratos del Pentagono.
+    con: !saludo && tiene(/contrato|pentagono|dod|adjudic|licitac|defensa de ee|usaspending/)
+  };
+}
+
 async function chatContexto(pregunta) {
   const q = String(pregunta || "").toLowerCase();
 
@@ -1252,12 +1274,22 @@ async function chatContexto(pregunta) {
     return (n.length > 3 && q.includes(n.split(" ")[0].toLowerCase())) || (t.length > 2 && q.includes(t));
   });
 
-  const [px, lit, pmq, ed, con] = await Promise.all([
+  /* Solo se pide lo que la pregunta necesita. Antes se pedia todo siempre y un
+     saludo costaba 21 segundos. Si no hay ninguna senal clara se cae al bloque
+     de apuestas, que es el nucleo del terminal. */
+  const it = chatIntencion(q, !!emp);
+  const nada = !it.empresa && !it.pm && !it.edgar && !it.con && !it.saludo;
+  const quierePm = it.pm || nada;
+
+  const [px, lit, intra, pmq, ed, con] = await Promise.all([
     emp ? limite(fetchPx(emp.tk.split(":").pop()), 6, null) : null,
     emp ? limite(fetchLitigios(730, emp.tk), 8, null) : null,
-    limite(fetchPMQ(1), 9, null),
-    limite(fetchEdgar(30), 9, null),
-    limite(fetchContracts(30, 100), 8, null)
+    // Barras horarias solo si preguntan por horas: es lo unico que las usa.
+    (emp && /\bhora|intradia|hoy mismo|ahora mismo|corto plazo|minutos\b/.test(q))
+      ? limite(fetchIntra(emp.tk.split(":").pop()), 6, null) : null,
+    quierePm ? limite(fetchPMQ(1), 9, null) : null,
+    it.edgar ? limite(fetchEdgar(30), 9, null) : null,
+    (it.con || it.empresa) ? limite(fetchContracts(30, 100), 8, null) : null
   ]);
 
   const partes = [];
@@ -1270,6 +1302,13 @@ async function chatContexto(pregunta) {
       partes.push("PRECIO: " + u.toFixed(2) + " " + (px.cur || "") +
                   (m1 !== null ? ", " + (m1 >= 0 ? "+" : "") + m1 + "% en el ultimo mes" : ""));
     } else partes.push("PRECIO: no disponible ahora mismo");
+    if (intra && isFinite(intra.sigmaBarra)) {
+      const s8 = intra.sigmaBarra * Math.sqrt(8);
+      partes.push("MOVIMIENTO EN 8 HORAS (medido sobre " + intra.barras + " barras horarias): " +
+        "se mueve +-" + (s8 * 100).toFixed(2) + "% dos de cada tres veces, y +-" +
+        (1.96 * s8 * 100).toFixed(2) + "% casi siempre. El mayor salto real de 8 horas del ultimo mes fue " +
+        (intra.peor8 * 100).toFixed(2) + "%. Esto es CUANTO se mueve, no hacia donde.");
+    }
     if (lit && lit.casos) {
       partes.push("PLEITOS (2 anos): " + (lit.casos.length
         ? lit.casos.slice(0, 3).map(c => c.fecha + " " + c.caso + " [" + c.natTxt + "]").join(" | ")
@@ -1344,9 +1383,19 @@ async function chatContexto(pregunta) {
   return partes.join(String.fromCharCode(10));
 }
 
-async function chatResponder(env, pregunta, estado) {
+async function chatResponder(env, pregunta, estado, historia) {
   const p = String(pregunta || "").trim().slice(0, 400);
   const est = String(estado || "").trim().slice(0, 1500);
+  /* Historia: pares "tu|ia" separados por barra vertical doble, ya recortados
+     por el cliente. Se validan aqui igualmente. */
+  let hist = [];
+  try {
+    hist = String(historia || "").split("||").filter(Boolean).slice(-6).map(x => {
+      const i = x.indexOf("|");
+      const rol = x.slice(0, i) === "ia" ? "assistant" : "user";
+      return { role: rol, content: x.slice(i + 1).slice(0, 400) };
+    });
+  } catch (e) { hist = []; }
   if (!p) return { error: "pregunta vacia" };
   if (!env.AI) return {
     error: "Falta el binding AI. En el panel de Cloudflare: Settings -> Bindings -> " +
@@ -1356,11 +1405,33 @@ async function chatResponder(env, pregunta, estado) {
   const ctx = await chatContexto(p);
   const mensajes = [
     { role: "system", content: CHAT_SISTEMA },
+    ...hist,
     { role: "user", content: "CONTEXTO (datos reales de ahora mismo):\n" + ctx +
                              (est ? "\n\nLO QUE EL USUARIO TIENE EN PANTALLA:\n" + est : "") +
                              "\n\nPREGUNTA: " + p }
   ];
 
+  /* Si la pregunta nombra una empresa o pide algo inequivoco, la accion la
+     decide una regla. El modelo solo elige cuando no esta claro. */
+  function accionPorRegla(txt) {
+    const t = " " + String(txt || "").toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") + " ";
+    const e = SC.find(s => {
+      const nom = s.name.toLowerCase().split(" ")[0];
+      const tk = String(s.tk).split(":").pop().toLowerCase();
+      return (nom.length > 3 && t.indexOf(nom) >= 0) || (tk.length > 2 && t.indexOf(" " + tk + " ") >= 0);
+    });
+    if (e) return "ficha:" + e.tk;
+    if (/busca|buscar|peina|echa un vistazo|que hay|encuentra|oportunidad|revisa todo|mira todo|escanea/.test(t)) return "buscar_oportunidades";
+    if (/\bveredicto|que compro|que vendo|donde entro|hasta cuando|stop|objetivo|posicion\b/.test(t)) return "ver_veredicto";
+    if (/\barbitraje|cuentas que no cuadran|sobra dinero\b/.test(t)) return "ver_oportunidades";
+    if (/\bdivisa|forex|euro|dolar|yen|par de\b/.test(t)) return "ver_analisis";
+    if (/\bsimula|backtest|funciona|acierto|t-stat|azar\b/.test(t)) return "ver_simulador";
+    if (/\bcontrato|pentagono|adjudic\b/.test(t)) return "ver_contratos";
+    if (/\bnoticia|titular|prensa\b/.test(t)) return "ver_noticias";
+    return null;
+  }
+  const accionRegla = accionPorRegla(p);
   const validas = CHAT_ACCIONES.map(a => a[0]);
   let ultimo = "";
   for (const modelo of CHAT_MODELOS) {
@@ -1383,7 +1454,8 @@ async function chatResponder(env, pregunta, estado) {
         if (validas.indexOf(a) >= 0 || (base === "ficha" && a.length > 6)) accion = a;
         txt = txt.replace(m[0], "").trim();
       }
-      return { respuesta: txt, accion: accion, modelo: modelo, contexto: ctx };
+      // La regla manda: solo se usa la del modelo si no habia regla aplicable.
+      return { respuesta: txt, accion: accionRegla || accion, modelo: modelo, contexto: ctx };
     } catch (e) { ultimo = String(e && e.message || e); }
   }
   return { error: "Ningun modelo respondio (" + ultimo + ")", contexto: ctx };
@@ -4957,6 +5029,267 @@ function iaMsg(txt,clase){
    no pasa nada. El worker ya valida, esto es la segunda barrera.                 */
 /* Resumen de lo que hay en pantalla para que la IA lo vea. Corto a proposito:
    va en la URL y el modelo no necesita mas. */
+
+/* ---------- Okapi BM25 en JavaScript, sin dependencias ---------- */
+var BM_K1=1.5, BM_B=0.75;   // constantes habituales de la literatura
+function bmTok(t){
+ return String(t||"").toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g,"")
+  .split(/[^a-z0-9ñ]+/).filter(function(x){return x.length>2});
+}
+function bmIndexar(docs){
+ var N=docs.length, df={}, tf=[], len=[], tot=0;
+ for(var i=0;i<N;i++){
+  var ts=bmTok(docs[i].texto), c={};
+  for(var j=0;j<ts.length;j++)c[ts[j]]=(c[ts[j]]||0)+1;
+  tf.push(c); len.push(ts.length); tot+=ts.length;
+  for(var k in c)df[k]=(df[k]||0)+1;
+ }
+ return {docs:docs,N:N,df:df,tf:tf,len:len,avg:N?tot/N:1};
+}
+function bmBuscar(idx,q,top){
+ if(!idx||!idx.N)return [];
+ var ts=bmTok(q); if(!ts.length)return [];
+ var res=[];
+ for(var i=0;i<idx.N;i++){
+  var sc=0;
+  for(var j=0;j<ts.length;j++){
+   var t=ts[j], f=idx.tf[i][t]; if(!f)continue;
+   // idf de Robertson, acotado por abajo para que no salga negativo.
+   var idf=Math.log(1+(idx.N-idx.df[t]+0.5)/(idx.df[t]+0.5));
+   var norm=f*(BM_K1+1)/(f+BM_K1*(1-BM_B+BM_B*idx.len[i]/idx.avg));
+   sc+=idf*norm;
+  }
+  /* Bonus por titulo. Sin esto, la entrada que DEFINE "arbitraje" perdia contra
+     las que solo lo mencionan, porque la palabra sale en tantos documentos que
+     su idf es minimo. Pesar el titulo aparte es lo habitual. */
+  var tit=bmTok(idx.docs[i].t||"");
+  if(tit.length){
+   var hay=0;
+   for(var m=0;m<tit.length;m++)if(ts.indexOf(tit[m])>=0)hay++;
+   if(hay)sc+=2.2*hay/tit.length*(1+Math.log(1+hay));
+  }
+  if(sc>0)res.push({s:sc,d:idx.docs[i]});
+ }
+ res.sort(function(a,b){return b.s-a.s});
+ return res.slice(0,top||3);
+}
+
+/* ---------- Conocimiento del propio terminal ----------
+   Se construye del HTML ya escrito -glosario, biblioteca, explicaciones- para
+   que no haya dos versiones de la misma frase que puedan desincronizarse. */
+
+/* Terminos que el terminal usa y no estaban explicados en ningun sitio. Van al
+   indice del asistente para que pueda responder que significa cada cosa con una
+   definicion escrita a proposito, en vez de con el parrafo mas parecido. */
+var IA_TERMINOS=[
+ ["Spread","La diferencia entre lo que te piden por comprar y lo que te dan por vender. Es lo que pagas por entrar y salir, aunque aciertes. Si el spread es del 3% y tu ventaja es del 2%, pierdes dinero teniendo razón. El terminal lo estima del propio precio con el método EDGE.","pm"],
+ ["Coste real de operar","El spread efectivo estimado a partir de máximos y mínimos diarios (método EDGE de Ardia, Guidotti y Kroencke). En el veredicto se resta del objetivo: si el neto sale en rojo, la idea no paga ni el peaje. En empresas pequeñas suele ser diez veces mayor que en grandes.","ver"],
+ ["Lambda de Wang","El número que mide cuánto se desvía el precio de una apuesta de su probabilidad real. Con lambda positiva, lo improbable cotiza caro y lo probable barato. El terminal usa 0,183, medido sobre 291.000 contratos ya resueltos. Ojo: los 107 mercados propios dan el signo contrario, y por eso hay un aviso.","brain"],
+ ["Kelly","La fórmula que dice qué porcentaje de tu dinero apostar para crecer lo más rápido posible a largo plazo. Kelly entero aguanta caídas enormes, así que el terminal usa la mitad y nunca pasa del 10%.","cart"],
+ ["Stop","El precio al que sales admitiendo que te equivocaste. En el veredicto está a dos veces el movimiento diario típico: lo bastante lejos para que el ruido normal no lo toque, lo bastante cerca para que la pérdida sea asumible.","ver"],
+ ["Objetivo","El precio al que recoges ganancias. Está al doble de distancia que el stop, para que ganes el doble de lo que arriesgas cuando aciertas. Así puedes fallar más veces de las que aciertas y seguir ganando.","ver"],
+ ["Movimiento diario típico","Cuánto se mueve un precio en una sesión normal. De ahí salen el stop y el objetivo, porque un stop que no respeta la volatilidad de la acción salta por ruido, no por error.","ver"],
+ ["Momentum","Que lo que ha subido tiende a seguir subiendo un tiempo. El terminal lo mide comparando cada empresa con el resto, no contra sí misma, para que no dependa de si todo el sector va bien.","quant"],
+ ["Z-score","Cuántas desviaciones típicas se aparta algo de la media. Por encima de 0 va mejor que el resto; por encima de 2, mucho mejor. Sirve para comparar cosas que no se parecen.","quant"],
+ ["Brier","La nota del que predice: 0 es perfecto y 0,25 es lo que saca tirar una moneda. Sirve para saber si el mercado acierta, no si tú ganas dinero.","sim"],
+ ["t-stat","Cuánto se distingue un resultado de la pura suerte. Por debajo de 2 no se distingue. Cuidado: sale inflado si mides ventanas que se solapan, que es el error más común.","sim"],
+ ["Arbitraje","Ganar sin acertar nada. Si las probabilidades de un grupo de resultados suman 1,05, sobra un 5% y eso se cobra pase lo que pase. Es aritmética, no predicción, y por eso es lo más sólido del terminal.","brain"],
+ ["Monotonía","Si A implica B, A nunca puede cotizar más caro que B. Que Bitcoin llegue a 200.000 implica que llegue a 150.000, así que la primera no puede valer más. Cuando pasa, hay dinero encima de la mesa.","brain"],
+ ["Cointegración","Dos precios que se mueven juntos aunque cada uno vaya a lo suyo. Cuando se separan más de lo normal suelen volver a juntarse. El terminal mide cuánto tardan en volver.","quant"],
+ ["Hurst","Un número que dice si una serie tiene memoria. Por encima de 0,55 las tendencias siguen; por debajo de 0,45 los movimientos se dan la vuelta. En 0,5 es aleatoria.","quant"],
+ ["Régimen","Si el mercado está más nervioso o más tranquilo de lo normal. Se mide comparando la volatilidad de las últimas 20 sesiones con la de las últimas 100.","quant"],
+ ["Longshot","Una apuesta poco probable, que paga mucho si sale. Suelen estar caras porque la gente paga de más por el billete de lotería, aunque en la muestra propia del terminal pasa lo contrario.","pm"],
+ ["Valor justo","Lo que debería costar una apuesta si se corrige el sesgo de que lo improbable cotiza caro. Solo se calcula dentro de un grupo de resultados excluyentes, porque fuera no hay con qué comparar.","brain"],
+ ["8-K","El aviso que una empresa cotizada en Estados Unidos tiene que mandar a la SEC cuando pasa algo relevante. Es el momento exacto en que una información privada se hace pública.","con"],
+ ["Small cap","Empresa cotizada pequeña, aquí entre 50 y 500 millones. Poca gente las sigue, así que su precio reacciona tarde a las noticias.","sc"],
+ ["Veredicto","La pantalla que junta todo y dice dónde conviene comprar o vender, con posición, entrada, stop, objetivo, cuánto y hasta cuándo. Es la lectura del terminal, no una recomendación: decides tú.","ver"]
+];
+
+var IAIDX=null;
+function iaIndice(){
+ if(IAIDX)return IAIDX;
+ var docs=[];
+ // Terminos propios, escritos a proposito para responder "que es X".
+ IA_TERMINOS.forEach(function(x){
+  docs.push({t:x[0],texto:x[0]+" "+x[0]+" "+x[2]+" "+x[1],cuerpo:x[1],fuente:"glosario",ir:x[2]});
+ });
+ // Glosario.
+ [].forEach.call(document.querySelectorAll(".gloss>div"),function(d){
+  var k=d.querySelector(".k"), v=d.querySelector(".v");
+  if(k&&v)docs.push({t:k.textContent.trim(),texto:k.textContent+" "+v.textContent,
+   cuerpo:v.textContent.trim(),fuente:"glosario",ir:null});
+ });
+ // Explicaciones y ayudas de cada vista.
+ [].forEach.call(document.querySelectorAll(".view"),function(v){
+  var id=v.id.replace("v-","");
+  [].forEach.call(v.querySelectorAll(".expl,.ayuda,.st"),function(e){
+   var tx=(e.textContent||"").trim();
+   if(tx.length>60)docs.push({t:(e.closest(".p")&&e.closest(".p").querySelector("h3")?
+    e.closest(".p").querySelector("h3").textContent.trim():id),
+    texto:tx,cuerpo:tx,fuente:"terminal",ir:id});
+  });
+ });
+ // Biblioteca de metodos.
+ if(typeof LIB!=="undefined")LIB.forEach(function(x){
+  docs.push({t:x.fam,texto:x.fam+" "+x.tema+" "+(x.qué||x.que||"")+" "+(x.por||""),
+   cuerpo:(x.qué||x.que||x.tema||""),fuente:"biblioteca",ir:"lib"});
+ });
+ // Que hay en cada pantalla.
+ if(typeof PAL_VISTAS!=="undefined")PAL_VISTAS.forEach(function(v){
+  docs.push({t:v[1],texto:v[1]+" "+v[2],cuerpo:v[2],fuente:"pantalla",ir:v[0]});
+ });
+ IAIDX=bmIndexar(docs);
+ return IAIDX;
+}
+
+/* ---------- Respuestas exactas, sin modelo ----------
+   Hay preguntas cuya respuesta es un numero que el terminal ya tiene. Pasarlas
+   por un modelo de lenguaje solo anade espera y riesgo de que se lo invente. */
+function iaLocal(q){
+ var t=" "+String(q||"").toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g,"")+" ";
+ var emp=null;
+ for(var i=0;i<SC.length;i++){
+  var nom=SC[i].name.toLowerCase().split(" ")[0], tk=String(SC[i].tk).split(":").pop().toLowerCase();
+  if((nom.length>3&&t.indexOf(nom)>=0)||(tk.length>2&&t.indexOf(" "+tk+" ")>=0)){emp=SC[i];break}
+ }
+ // "hasta cuando" / niveles de una empresa concreta
+ if(emp&&/hasta cuando|cuanto aguanto|cuando salgo|cuando vendo|stop|objetivo|entrada|niveles/.test(t)){
+  var q2=null; for(var j=0;j<QUANT.length;j++)if(QUANT[j].s.tk===emp.tk){q2=QUANT[j];break}
+  if(q2&&q2.c&&q2.c.length>60){
+   var dir=(q2.z>0.5&&q2.s50>q2.s200&&q2.dd>-0.4)?1:((q2.z<-0.5&&q2.s50<q2.s200)?-1:0);
+   if(!dir)return {r:emp.name+T(" no da señal clara ahora mismo, así que el terminal no propone ni entrada ni plazo. Momentum z "+q2.z.toFixed(2)+".",
+     " gives no clear signal right now, so the terminal proposes no entry or horizon. Momentum z "+q2.z.toFixed(2)+"."),a:"ficha:"+emp.tk};
+   var nv=nivelesDe(q2.c,dir), br=Math.abs(nv.obj-nv.ent)/nv.ent, d=sesionesHasta(q2.c,br);
+   var sp=(PX[emp.tk]&&typeof PX[emp.tk].spread==="number")?PX[emp.tk].spread:null;
+   return {r:emp.name+": "+T("posición ","position ")+(dir>0?T("alcista","long"):T("bajista","short"))+
+     ". "+T("Entrada ","Entry ")+nv.ent.toFixed(2)+", stop "+nv.stop.toFixed(2)+", "+T("objetivo ","target ")+nv.obj.toFixed(2)+". "+
+     T("Plazo esperado ","Expected horizon ")+plazoTxt(d)+T(", y sales igualmente si ","; exit anyway if ")+
+     (dir>0?T("la media de 50 cae por debajo de la de 200","the 50-day average drops below the 200-day")
+           :T("la media de 50 sube por encima de la de 200","the 50-day average rises above the 200-day"))+". "+
+     (sp===null?T("El coste de operar no es estimable en esta serie.","Trading cost is not estimable in this series.")
+              :T("Descontando el coste real de "+(sp*100).toFixed(2)+"%, queda un "+((br-sp)*100).toFixed(1)+"% neto.",
+                 "After the real "+(sp*100).toFixed(2)+"% cost, "+((br-sp)*100).toFixed(1)+"% net remains."))+
+     " "+T("Decides tú.","You decide."),a:"ficha:"+emp.tk};
+  }
+  return {r:T("Necesito los precios cargados para darte los niveles. Los estoy pidiendo.","I need prices loaded to give you levels. Requesting them now."),a:"cargar_precios"};
+ }
+ // arbitrajes de hoy
+ if(/arbitraje|cuentas que no cuadran|sobra dinero/.test(t)&&typeof BQ!=="undefined"&&BQ&&BQ.groups){
+  var g=BQ.groups.filter(function(x){return x.net>0}).sort(function(a,b){return b.net-a.net}).slice(0,3);
+  if(!g.length)return {r:T("Hoy no hay ningún grupo cuyas cuentas no cuadren lo suficiente para cubrir costes.","No group today is off by enough to cover costs."),a:"ver_oportunidades"};
+  return {r:T("Hay "+BQ.groups.filter(function(x){return x.net>0}).length+" grupos con ventaja neta. Los mayores: ","There are "+BQ.groups.filter(function(x){return x.net>0}).length+" groups with net edge. The largest: ")+
+    g.map(function(x){return x.ev.slice(0,40)+" ("+(x.net*100).toFixed(2)+"%, "+x.side+")"}).join("; ")+
+    ". "+T("Esto es aritmética, no predicción: no hace falta acertar nada.","This is arithmetic, not forecasting: nothing needs to be predicted."),a:"ver_oportunidades"};
+ }
+ // resultado de la simulacion
+ if(/simulacion|backtest|funciona|tasa de acierto|supera al azar/.test(t)&&typeof BT!=="undefined"&&BT&&BT.strats){
+  var b=BT.strats[0];
+  return {r:T("Sobre "+BT.S.length+(BT.fx?" ventanas de divisas":" mercados ya resueltos")+", la mejor es «"+b.name+"»: "+
+    (b.win*100).toFixed(0)+"% de acierto, "+(b.total>=0?"+":"")+b.total.toFixed(1)+" unidades, t="+b.t.toFixed(2)+". "+
+    (Math.abs(b.t)>=2?"Supera el umbral de 2, pero conviene compararla con la referencia antes de creérselo.":"No llega a t=2, así que no se distingue del azar."),
+    "Over "+BT.S.length+" cases, the best is "+b.name+": "+(b.win*100).toFixed(0)+"% hit rate, "+b.total.toFixed(1)+" units, t="+b.t.toFixed(2)+"."),a:"ver_simulador"};
+ }
+ return null;
+}
+
+/* Busca en el conocimiento del terminal y devuelve una respuesta si es clara. */
+function iaDoc(q){
+ var r=bmBuscar(iaIndice(),q,2);
+ // Umbral: por debajo, la coincidencia es casual y es mejor callarse.
+ if(!r.length||r[0].s<5)return null;
+ // Si el segundo va casi igual de bien, la pregunta es ambigua: mejor el modelo.
+ if(r.length>1&&r[1].s>r[0].s*0.9)return null;
+ var d=r[0].d, cuerpo=String(d.cuerpo||"").replace(/\\s+/g," ").trim();
+ if(cuerpo.length<40)return null;
+ return {r:cuerpo.slice(0,420),a:d.ir?("ver_"+({ini:"inicio",con:"contratos",sc:"empresas",pm:"apuestas",
+   news:"noticias",quant:"analisis",ver:"veredicto",brain:"oportunidades",sim:"simulador",
+   cart:"cartera",lib:"metodos"}[d.ir]||"inicio")):null,fuente:d.fuente};
+}
+
+
+/* Espera a que una condicion se cumpla, con tope. Lo que permite que el
+   asistente lance una carga y siga trabajando cuando termine. */
+function iaEsperar(cond,ms,paso){
+ var t0=Date.now(), paso=paso||1200;
+ return new Promise(function(res){
+  (function tic(){
+   if(cond())return res(true);
+   if(Date.now()-t0>(ms||45000))return res(false);
+   setTimeout(tic,paso);
+  })();
+ });
+}
+
+/* Barrido completo: carga lo que falte y devuelve lo mejor de cada fuente. */
+function iaBarrer(){
+ var av=iaMsg(T("Peinando el terreno: empresas, apuestas, divisas y arbitrajes…",
+                "Sweeping: companies, markets, currencies and arbitrage…"),"ia");
+ av.style.borderLeftColor="var(--am)";
+ go("ver");
+ if(!QUANT.length&&!QLOAD)loadPx();
+ if(!BQ&&!BLOAD)loadBrain();
+ if(!FXQ.length&&!FXQLOAD)fxLoad();
+ return iaEsperar(function(){return QUANT.length&&BQ&&FXQ.length},60000).then(function(ok){
+  renderVer();
+  var out=[], nada=[];
+
+  // --- empresas ---
+  var emps=[];
+  QUANT.forEach(function(q){
+   if(!q.c||q.c.length<60)return;
+   var dir=(q.z>0.5&&q.s50>q.s200&&q.dd>-0.4)?1:((q.z<-0.5&&q.s50<q.s200)?-1:0);
+   if(!dir)return;
+   var nv=nivelesDe(q.c,dir), br=Math.abs(nv.obj-nv.ent)/nv.ent;
+   var sp=(PX[q.s.tk]&&typeof PX[q.s.tk].spread==="number")?PX[q.s.tk].spread:null;
+   emps.push({n:q.s.name,tk:q.s.tk,dir:dir,z:q.z,neto:sp===null?null:br-sp,
+    plazo:sesionesHasta(q.c,br)});
+  });
+  emps.sort(function(a,b){return Math.abs(b.z)-Math.abs(a.z)});
+  if(emps.length){
+   out.push(T("EMPRESAS: ","COMPANIES: ")+emps.slice(0,3).map(function(x){
+    return x.n+" "+(x.dir>0?T("alcista","long"):T("bajista","short"))+
+     (x.neto===null?"":" ("+(x.neto*100).toFixed(1)+T("% neto","% net")+")")+
+     (x.plazo?", "+plazoTxt(x.plazo):"")}).join("; "));
+  } else nada.push(T("empresas","companies"));
+
+  // --- arbitrajes: lo mas solido, porque es aritmetica ---
+  var ar=(BQ.groups||[]).filter(function(g){return g.net>0}).sort(function(a,b){return b.net-a.net});
+  if(ar.length)out.push(T("ARBITRAJE (no hace falta acertar nada): ","ARBITRAGE (no forecasting needed): ")+
+   ar.slice(0,3).map(function(g){return g.ev.slice(0,38)+" +"+(g.net*100).toFixed(2)+"% ("+g.side+")"}).join("; "));
+  else nada.push(T("arbitrajes","arbitrage"));
+
+  // --- apuestas ---
+  var ap=[];
+  (BQ.markets||[]).forEach(function(m){
+   if(typeof m.edge!=="number"||m.fair===null)return;
+   if(m.spreadRel>0.15||m.p<0.03||m.p>0.97)return;
+   if(Math.abs(m.edge)>Math.max(0.03,m.spreadRel))ap.push(m);
+  });
+  ap.sort(function(a,b){return Math.abs(b.edge)-Math.abs(a.edge)});
+  if(ap.length)out.push(T("APUESTAS: ","MARKETS: ")+ap.slice(0,3).map(function(m){
+   return m.q.slice(0,34)+" "+(m.edge<0?T("barata","cheap"):T("cara","rich"))+" "+(Math.abs(m.edge)*100).toFixed(1)+T(" pts"," pts")}).join("; "));
+  else nada.push(T("apuestas","markets"));
+
+  // --- divisas ---
+  var fx=FXQ.filter(function(x){return x.sig!=="—"}).sort(function(a,b){return Math.abs(b.z)-Math.abs(a.z)});
+  if(fx.length)out.push(T("DIVISAS: ","CURRENCIES: ")+fx.slice(0,3).map(function(x){
+   return x.n+" "+(x.sig==="COMPRA"?T("alcista","long"):T("bajista","short"))+" (z "+x.z.toFixed(2)+")"}).join("; "));
+  else nada.push(T("divisas","currencies"));
+
+  var txt=out.length?out.join(String.fromCharCode(10)+String.fromCharCode(10)):
+   T("No hay nada que destaque ahora mismo en ninguna de las cuatro fuentes.","Nothing stands out right now in any of the four sources.");
+  if(nada.length&&out.length)txt+=String.fromCharCode(10)+String.fromCharCode(10)+
+   T("Sin señal en: ","No signal in: ")+nada.join(", ")+".";
+  if(!ok)txt+=String.fromCharCode(10)+T("(alguna fuente tardó demasiado y va con lo que llegó)","(a source timed out; this uses what arrived)");
+  txt+=String.fromCharCode(10)+String.fromCharCode(10)+
+   T("Lo tienes todo con entrada, stop, objetivo y plazo en la pantalla que te he abierto. Decides tú.",
+     "Full entries, stops, targets and horizons are on the screen I opened. You decide.");
+  var d=iaMsg(txt,"ia"); decir(txt);
+  IAHIST.push(["ia",txt.slice(0,300)]); if(IAHIST.length>6)IAHIST=IAHIST.slice(-6);
+  return true;
+ });
+}
+
 function iaEstado(){
  var p=[];
  try{
@@ -5023,6 +5356,7 @@ function iaEjecutar(a){
   for(var i=0;i<SC.length;i++)if(SC[i].tk===tk){feAbrir(tk);return "Te abro la ficha de "+SC[i].name+"."}
   return null}
  if(a==="cargar_precios"){go("quant");if(!QLOAD)loadPx();return "Descargando precios, tarda unos segundos."}
+ if(a==="buscar_oportunidades"){iaBarrer();return null}
  if(a==="cargar_divisas"){go("quant");fxLoad();setTimeout(function(){try{$("fxload").scrollIntoView({block:"start"})}catch(e){}},300);return "Descargando las 18 divisas."}
  if(a==="simular"){go("sim");setUniv("pm");btRun();return "Simulación lanzada. Tarda 1–3 minutos."}
  if(a==="simular_divisas"){go("sim");setUniv("fx");fxRun();return "Simulando divisas."}
@@ -5032,6 +5366,7 @@ function iaEjecutar(a){
  return null}
 
 /* ---- voz ---- */
+var IAHIST=[];
 var VOZ=null,VOZON=false,HABLAR=false,CONVERSA=false;
 function vozIniciar(){
  var R=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -5071,13 +5406,38 @@ function iaPreguntar(q){
  if(!q||IABUSY)return;
  IABUSY=true;$("iaq").value="";
  iaMsg(q,"tu");
+ /* Primero se intenta contestar con lo que ya sabe el terminal: es instantaneo
+    y no puede inventarse nada. Solo si no hay respuesta clara se llama al
+    modelo, que es lo que cuesta segundos. */
+ /* Si lo que piden es un barrido, se lanza ya: no tiene sentido esperar al
+    modelo para que diga "voy a mirar". */
+ if(/busca|buscar|peina|echa un vistazo|que hay|encuentra|oportunidad|revisa todo|mira todo|escanea/i
+    .test(q.normalize("NFD").replace(/[\\u0300-\\u036f]/g,""))){
+  IAHIST.push(["tu",q]); if(IAHIST.length>6)IAHIST=IAHIST.slice(-6);
+  iaBarrer().then(function(){IABUSY=false});
+  return;
+ }
+ var loc=null;
+ try{ loc = iaLocal(q) || iaDoc(q) }catch(e){ loc=null }
+ if(loc){
+  var d0=iaMsg(loc.r,"ia");
+  if(loc.fuente)d0.insertAdjacentHTML("beforeend","<div class='dsc' style='margin-top:5px'>"+T("de la documentación del terminal","from the terminal's own documentation")+"</div>");
+  decir(loc.r);
+  IAHIST.push(["tu",q],["ia",loc.r.slice(0,300)]); if(IAHIST.length>6)IAHIST=IAHIST.slice(-6);
+  var h0=iaEjecutar(loc.a);
+  if(h0){var e0=iaMsg("▸ "+h0,"ia");e0.style.borderLeftColor="var(--cy)";e0.style.background="rgba(34,211,238,.07)"}
+  IABUSY=false; return;
+ }
  var esp=iaMsg("Consultando tus datos…","ia");
- api("/api/chat?q="+encodeURIComponent(q)+"&estado="+encodeURIComponent(iaEstado()),{cache:"no-store"})
+ api("/api/chat?q="+encodeURIComponent(q)+"&estado="+encodeURIComponent(iaEstado())+
+     "&hist="+encodeURIComponent(IAHIST.map(function(x){return x[0]+"|"+x[1]}).join("||")),{cache:"no-store"})
   .then(function(r){return r.json()})
   .then(function(j){
    if(j.error){esp.className="iab err";esp.textContent=j.error;return}
    esp.textContent=j.respuesta;
    decir(j.respuesta);
+   IAHIST.push(["tu",q],["ia",String(j.respuesta).slice(0,300)]);
+   if(IAHIST.length>6)IAHIST=IAHIST.slice(-6);
    var hecho=iaEjecutar(j.accion);
    if(hecho){var d=iaMsg("▸ "+hecho,"ia");d.style.borderLeftColor="var(--cy)";d.style.background="rgba(34,211,238,.07)"}})
   .catch(function(e){esp.className="iab err";esp.textContent="No se pudo consultar: "+(e.message||e)})
@@ -6082,7 +6442,7 @@ export default {
       if (p === "/api/relaciones/todo") return json(await relAcumulado(env), cab);
       if (p === "/api/relaciones/agente") return json(await relAgente(env), cab);
       if (p === "/api/pago") return json(await verificarPago(env, url.searchParams.get("sig")), cab);
-      if (p === "/api/chat") return json(await chatResponder(env, url.searchParams.get("q"), url.searchParams.get("estado")), cab);
+      if (p === "/api/chat") return json(await chatResponder(env, url.searchParams.get("q"), url.searchParams.get("estado"), url.searchParams.get("hist")), cab);
       if (p === "/api/ynews") return json(await fetchYNews(url.searchParams.get("s")), cab);
       if (p === "/api/litigios") return json(await fetchLitigios(Number(url.searchParams.get("d")) || 365, url.searchParams.get("tk")), cab);
       if (p === "/api/edgar") return json(await fetchEdgar(Number(url.searchParams.get("d")) || 30), cab);
