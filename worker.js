@@ -1233,6 +1233,213 @@ async function chatResponder(env, pregunta) {
   return { error: "Ningun modelo respondio (" + ultimo + ")", contexto: ctx };
 }
 
+/* ---------- GRAFO DE RESTRICCIONES LOGICAS ENTRE EVENTOS ----------
+   Polymarket trata cada evento por separado, asi que nadie comprueba si mercados
+   de eventos DISTINTOS se contradicen entre si. "Cae el regimen irani antes de
+   2027" implica "cambio de liderazgo en Iran antes de 2027": la primera nunca
+   puede cotizar mas cara que la segunda.
+
+   REPARTO DE TRABAJO, y es lo que hace esto honesto:
+     La IA PROPONE la relacion logica. La ARITMETICA la juzga.
+
+   El modelo solo responde una de cuatro etiquetas. Nunca estima probabilidades,
+   nunca predice. Si alucina una relacion, el peor caso es que la comprobacion no
+   encuentre violacion y no pase nada: NO puede inventarse una ventaja, porque la
+   ventaja la calcula la aritmetica. Reconocer implicacion entre dos frases es la
+   unica tarea donde un modelo de lenguaje no puede mentirte de forma peligrosa.  */
+
+const REL_SISTEMA =
+  "Eres un clasificador de logica. Te doy dos afirmaciones sobre el futuro (A y B).\n" +
+  "Responde UNA SOLA palabra, sin explicar nada:\n" +
+  "  IMPLICA_AB  si siempre que A sea cierta, B tiene que ser cierta.\n" +
+  "  IMPLICA_BA  si siempre que B sea cierta, A tiene que ser cierta.\n" +
+  "  EXCLUYE     si A y B no pueden ser ciertas a la vez.\n" +
+  "  NINGUNA     en cualquier otro caso, incluido si solo estan relacionadas por tema.\n" +
+  "Se ESTRICTO: 'relacionadas' o 'parecidas' NO es implicacion. Ante la duda, NINGUNA.";
+
+/* Palabras que no distinguen nada: sin quitarlas, "will the" empareja todo. */
+/* Enfrentamientos directos: un partido no implica logicamente otro, son sucesos
+   independientes por construccion. Solo generan ruido en el emparejador y gastan
+   consultas al modelo para nada.                                               */
+const REL_DEPORTE = /vs.?| v.? |bo[1-9]|match|game [0-9]|playoffs?|winner.*(cup|league|open|series|championship|tournament)|counter-?strike|dota|league of legends|valorant|nba|nfl|mlb|nhl|ufc|atp|wta/i;
+
+const REL_VACIAS = new Set(("will the be by on in of a an and or to for at from is are was " +
+  "before after during any more than what which who when how much many new next this that " +
+  "there their its it his her they them he she we you i us our").split(" "));
+
+function relClaves(q) {
+  const t = String(q || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/);
+  const out = new Set();
+  for (const w of t) if (w.length >= 4 && !REL_VACIAS.has(w)) out.add(w);
+  return out;
+}
+
+/* Candidatos: mercados de EVENTOS DISTINTOS que comparten entidades. Sin este
+   filtro serian 400x400 = 160.000 pares y no cabria ni en tiempo ni en cuota.   */
+function relCandidatos(markets, maxPares) {
+  const vivos = markets.filter(m => m.live && m.liq > 3000 && m.p > 0.01 && m.p < 0.99
+                                    && !REL_DEPORTE.test(m.q))
+                       .slice(0, 140)
+                       .map(m => ({ m: m, k: relClaves(m.q) }));
+
+  /* Rareza de cada palabra. Sin esto el emparejador se llena de partidas de
+     Counter-Strike, que comparten "counter", "strike" e "iem" y se emparejan entre
+     si sin tener nada que ver. Una palabra que sale en 30 mercados es plantilla,
+     no entidad: solo cuentan las que aparecen en pocos.                         */
+  const frec = {};
+  vivos.forEach(v => v.k.forEach(w => { frec[w] = (frec[w] || 0) + 1; }));
+  const peso = w => {
+    const f = frec[w] || 1;
+    if (f > vivos.length * 0.12) return 0;      // plantilla: no cuenta
+    return Math.log(vivos.length / f);          // cuanto mas rara, mas pesa
+  };
+
+  const pares = [];
+  for (let i = 0; i < vivos.length; i++) {
+    for (let j = i + 1; j < vivos.length; j++) {
+      const a = vivos[i], b = vivos[j];
+      if (a.m.evSlug && a.m.evSlug === b.m.evSlug) continue;   // mismo evento: ya cubierto
+      let comunes = 0, fuerza = 0;
+      for (const w of a.k) if (b.k.has(w)) { const p = peso(w); if (p > 0) { comunes++; fuerza += p; } }
+      if (comunes < 2 || fuerza < 5) continue;
+      /* Dos preguntas casi identicas salvo por los numeros son tramos del mismo
+         indicador (rangos de tuits, de temperatura, de precio). Eso es exclusion,
+         no implicacion, y es donde el modelo mas se equivoca. Fuera.            */
+      const limpia = q => String(q).toLowerCase().replace(/[0-9]+/g, "#").replace(/[^a-z# ]/g, "").trim();
+      if (limpia(a.m.q) === limpia(b.m.q)) continue;
+      pares.push({ a: a.m, b: b.m, comunes: comunes, fuerza: fuerza });
+    }
+  }
+  pares.sort((x, y) => (y.fuerza - x.fuerza) || ((y.a.liq + y.b.liq) - (x.a.liq + x.b.liq)));
+  return pares.slice(0, maxPares);
+}
+
+/* Coherencia al invertir: si el modelo dice "A implica B", al preguntarle (B,A)
+   TIENE que decir "B es implicada por A". Si contesta lo mismo en ambos ordenes no
+   esta razonando, esta reconociendo un patron, y su etiqueta no vale. Cuesta el
+   doble de consultas -que se cachean- y mata la mayoria de falsos positivos.    */
+function relInversa(r) {
+  if (r === "IMPLICA_AB") return "IMPLICA_BA";
+  if (r === "IMPLICA_BA") return "IMPLICA_AB";
+  return r;   // EXCLUYE y NINGUNA son simetricas
+}
+
+async function relClasificar(env, a, b) {
+  // La relacion logica entre dos preguntas NO cambia con el tiempo: se cachea.
+  const clave = "rel:" + (await sha256(a.q + "||" + b.q)).slice(0, 24);
+  if (env.RADAR) {
+    const c = await env.RADAR.get(clave);
+    if (c) return { rel: c, cache: true };
+  }
+  if (!env.AI) return { rel: "NINGUNA", error: "sin binding AI" };
+
+  const mensajes = [
+    { role: "system", content: REL_SISTEMA },
+    { role: "user", content: "A: " + a.q + BR + "B: " + b.q }
+  ];
+  let rel = "NINGUNA";
+  for (const modelo of CHAT_MODELOS) {
+    try {
+      const r = await Promise.race([
+        env.AI.run(modelo, { messages: mensajes, max_tokens: 12 }),
+        new Promise((_, rj) => setTimeout(() => rj(new Error("lento")), 12000))
+      ]);
+      const t = ((r && (r.response || r.result || "")) + "").toUpperCase();
+      const m = t.match(/IMPLICA_AB|IMPLICA_BA|EXCLUYE|NINGUNA/);
+      if (m) { rel = m[0]; break; }
+    } catch (e) {}
+  }
+  // Segunda pasada con el orden invertido. Solo se acepta si son coherentes.
+  if (rel !== "NINGUNA") {
+    let rel2 = "NINGUNA";
+    const men2 = [
+      { role: "system", content: REL_SISTEMA },
+      { role: "user", content: "A: " + b.q + BR + "B: " + a.q }
+    ];
+    for (const modelo of CHAT_MODELOS) {
+      try {
+        const r = await Promise.race([
+          env.AI.run(modelo, { messages: men2, max_tokens: 12 }),
+          new Promise((_, rj) => setTimeout(() => rj(new Error("lento")), 12000))
+        ]);
+        const t = ((r && (r.response || r.result || "")) + "").toUpperCase();
+        const mm = t.match(/IMPLICA_AB|IMPLICA_BA|EXCLUYE|NINGUNA/);
+        if (mm) { rel2 = mm[0]; break; }
+      } catch (e) {}
+    }
+    if (rel2 !== relInversa(rel)) rel = "NINGUNA";   // incoherente -> se descarta
+  }
+
+  if (env.RADAR) await env.RADAR.put(clave, rel, { expirationTtl: 2592000 });
+  return { rel: rel, cache: false };
+}
+
+/* La aritmetica. Aqui no hay modelo ni criterio: o los numeros violan la relacion
+   o no la violan.                                                               */
+function relVerificar(rel, a, b) {
+  const coste = (a.spread + b.spread) / 2;
+  if (rel === "IMPLICA_AB") {
+    // A implica B  =>  p(A) <= p(B)
+    const v = a.p - b.p;
+    if (v > 0) return { viola: true, bruto: v, coste: coste, neto: v - coste,
+      dice: "«" + a.q.slice(0, 60) + "» implica «" + b.q.slice(0, 60) + "», asi que no puede cotizar mas cara",
+      accion: "vender A (" + (a.p * 100).toFixed(1) + "%) y comprar B (" + (b.p * 100).toFixed(1) + "%)" };
+  } else if (rel === "IMPLICA_BA") {
+    const v = b.p - a.p;
+    if (v > 0) return { viola: true, bruto: v, coste: coste, neto: v - coste,
+      dice: "«" + b.q.slice(0, 60) + "» implica «" + a.q.slice(0, 60) + "», asi que no puede cotizar mas cara",
+      accion: "vender B (" + (b.p * 100).toFixed(1) + "%) y comprar A (" + (a.p * 100).toFixed(1) + "%)" };
+  } else if (rel === "EXCLUYE") {
+    // No pueden ser ciertas a la vez  =>  p(A) + p(B) <= 1
+    const v = a.p + b.p - 1;
+    if (v > 0) return { viola: true, bruto: v, coste: coste, neto: v - coste,
+      dice: "no pueden pasar las dos, y juntas suman " + ((a.p + b.p) * 100).toFixed(1) + "%",
+      accion: "vender las dos" };
+  }
+  return { viola: false };
+}
+
+async function fetchRelaciones(env, maxPares) {
+  const N = Math.max(4, Math.min(24, maxPares || 12));
+  const datos = await fetchPMQ(2);
+  const pares = relCandidatos(datos.markets, N);
+
+  const hallazgos = [], revisados = [];
+  let deCache = 0, consultas = 0;
+
+  for (const p of pares) {
+    const { rel, cache } = await relClasificar(env, p.a, p.b);
+    if (cache) deCache++; else consultas++;
+    revisados.push({ a: p.a.q.slice(0, 70), b: p.b.q.slice(0, 70), rel: rel, comunes: p.comunes });
+    if (rel === "NINGUNA") continue;
+    const v = relVerificar(rel, p.a, p.b);
+    if (!v.viola) continue;
+    hallazgos.push({
+      rel: rel, dice: v.dice, accion: v.accion,
+      explica: rel === "EXCLUYE"
+        ? "La IA propone que NO pueden ser ciertas las dos a la vez."
+        : "La IA propone que la primera implica la segunda.",
+      comprobar: "Lee ambas preguntas: ¿de verdad no pueden pasar las dos? Ojo con " +
+                 "vueltas electorales, ventanas de fechas distintas y fuentes de resolucion distintas.",
+      bruto: v.bruto, coste: v.coste, neto: v.neto,
+      a: { q: p.a.q, p: p.a.p, url: p.a.url, ev: p.a.ev, liq: p.a.liq },
+      b: { q: p.b.q, p: p.b.p, url: p.b.url, ev: p.b.ev, liq: p.b.liq }
+    });
+  }
+  hallazgos.sort((x, y) => y.neto - x.neto);
+  return {
+    ts: new Date().toISOString(),
+    paresCandidatos: pares.length, consultasIA: consultas, deCache: deCache,
+    hallazgos: hallazgos, revisados: revisados.slice(0, 30),
+    aviso: "PROPUESTAS, no confirmaciones. La IA solo propone la relacion logica y la " +
+           "aritmetica la comprueba, asi que la ventaja nunca se la inventa el modelo. Pero " +
+           "la aritmetica es tan buena como la logica que recibe: en pruebas, un modelo " +
+           "marco como excluyentes \"gana las elecciones de Brasil\" y \"queda segundo en la " +
+           "PRIMERA VUELTA\", y no lo son porque hay segunda vuelta. Lee las dos preguntas " +
+           "enteras antes de operar."
+  };
+}
+
 /* ---------- MOTOR DE PAPEL ----------
    Existe porque el backtest sobre mercados cerrados tiene sesgo de seleccion: se
    piden ordenados por volumen, asi que la muestra son los mercados famosos. Aqui
@@ -1833,6 +2040,18 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
       <h3>DISTORSIÓN DE WANG · PRECIO vs PROBABILIDAD REAL</h3>
       <div class="bd" id="b-wang"></div>
     </div>
+  </div>
+
+  <div class="p" style="margin-bottom:8px">
+    <h3>CONTRADICCIONES ENTRE MERCADOS <span id="rl-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— apuestas de eventos distintos que se contradicen entre sí</span></h3>
+    <div class="chips" style="align-items:center;gap:8px">
+      <label class="st">Pares a revisar <select id="rl-n"><option value="8">8</option><option value="14" selected>14</option><option value="24">24</option></select></label>
+      <button id="rl-run">⟳ Buscar contradicciones</button>
+      <span class="st" id="rl-st">Polymarket trata cada evento por separado, así que nadie comprueba si se contradicen entre sí.</span>
+    </div>
+    <div class="bd" style="max-height:250px;padding:0 4px" id="rl-res"></div>
+    <div class="st"><b>Cómo funciona:</b> la IA solo propone la relación lógica («A implica B», «no pueden pasar las dos»); la ventaja la calcula la <b>aritmética</b>, así que el modelo nunca se la puede inventar. Si propone una relación falsa, sale un falso positivo, no una pérdida.<br>
+    <b class="dn">Verifícalo siempre a mano.</b> En pruebas, un modelo marcó como excluyentes «gana las elecciones de Brasil» y «queda segundo en la <b>primera vuelta</b>» — y no lo son, porque hay segunda vuelta. Lee las dos preguntas enteras.</div>
   </div>
 
   <div class="p" style="margin-bottom:8px">
@@ -2512,7 +2731,7 @@ function render(){
    :"<tr><td colspan='7'>"+(PM.length?emp("🔍","Ningún mercado con esos filtros"):(ERR.pm?emp("⚠","Polymarket no responde"):sk(5)))+"</td></tr>"}
 
  if(VIEW==="quant"){renderQuant()}
- if(VIEW==="brain"){renderBrain()}
+ if(VIEW==="brain"){renderBrain();renderRel()}
  if(VIEW==="sim"){renderSim();renderMC();renderPaper()}
  if(VIEW==="cart"){renderCart()}
  if(VIEW==="lib"){renderLib()}
@@ -2647,6 +2866,39 @@ function renderQuant(){
    aquí, donde cualquiera lo leía abriendo el inspector. Se movió al Worker: ahora
    /api/pmq devuelve ya calculados \`fair\`, \`edge\` y \`lam\`. El cliente solo pinta.
    La curva de distorsión se dibuja con la λ que manda el servidor.               */
+
+var RL=null,RLLOAD=false;
+function loadRel(){
+ if(RLLOAD)return;RLLOAD=true;
+ $("rl-st").textContent="Buscando… la IA clasifica cada par y la aritmética lo comprueba.";
+ api("/api/relaciones?n="+(+$("rl-n").value||14),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){
+   if(j.error)throw new Error(j.error);
+   RL=j;
+   $("rl-st").textContent=j.paresCandidatos+" pares revisados · "+j.consultasIA+" consultas a la IA · "+
+     j.deCache+" de memoria · "+j.hallazgos.length+" contradicción(es)"})
+  .catch(function(e){RL=null;$("rl-st").textContent="Error: "+(e.message||e)})
+  .then(function(){RLLOAD=false;render()})}
+
+function renderRel(){
+ if(!RL){$("rl-res").innerHTML=emp("🔗","Pulsa «Buscar contradicciones».<br>Compara apuestas de eventos distintos que hablan de lo mismo.");return}
+ $("rl-cnt").textContent="("+RL.hallazgos.length+")";
+ if(!RL.hallazgos.length){
+  $("rl-res").innerHTML=emp("✓","Ninguna contradicción ahora mismo.<br><span style='font-size:11px'>Revisadas "+RL.paresCandidatos+" parejas. Que no haya es lo normal: significa que el mercado es coherente.</span>");return}
+ $("rl-res").innerHTML=RL.hallazgos.map(function(h){
+  return "<div style='padding:11px 10px;border-bottom:1px solid var(--line2)'>"+
+   "<div style='display:flex;align-items:center;gap:9px;margin-bottom:7px'>"+
+     "<b class='up' style='font-size:15px'>+"+(h.neto*100).toFixed(2)+"%</b>"+
+     "<span class='t5'>"+esc(h.rel==="EXCLUYE"?"no pueden pasar las dos":"una implica la otra")+"</span>"+
+     "<span class='dim' style='font-size:10.5px'>neto tras costes</span></div>"+
+   "<div class='fila' style='border:0;padding:2px 0'><b>"+(h.a.p*100).toFixed(1)+"%</b> · "+
+     "<a href='"+esc(h.a.url)+"' target='_blank' rel='noopener'>"+esc(h.a.q)+"</a></div>"+
+   "<div class='fila' style='border:0;padding:2px 0'><b>"+(h.b.p*100).toFixed(1)+"%</b> · "+
+     "<a href='"+esc(h.b.url)+"' target='_blank' rel='noopener'>"+esc(h.b.q)+"</a></div>"+
+   "<div class='st' style='padding:6px 0 0'>"+esc(h.dice)+" → <b>"+esc(h.accion)+"</b></div>"+
+   "<div class='st' style='padding:2px 0 0;color:var(--am)'>⚠ "+esc(h.comprobar)+"</div>"+
+  "</div>"}).join("")}
 
 var BQ=null,BVOL={},BLOAD=false,BSORT={k:"vol24",d:-1},BLAM=0,BNLAM=0;
 
@@ -4277,6 +4529,7 @@ document.addEventListener("click",function(e){var t=e.target;
   else{SORT=SORT.k===k?{k:k,d:-SORT.d}:{k:k,d:1}}
   render()}});
 $("bload").onclick=function(){loadBrain(true)};
+$("rl-run").onclick=loadRel;
 $("srun").onclick=btRun;
 [].forEach.call(document.querySelectorAll(".lf"),function(b){b.onclick=function(){
  LF=b.dataset.f;[].forEach.call(document.querySelectorAll(".lf"),function(o){o.classList.toggle("on",o===b)});render()}});
@@ -4507,6 +4760,7 @@ export default {
       if (p === "/api/news") return json(await fetchNews(url.searchParams.get("region") || "Pentágono"), cab);
       if (p === "/api/pmq") return json(await fetchPMQ(Number(url.searchParams.get("pages")) || 3), cab);
       if (p === "/api/pmh") return json(await fetchPMHist(url.searchParams.get("t"), url.searchParams.get("i")), cab);
+      if (p === "/api/relaciones") return json(await fetchRelaciones(env, Number(url.searchParams.get("n")) || 12), cab);
       if (p === "/api/pago") return json(await verificarPago(env, url.searchParams.get("sig")), cab);
       if (p === "/api/chat") return json(await chatResponder(env, url.searchParams.get("q")), cab);
       if (p === "/api/ynews") return json(await fetchYNews(url.searchParams.get("s")), cab);

@@ -458,6 +458,18 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   </div>
 
   <div class="p" style="margin-bottom:8px">
+    <h3>CONTRADICCIONES ENTRE MERCADOS <span id="rl-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— apuestas de eventos distintos que se contradicen entre sí</span></h3>
+    <div class="chips" style="align-items:center;gap:8px">
+      <label class="st">Pares a revisar <select id="rl-n"><option value="8">8</option><option value="14" selected>14</option><option value="24">24</option></select></label>
+      <button id="rl-run">⟳ Buscar contradicciones</button>
+      <span class="st" id="rl-st">Polymarket trata cada evento por separado, así que nadie comprueba si se contradicen entre sí.</span>
+    </div>
+    <div class="bd" style="max-height:250px;padding:0 4px" id="rl-res"></div>
+    <div class="st"><b>Cómo funciona:</b> la IA solo propone la relación lógica («A implica B», «no pueden pasar las dos»); la ventaja la calcula la <b>aritmética</b>, así que el modelo nunca se la puede inventar. Si propone una relación falsa, sale un falso positivo, no una pérdida.<br>
+    <b class="dn">Verifícalo siempre a mano.</b> En pruebas, un modelo marcó como excluyentes «gana las elecciones de Brasil» y «queda segundo en la <b>primera vuelta</b>» — y no lo son, porque hay segunda vuelta. Lee las dos preguntas enteras.</div>
+  </div>
+
+  <div class="p" style="margin-bottom:8px">
     <h3>CALCULADORA DE VENTAJA Y KELLY</h3>
     <div class="chips" style="align-items:center;flex-wrap:wrap;gap:10px">
       <label class="st">Mercado <select id="b-kmkt" style="max-width:340px"></select></label>
@@ -1134,7 +1146,7 @@ function render(){
    :"<tr><td colspan='7'>"+(PM.length?emp("🔍","Ningún mercado con esos filtros"):(ERR.pm?emp("⚠","Polymarket no responde"):sk(5)))+"</td></tr>"}
 
  if(VIEW==="quant"){renderQuant()}
- if(VIEW==="brain"){renderBrain()}
+ if(VIEW==="brain"){renderBrain();renderRel()}
  if(VIEW==="sim"){renderSim();renderMC();renderPaper()}
  if(VIEW==="cart"){renderCart()}
  if(VIEW==="lib"){renderLib()}
@@ -1269,6 +1281,39 @@ function renderQuant(){
    aquí, donde cualquiera lo leía abriendo el inspector. Se movió al Worker: ahora
    /api/pmq devuelve ya calculados `fair`, `edge` y `lam`. El cliente solo pinta.
    La curva de distorsión se dibuja con la λ que manda el servidor.               */
+
+var RL=null,RLLOAD=false;
+function loadRel(){
+ if(RLLOAD)return;RLLOAD=true;
+ $("rl-st").textContent="Buscando… la IA clasifica cada par y la aritmética lo comprueba.";
+ api("/api/relaciones?n="+(+$("rl-n").value||14),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){
+   if(j.error)throw new Error(j.error);
+   RL=j;
+   $("rl-st").textContent=j.paresCandidatos+" pares revisados · "+j.consultasIA+" consultas a la IA · "+
+     j.deCache+" de memoria · "+j.hallazgos.length+" contradicción(es)"})
+  .catch(function(e){RL=null;$("rl-st").textContent="Error: "+(e.message||e)})
+  .then(function(){RLLOAD=false;render()})}
+
+function renderRel(){
+ if(!RL){$("rl-res").innerHTML=emp("🔗","Pulsa «Buscar contradicciones».<br>Compara apuestas de eventos distintos que hablan de lo mismo.");return}
+ $("rl-cnt").textContent="("+RL.hallazgos.length+")";
+ if(!RL.hallazgos.length){
+  $("rl-res").innerHTML=emp("✓","Ninguna contradicción ahora mismo.<br><span style='font-size:11px'>Revisadas "+RL.paresCandidatos+" parejas. Que no haya es lo normal: significa que el mercado es coherente.</span>");return}
+ $("rl-res").innerHTML=RL.hallazgos.map(function(h){
+  return "<div style='padding:11px 10px;border-bottom:1px solid var(--line2)'>"+
+   "<div style='display:flex;align-items:center;gap:9px;margin-bottom:7px'>"+
+     "<b class='up' style='font-size:15px'>+"+(h.neto*100).toFixed(2)+"%</b>"+
+     "<span class='t5'>"+esc(h.rel==="EXCLUYE"?"no pueden pasar las dos":"una implica la otra")+"</span>"+
+     "<span class='dim' style='font-size:10.5px'>neto tras costes</span></div>"+
+   "<div class='fila' style='border:0;padding:2px 0'><b>"+(h.a.p*100).toFixed(1)+"%</b> · "+
+     "<a href='"+esc(h.a.url)+"' target='_blank' rel='noopener'>"+esc(h.a.q)+"</a></div>"+
+   "<div class='fila' style='border:0;padding:2px 0'><b>"+(h.b.p*100).toFixed(1)+"%</b> · "+
+     "<a href='"+esc(h.b.url)+"' target='_blank' rel='noopener'>"+esc(h.b.q)+"</a></div>"+
+   "<div class='st' style='padding:6px 0 0'>"+esc(h.dice)+" → <b>"+esc(h.accion)+"</b></div>"+
+   "<div class='st' style='padding:2px 0 0;color:var(--am)'>⚠ "+esc(h.comprobar)+"</div>"+
+  "</div>"}).join("")}
 
 var BQ=null,BVOL={},BLOAD=false,BSORT={k:"vol24",d:-1},BLAM=0,BNLAM=0;
 
@@ -2899,6 +2944,7 @@ document.addEventListener("click",function(e){var t=e.target;
   else{SORT=SORT.k===k?{k:k,d:-SORT.d}:{k:k,d:1}}
   render()}});
 $("bload").onclick=function(){loadBrain(true)};
+$("rl-run").onclick=loadRel;
 $("srun").onclick=btRun;
 [].forEach.call(document.querySelectorAll(".lf"),function(b){b.onclick=function(){
  LF=b.dataset.f;[].forEach.call(document.querySelectorAll(".lf"),function(o){o.classList.toggle("on",o===b)});render()}});

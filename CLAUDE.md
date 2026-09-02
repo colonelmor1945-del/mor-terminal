@@ -172,6 +172,34 @@ cargado" cuando falte, y le impide recomendar comprar, vender o apostar.
 nombre `AI`). Sin él devuelve un error explicando cómo añadirlo.
 `dev.mjs` trae un AI simulado que devuelve el contexto, para probar sin gastar cuota.
 
+## Grafo de restricciones lógicas entre eventos (F8)
+Polymarket trata cada evento por separado, así que **nadie comprueba si mercados de
+eventos distintos se contradicen entre sí**. «Cae el régimen iraní antes de 2027»
+implica «cambio de liderazgo en Irán antes de 2027»: la primera no puede cotizar
+más cara.
+
+**El reparto de trabajo es lo que hace esto honesto: la IA PROPONE la relación
+lógica, la ARITMÉTICA la juzga.** El modelo solo devuelve una de cuatro etiquetas,
+nunca estima probabilidades. Si alucina, sale un falso positivo, no una pérdida:
+no puede inventarse una ventaja porque la calcula la aritmética.
+
+Tres defensas, todas necesarias y probadas:
+1. **Coherencia al invertir.** Si dice «A implica B», al preguntarle (B,A) tiene que
+   decir «B es implicada por A». Si responde lo mismo en ambos órdenes no razona,
+   reconoce un patrón. Con un modelo que decía IMPLICA a todo: de 6 falsos
+   positivos a 0.
+2. **Rareza de palabras (IDF).** Sin ella el emparejador se llenaba de partidas de
+   Counter-Strike que comparten «counter», «strike» e «iem».
+3. **Fuera enfrentamientos directos.** Un partido no implica lógicamente otro.
+
+⚠️ **Límite real, encontrado probando:** la aritmética es tan buena como la lógica
+que recibe. Un modelo marcó como excluyentes «gana las elecciones de Brasil» y
+«queda segundo en la PRIMERA VUELTA» — y no lo son, porque hay segunda vuelta.
+Los hallazgos se presentan como **propuestas a verificar**, nunca como confirmadas.
+
+Las relaciones se cachean en KV: la relación lógica entre dos preguntas no cambia
+con el tiempo. Segunda ejecución: 0 consultas al modelo.
+
 ## Roadmap (siguiente)
 1. ~~Subir `index.html` al Worker~~ hecho (31/08/2026, vía `sync.mjs`). Falta desplegar.
 2. Mover el universo `SC` a Google Sheets o KV para editarlo sin redesplegar. ← prioridad
