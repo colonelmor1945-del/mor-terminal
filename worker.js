@@ -240,6 +240,40 @@ function edgeSpread(O, H, L, C) {
   return Math.sqrt(s2);
 }
 
+/* Barras horarias del ultimo mes. Se usa para el rango a pocas horas: NO para
+   predecir direccion, que a ese plazo no se predice. */
+async function fetchIntra(sym) {
+  const clean = String(sym).trim().toUpperCase().replace(/[^A-Z0-9.\-=^]/g, "");
+  if (!clean) throw new Error("Símbolo vacío");
+  for (const h of ["query1.finance.yahoo.com", "query2.finance.yahoo.com"]) {
+    try {
+      const r = await fetch("https://" + h + "/v8/finance/chart/" + encodeURIComponent(clean) +
+        "?range=1mo&interval=60m", { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
+      if (!r.ok) continue;
+      const j = await r.json();
+      const res = j && j.chart && j.chart.result && j.chart.result[0];
+      if (!res) continue;
+      const q = res.indicators && res.indicators.quote && res.indicators.quote[0];
+      const c = ((q && q.close) || []).filter(x => typeof x === "number" && isFinite(x) && x > 0);
+      if (c.length < 20) continue;
+      // Volatilidad por barra sobre log-retornos.
+      const r2 = [];
+      for (let i = 1; i < c.length; i++) r2.push(Math.log(c[i] / c[i - 1]));
+      const mu = r2.reduce((a, b) => a + b, 0) / r2.length;
+      const sg = Math.sqrt(r2.reduce((a, b) => a + (b - mu) * (b - mu), 0) / ((r2.length - 1) || 1));
+      /* Mayor movimiento de 8 barras observado de verdad en el mes, sin solapar,
+         para poder contrastar la banda teorica con lo que de veras paso. */
+      let peor = 0;
+      for (let i = 8; i < c.length; i += 8) {
+        const v = Math.abs(c[i] / c[i - 8] - 1);
+        if (v > peor) peor = v;
+      }
+      return { s: clean, barras: c.length, ultimo: c[c.length - 1], sigmaBarra: sg, peor8: peor };
+    } catch (e) {}
+  }
+  throw new Error("sin datos intradía para " + clean);
+}
+
 async function fetchPx(sym) {
   const clean = String(sym).trim().toUpperCase().replace(/[^A-Z0-9.\-=^]/g, "");
   if (!clean) throw new Error("Símbolo vacío");
@@ -1183,7 +1217,14 @@ const CHAT_SISTEMA =
   "5. Los cruces por nombre son coincidencias, no hechos: di siempre que hay que " +
   "verificarlos a mano.\n" +
   "6. Responde en espanol llano, breve, sin jerga. Maximo 5 frases salvo que te " +
-  "pidan detalle." + BR + BR +
+  "pidan detalle.\n" +
+  "7. HORIZONTES CORTOS. Si preguntan que hara el precio en horas o manana, di " +
+  "claro que la DIRECCION a ese plazo no se predice, y da en cambio CUANTO se " +
+  "mueve normalmente en ese rato, que si esta medido. Nunca des una direccion a " +
+  "pocas horas.\n" +
+  "8. HASTA CUANDO. Si preguntan cuanto aguantar una posicion, usa el plazo y la " +
+  "condicion de salida del bloque VEREDICTO del contexto, con sus cifras. Si ese " +
+  "bloque no esta, di que hace falta cargar los precios." + BR + BR +
   "PUEDES MANEJAR EL TERMINAL. Si lo que piden se hace en una pantalla concreta o " +
   "requiere lanzar algo, termina tu respuesta con una linea suelta asi:" + BR +
   "ACCION: nombre_de_la_accion" + BR +
@@ -2342,7 +2383,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 
 <div class="view" id="v-ver">
   <div class="ayuda-fija" style="border:1px solid var(--line);border-left:3px solid var(--am);border-radius:6px;padding:9px 12px;margin-bottom:8px;font-size:12px;color:var(--dim)">
-   <b style="color:var(--txt)">Lectura del terminal con los datos de ahora mismo.</b> Posición alcista = comprar; bajista = vender o no entrar. El <b>stop</b> es donde el terminal admite que se equivocó (dos veces el movimiento típico de 14 sesiones) y el <b>objetivo</b> el doble de esa distancia, para que la operación sea 2:1. <b>Cuánto</b> es medio Kelly, entre el 1% y el 10% del capital. <b>Neto tras coste</b> descuenta el spread efectivo real estimado del propio precio (método EDGE de Ardia, Guidotti y Kroencke): si sale en rojo, la idea no paga ni el peaje de entrar y salir. No es consejo: <b>tú decides</b>.
+   <b style="color:var(--txt)">Lectura del terminal con los datos de ahora mismo.</b> Posición alcista = comprar; bajista = vender o no entrar. El <b>stop</b> es donde el terminal admite que se equivocó (dos veces el movimiento típico de 14 sesiones) y el <b>objetivo</b> el doble de esa distancia, para que la operación sea 2:1. <b>Cuánto</b> es medio Kelly, entre el 1% y el 10% del capital. <b>Neto tras coste</b> descuenta el spread efectivo real estimado del propio precio (método EDGE de Ardia, Guidotti y Kroencke): si sale en rojo, la idea no paga ni el peaje de entrar y salir. <b>Hasta cuándo</b> es el plazo que hace falta, con la volatilidad de esta serie, para recorrer la distancia al objetivo; sal igualmente si se cumple la condición que invalida la idea. No es consejo: <b>tú decides</b>.
   </div>
   <div class="grid g4" style="margin-bottom:8px">
     <div class="kpi c2"><div class="k">ALCISTAS</div><div class="v" id="ve1">—</div><div class="s" id="ve1s">empresas y divisas para comprar</div></div>
@@ -2352,13 +2393,13 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   </div>
   <div class="chips" style="margin-bottom:8px"><button id="ver-calc">⟳ Recalcular todo</button><span class="st" id="ver-st">Carga precios, cerebro y divisas y vuelve a decidir.</span></div>
   <div class="p" style="margin-bottom:8px"><h3>EMPRESAS <span id="ver-emp-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— clic para la ficha</span></h3>
-    <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:22%">Empresa</th><th style="width:10%">Posición</th><th style="width:10%">Entrada</th><th style="width:10%">Stop</th><th style="width:10%">Objetivo</th><th style="width:8%">Cuánto</th><th style="width:11%">Neto tras coste</th><th>Por qué</th></tr></thead><tbody id="ver-emp"></tbody></table></div></div>
+    <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:22%">Empresa</th><th style="width:10%">Posición</th><th style="width:10%">Entrada</th><th style="width:10%">Stop</th><th style="width:10%">Objetivo</th><th style="width:8%">Cuánto</th><th style="width:11%">Neto tras coste</th><th style="width:14%">Hasta cuándo</th><th>Por qué</th></tr></thead><tbody id="ver-emp"></tbody></table></div></div>
   <div id="ver-aviso" style="display:none;border:1px solid var(--rd);border-left:3px solid var(--rd);border-radius:6px;padding:9px 12px;margin-bottom:8px;font-size:12px;color:var(--dim);background:rgba(240,96,93,.06)"></div>
   <div class="p" style="margin-bottom:8px"><h3>APUESTAS <span id="ver-pm-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— clic para el mercado</span></h3>
-    <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:34%">Mercado</th><th style="width:9%">Posición</th><th style="width:9%">Entrada</th><th style="width:9%">Salir si</th><th style="width:9%">Objetivo</th><th style="width:8%">Cuánto</th><th>Por qué</th></tr></thead><tbody id="ver-pm"></tbody></table></div></div>
+    <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:34%">Mercado</th><th style="width:9%">Posición</th><th style="width:9%">Entrada</th><th style="width:9%">Salir si</th><th style="width:9%">Objetivo</th><th style="width:8%">Cuánto</th><th style="width:13%">Hasta cuándo</th><th>Por qué</th></tr></thead><tbody id="ver-pm"></tbody></table></div></div>
   <div class="grid g2" style="margin-bottom:8px">
     <div class="p"><h3>DIVISAS <span id="ver-fx-cnt"></span></h3>
-      <div class="bd" style="overflow:auto"><table><thead><tr><th>Par</th><th>Posición</th><th>Entrada</th><th>Stop</th><th>Objetivo</th><th>Cuánto</th></tr></thead><tbody id="ver-fx"></tbody></table></div></div>
+      <div class="bd" style="overflow:auto"><table><thead><tr><th>Par</th><th>Posición</th><th>Entrada</th><th>Stop</th><th>Objetivo</th><th>Cuánto</th><th>Hasta cuándo</th></tr></thead><tbody id="ver-fx"></tbody></table></div></div>
     <div class="p"><h3>ARBITRAJES <span id="ver-arb-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— aritmética, no predicción</span></h3>
       <div class="bd" style="overflow:auto"><table><thead><tr><th>Grupo</th><th>Qué hacer</th><th>Neto</th></tr></thead><tbody id="ver-arb"></tbody></table></div></div>
   </div>
@@ -4110,6 +4151,7 @@ function feAbrir(tk,sinApilar){
  var k=function(l,v,c){return "<div><div class='l'>"+l+"</div><div class='v "+(c||"")+"'>"+v+"</div></div>"};
  $("fe-met").innerHTML=
   sugEmpresa(e,q)+
+  "<div class='sug' id='fe-8h' style='border-left-color:var(--cy);background:rgba(90,168,199,.05)'></div>"+
   k(MODO==="simple"?"TAMAÑO":"CAPITALIZACIÓN",["micro","pequeña","mediana"][e.z]||"—")+
   k("REGIÓN",esc(e.r))+
   (q?k(MODO==="simple"?"ÚLTIMO MES":"1M",pct(q.r1),pcl(q.r1))+
@@ -4121,6 +4163,9 @@ function feAbrir(tk,sinApilar){
   (q?"":"<div class='pxlive'><div class='l'>PRECIO</div><div class='v dim'>\\u2026</div></div>")+
   k("EN TU LISTA",W[e.tk]?"sí":"no")+
   (sim?k("SÍMBOLO",esc(sim)):"");
+
+ if(sim)bandaHoras($("fe-8h"),sim,8);
+ else $("fe-8h").innerHTML="<span class='dim'>"+T("sin símbolo de precios mapeado.","no price symbol mapped.")+"</span>";
 
  // --- precio ---
  if(q&&q.c){ precioChart($("fe-px"),q.c) }
@@ -4934,10 +4979,29 @@ function iaEstado(){
    p.push("DIVISAS, MEJOR MOMENTUM: "+fz.slice(0,3).map(function(x){return x.n+" z="+x.z.toFixed(2)+" 6M "+(x.r6*100).toFixed(1)+"%"}).join(", "));
    p.push("DIVISAS EN TENSION: "+(FXQ.filter(function(x){return x.reg>1.25}).map(function(x){return x.n}).join(", ")||"ninguna"));
   }
+  /* El veredicto con sus niveles: es lo que hace falta para poder contestar
+     "hasta cuando" o "donde pongo el stop" sin inventarselo. */
   try{
-   var vAl=QUANT.filter(function(q){return q.z>0.5&&q.s50>q.s200&&q.dd>-0.4}).map(function(q){return q.s.name}).slice(0,4);
-   var vBa=QUANT.filter(function(q){return q.z<-0.5&&q.s50<q.s200}).map(function(q){return q.s.name}).slice(0,4);
-   if(vAl.length||vBa.length)p.push("VEREDICTO EMPRESAS: alcistas "+(vAl.join(", ")||"ninguna")+" · bajistas "+(vBa.join(", ")||"ninguna"));
+   var vv=[];
+   QUANT.forEach(function(q){
+    if(!q.c||q.c.length<60)return;
+    var dir=0;
+    if(q.z>0.5&&q.s50>q.s200&&q.dd>-0.4)dir=1; else if(q.z<-0.5&&q.s50<q.s200)dir=-1;
+    if(!dir||vv.length>=6)return;
+    var nv=nivelesDe(q.c,dir),br=Math.abs(nv.obj-nv.ent)/nv.ent;
+    var sp=(PX[q.s.tk]&&typeof PX[q.s.tk].spread==="number")?PX[q.s.tk].spread:null;
+    vv.push(q.s.name+" ("+q.s.tk+"): "+(dir>0?"ALCISTA":"BAJISTA")+
+     ", entrada "+nv.ent.toFixed(2)+", stop "+nv.stop.toFixed(2)+", objetivo "+nv.obj.toFixed(2)+
+     ", plazo ~"+(sesionesHasta(q.c,br)||"?")+" sesiones"+
+     (sp===null?", coste no estimable":", coste "+(sp*100).toFixed(2)+"%")+
+     ", salir si "+(dir>0?"la media de 50 cae bajo la de 200":"la media de 50 sube sobre la de 200"));
+   });
+   if(vv.length)p.push("VEREDICTO (niveles que propone el terminal):"+String.fromCharCode(10)+vv.join(String.fromCharCode(10)));
+  }catch(e){}
+  try{
+   if(BT&&!BT.fx&&BT.lam!==null&&isFinite(BT.lam)&&BT.lam<0)
+    p.push("AVISO: la lambda medida en los "+BT.S.length+" mercados resueltos es "+BT.lam.toFixed(3)+
+      ", signo contrario al +0.183 de la literatura que usa el valor justo. Las apuestas propuestas son senal debil.");
   }catch(e){}
   if(FE)p.push("FICHA ABIERTA: "+FE.name+" ("+FE.tk+")");
   if(DT)p.push("MERCADO ABIERTO: "+DT.q);
@@ -5207,6 +5271,30 @@ function go(v,sinApilar){
    en 14 sesiones. Es el ATR sin maximos ni minimos, que la API no da. */
 function atrProxy(c,nn){nn=nn||14;var t=0,k=0;for(var i=Math.max(1,c.length-nn);i<c.length;i++){t+=Math.abs(c[i]-c[i-1]);k++}return k?t/k:0}
 function nivelesDe(c,dir){var u=c[c.length-1],a=atrProxy(c,14);return {ent:u,stop:u-dir*2*a,obj:u+dir*4*a,atr:a}}
+/* Sesiones esperadas hasta recorrer una distancia relativa d con volatilidad
+   diaria sigma. Difusion pura: sin deriva, el tiempo de primer paso escala con
+   el cuadrado de la distancia en unidades de sigma. */
+function sesionesHasta(c,d){
+ /* La desviacion tipica normal se contamina con un solo dato malo: Next Vision
+    trae un salto de +5385% -reparto o ajuste mal aplicado por la fuente- y con
+    el la sigma se disparaba tanto que el objetivo parecia alcanzable en UNA
+    sesion. Se usa la desviacion absoluta mediana escalada, que ignora los
+    valores extremos, y sobre 60 sesiones, que es el plazo del que salen tambien
+    los niveles. */
+ var r=fxRets(c.slice(-61)); if(r.length<20||!(d>0))return null;
+ var ab=r.map(Math.abs).sort(function(a,b){return a-b});
+ var sg=1.4826*ab[Math.floor(ab.length/2)];
+ if(!(sg>0))return null;
+ var k=d/sg;
+ return Math.max(2,Math.min(250,Math.round(k*k)));
+}
+function plazoTxt(dias){
+ if(dias===null)return "—";
+ var u=function(v,sing,plur,en){return v+" "+T(v===1?sing:plur,en)};
+ if(dias<=9)return u(dias,"sesión","sesiones","sessions");
+ if(dias<=42){var w=Math.round(dias/5);return u(w,"semana","semanas","weeks")}
+ var m=Math.round(dias/21);return u(m,"mes","meses","months");
+}
 function kellyDe(c){var r=fxRets(c.slice(-121)),mu=mean(r),va=Math.pow(sd(r),2);return va>0?mu/va:0}
 function cuanto(k){return Math.min(0.10,Math.max(0.01,Math.max(0,k)*0.5))}
 function fP(v,ref){return v.toFixed(ref<10?4:(ref<1000?2:0))}
@@ -5239,9 +5327,14 @@ function renderVer(){
   var spr=(PX[q.s.tk]&&typeof PX[q.s.tk].spread==="number")?PX[q.s.tk].spread:null;
   var bruto=Math.abs(nv.obj-nv.ent)/nv.ent;
   var neto=spr===null?null:bruto-spr;
+  /* Plazo hasta el objetivo, y la mitad de camino hasta el stop -que esta a la
+     mitad de distancia, asi que suele saltar cuatro veces antes-. */
+  var dObj=sesionesHasta(q.c,bruto), dStop=sesionesHasta(q.c,Math.abs(nv.stop-nv.ent)/nv.ent);
+  var inval=dir>0?T("si la media de 50 cae por debajo de la de 200","if the 50-day average drops below the 200-day")
+                 :T("si la media de 50 sube por encima de la de 200","if the 50-day average rises above the 200-day");
   var por=dir>0?T("momentum z "+q.z.toFixed(2)+", tendencia alcista, mes "+(q.r1>=0?"+":"")+(q.r1*100).toFixed(1)+"%","momentum z "+q.z.toFixed(2)+", uptrend, month "+(q.r1>=0?"+":"")+(q.r1*100).toFixed(1)+"%")
                  :T("momentum z "+q.z.toFixed(2)+", tendencia bajista, mes "+(q.r1*100).toFixed(1)+"%","momentum z "+q.z.toFixed(2)+", downtrend, month "+(q.r1*100).toFixed(1)+"%");
-  (dir>0?al:ba).push({tk:q.s.tk,n:q.s.name,dir:dir,nv:nv,k:k,z:q.z,por:por,spr:spr,bruto:bruto,neto:neto});
+  (dir>0?al:ba).push({tk:q.s.tk,n:q.s.name,dir:dir,nv:nv,k:k,z:q.z,por:por,spr:spr,bruto:bruto,neto:neto,dObj:dObj,dStop:dStop,inval:inval});
  });
  al.sort(function(a,b){return b.z-a.z});ba.sort(function(a,b){return a.z-b.z});
  var filaE=function(x){return "<tr data-tk='"+esc(x.tk)+"' style='cursor:pointer'><td><b>"+esc(x.n)+"</b><div class='dsc'>"+esc(x.tk)+"</div></td>"+
@@ -5250,10 +5343,13 @@ function renderVer(){
   "<td>"+(x.spr===null?"<span class='dim'>—</span>":
     "<span class='"+(x.neto>0?"up":"dn")+"'>"+(x.neto>0?"+":"")+(x.neto*100).toFixed(1)+"%</span>"+
     "<div class='dsc'>"+T("bruto ","gross ")+(x.bruto*100).toFixed(1)+"% − "+T("coste ","cost ")+(x.spr*100).toFixed(2)+"%</div>")+"</td>"+
+  "<td>"+plazoTxt(x.dObj)+
+   "<div class='dsc'>"+T("revisa cada mes · cierra ","review monthly · close ")+inv(x)+"</div></td>"+
   "<td class='dim'>"+x.por+"</td></tr>"};
+ var inv=function(x){return x.inval};
  var tE=al.concat(ba);
  $("ver-emp").innerHTML=tE.length?tE.map(filaE).join("")
-  :"<tr><td colspan='8'>"+(QUANT.length?emp("🤷",T("Ninguna empresa da señal clara ahora mismo.","No company gives a clear signal right now."))
+  :"<tr><td colspan='9'>"+(QUANT.length?emp("🤷",T("Ninguna empresa da señal clara ahora mismo.","No company gives a clear signal right now."))
    :emp("⏳",T("Cargando precios de las empresas…","Loading company prices…")))+"</td></tr>";
  $("ver-emp-cnt").textContent=tE.length?"("+al.length+" ↑ / "+ba.length+" ↓)":"";
 
@@ -5277,8 +5373,10 @@ function renderVer(){
    "<td><span class='"+(x.lado==="SÍ"?"t3":"t4")+"'>"+T("COMPRAR ","BUY ")+x.lado+"</span></td>"+
    "<td>"+(x.ent*100).toFixed(1)+"%</td><td class='dn'>"+(x.stop*100).toFixed(1)+"%</td><td class='up'>"+(x.obj*100).toFixed(1)+"%</td>"+
    "<td>"+(Math.min(0.05,Math.max(0.005,x.k*0.25))*100).toFixed(1)+"%</td>"+
-   "<td class='dim'>"+T("precio a "+(x.e*100).toFixed(1)+" puntos de lo justo","price "+(x.e*100).toFixed(1)+" points from fair")+(typeof x.dias==="number"?" · "+Math.round(x.dias)+T(" días"," days"):"")+"</td></tr>"}).join("")
-  :"<tr><td colspan='7'>"+(BQ?emp("🤷",T("Ningún mercado con precio lejos de lo justo y spread razonable.","No market far from fair with a reasonable spread.")):emp("⏳",T("Cargando el cerebro…","Loading the engine…")))+"</td></tr>";
+   "<td>"+(typeof x.dias==="number"?Math.round(x.dias)+T(" días","d"):"—")+
+    "<div class='dsc'>"+T("hasta que resuelva · o antes si llega al justo","until it resolves · or sooner if it reaches fair")+"</div></td>"+
+   "<td class='dim'>"+T("precio a "+(x.e*100).toFixed(1)+" puntos de lo justo","price "+(x.e*100).toFixed(1)+" points from fair")+"</td></tr>"}).join("")
+  :"<tr><td colspan='8'>"+(BQ?emp("🤷",T("Ningún mercado con precio lejos de lo justo y spread razonable.","No market far from fair with a reasonable spread.")):emp("⏳",T("Cargando el cerebro…","Loading the engine…")))+"</td></tr>";
  $("ver-pm-cnt").textContent=ap.length?"("+ap.length+")":"";
  avisoLambda();
 
@@ -5286,13 +5384,15 @@ function renderVer(){
  var fx=[];
  FXQ.forEach(function(x){
   var dir=x.sig==="COMPRA"?1:(x.sig==="VENTA"?-1:0); if(!dir)return;
-  fx.push({n:x.n,dir:dir,nv:nivelesDe(x.c,dir),k:dir*x.kelly,z:x.z});
+  var nvf=nivelesDe(x.c,dir);
+  fx.push({n:x.n,dir:dir,nv:nvf,k:dir*x.kelly,z:x.z,
+   dObj:sesionesHasta(x.c,Math.abs(nvf.obj-nvf.ent)/nvf.ent)});
  });
  fx.sort(function(a,b){return Math.abs(b.z)-Math.abs(a.z)});
  $("ver-fx").innerHTML=fx.length?fx.map(function(x){
   return "<tr data-fx='"+esc(x.n)+"' style='cursor:pointer'><td><b>"+esc(x.n)+"</b></td><td>"+posTag(x.dir)+"</td>"+
-   "<td>"+fP(x.nv.ent,x.nv.ent)+"</td><td class='dn'>"+fP(x.nv.stop,x.nv.ent)+"</td><td class='up'>"+fP(x.nv.obj,x.nv.ent)+"</td><td>"+(cuanto(x.k)*100).toFixed(0)+"%</td></tr>"}).join("")
-  :"<tr><td colspan='6'>"+(FXQ.length?emp("🤷",T("Ningún par con momentum y tendencia de acuerdo.","No pair with momentum and trend agreeing.")):emp("⏳",T("Cargando divisas…","Loading currencies…")))+"</td></tr>";
+   "<td>"+fP(x.nv.ent,x.nv.ent)+"</td><td class='dn'>"+fP(x.nv.stop,x.nv.ent)+"</td><td class='up'>"+fP(x.nv.obj,x.nv.ent)+"</td><td>"+(cuanto(x.k)*100).toFixed(0)+"%</td><td>"+plazoTxt(x.dObj)+"</td></tr>"}).join("")
+  :"<tr><td colspan='7'>"+(FXQ.length?emp("🤷",T("Ningún par con momentum y tendencia de acuerdo.","No pair with momentum and trend agreeing.")):emp("⏳",T("Cargando divisas…","Loading currencies…")))+"</td></tr>";
  $("ver-fx-cnt").textContent=fx.length?"("+fx.length+")":"";
 
  // --- arbitrajes ---
@@ -5669,6 +5769,28 @@ document.addEventListener("click",function(e){var t=e.target;
 
 /* ---- Inclinacion del terminal. Calculada de lo que hay en pantalla; el que
    decide es el usuario y asi se dice en la propia linea. ---- */
+function bandaHoras(el,sim,horas){
+ if(!el)return;
+ horas=horas||8;
+ el.innerHTML="<span class='dim'>"+T("midiendo el movimiento típico…","measuring typical move…")+"</span>";
+ api("/api/intra?s="+encodeURIComponent(sim),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){
+   if(!j||!isFinite(j.sigmaBarra))throw 0;
+   var s1=j.sigmaBarra*Math.sqrt(horas), s2=1.96*s1;
+   el.innerHTML=
+    "<div class='l'>"+T("CUÁNTO SE MUEVE EN "+horas+" HORAS","TYPICAL MOVE IN "+horas+" HOURS")+"</div>"+
+    "<div class='v'>±"+(s1*100).toFixed(2)+"%</div>"+
+    "<div class='l' style='text-transform:none;letter-spacing:0'>"+
+     T("2 de cada 3 veces. Casi siempre (19 de 20) dentro de ±"+(s2*100).toFixed(2)+"%. El mayor salto real de "+horas+
+       " horas este mes fue "+(j.peor8*100).toFixed(2)+"%. Medido sobre "+j.barras+" barras horarias. "+
+       "<b>Esto es cuánto, no hacia dónde: la dirección a estas horas no se predice.</b>",
+       "2 times out of 3. Almost always (19 of 20) within ±"+(s2*100).toFixed(2)+"%. Largest real "+horas+
+       "-hour jump this month was "+(j.peor8*100).toFixed(2)+"%. Measured on "+j.barras+" hourly bars. "+
+       "<b>This is how much, not which way: direction at these horizons is not predictable.</b>")+"</div>";
+  })
+  .catch(function(){el.innerHTML="<span class='dim'>"+T("sin datos por horas para este símbolo.","no hourly data for this symbol.")+"</span>"});
+}
 function sugEmpresa(e,q){
  var txt,cl,por;
  if(!q){txt=T("sin precios cargados","no prices loaded");cl="dim";por=T("carga los precios para tener una lectura","load prices to get a read")}
@@ -5844,7 +5966,7 @@ setInterval(function(){loadPM()},120000);
    con ADMIN_TOKEN, que se pone como variable secreta en Cloudflare.              */
 
 const PLANES = {
-  libre: { cuota: 50,   endpoints: ["pmq", "px", "pm", "contracts", "news", "history"] },
+  libre: { cuota: 50,   endpoints: ["pmq", "px", "intra", "pm", "contracts", "news", "history"] },
   pro:   { cuota: 5000, endpoints: "*" }
 };
 
@@ -5952,6 +6074,7 @@ export default {
       if (p === "/api/contracts") return json(await fetchContracts(), cab);
       if (p === "/api/pm") return json(await fetchPM(), cab);
       if (p === "/api/px") return json(await fetchPx(url.searchParams.get("s") || "ONDS"), cab);
+      if (p === "/api/intra") return json(await fetchIntra(url.searchParams.get("s") || "ONDS"), cab);
       if (p === "/api/news") return json(await fetchNews(url.searchParams.get("region") || "Pentágono"), cab);
       if (p === "/api/pmq") return json(await fetchPMQ(Number(url.searchParams.get("pages")) || 3), cab);
       if (p === "/api/pmh") return json(await fetchPMHist(url.searchParams.get("t"), url.searchParams.get("i")), cab);
