@@ -1255,6 +1255,29 @@ async function chatResponder(env, pregunta) {
    ventaja la calcula la aritmetica. Reconocer implicacion entre dos frases es la
    unica tarea donde un modelo de lenguaje no puede mentirte de forma peligrosa.  */
 
+/* Pregunta de control para EXCLUYE, formulada al reves a proposito: si el modelo
+   razona, "no pueden pasar las dos" y "pueden pasar las dos" deben contradecirse.
+   Si contesta que si a ambas, no razona. */
+const REL_RETO =
+  "Te doy dos afirmaciones sobre el futuro. Responde UNA SOLA palabra:\n" +
+  "  SI   si es posible que AMBAS resulten ciertas.\n" +
+  "  NO   si es imposible que ambas sean ciertas a la vez.\n" +
+  "Piensa si hay algun escenario, aunque sea poco probable, en que las dos se " +
+  "cumplan. Fijate en las FECHAS: plazos distintos casi siempre permiten que ambas " +
+  "ocurran. Ante la duda, SI.";
+
+/* Horizonte temporal de una pregunta. Dos afirmaciones con plazos distintos casi
+   nunca son excluyentes: es lo que fallaba en ambos falsos positivos. */
+const REL_MESES = { january:1,february:2,march:3,april:4,may:5,june:6,july:7,
+                    august:8,september:9,october:10,november:11,december:12 };
+function relHorizonte(q) {
+  const t = String(q || "").toLowerCase();
+  const anio = (t.match(/\b(20\d\d)\b/) || [])[1];
+  const mes = (t.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/) || [])[1];
+  if (!anio && !mes) return null;
+  return (anio ? Number(anio) * 12 : 0) + (mes ? REL_MESES[mes] : 0);
+}
+
 const REL_SISTEMA =
   "Eres un clasificador de logica. Te doy dos afirmaciones sobre el futuro (A y B).\n" +
   "Responde UNA SOLA palabra, sin explicar nada:\n" +
@@ -1343,7 +1366,10 @@ function relInversa(r) {
 
 async function relClasificar(env, a, b) {
   // La relacion logica entre dos preguntas NO cambia con el tiempo: se cachea.
-  const clave = "rel:" + (await sha256(a.q + "||" + b.q)).slice(0, 24);
+  /* La version va en la clave: al endurecer las comprobaciones hay que invalidar
+     lo cacheado, o las etiquetas equivocadas de antes se seguirian sirviendo sin
+     pasar por las guardas nuevas. v2 = con guardas de EXCLUYE. */
+  const clave = "rel:v2:" + (await sha256(a.q + "||" + b.q)).slice(0, 24);
   if (env.RADAR) {
     const c = await env.RADAR.get(clave);
     if (c) return { rel: c, cache: true };
@@ -1385,6 +1411,35 @@ async function relClasificar(env, a, b) {
       } catch (e) {}
     }
     if (rel2 !== relInversa(rel)) rel = "NINGUNA";   // incoherente -> se descarta
+  }
+
+  /* Guardas propias de EXCLUYE, que la comprobacion anterior no examina por ser
+     simetrica. Aqui se concentraban TODOS los falsos positivos. */
+  if (rel === "EXCLUYE") {
+    // 1. Plazos distintos: "antes de septiembre" y "antes de marzo de 2027" pueden
+    //    cumplirse las dos. Es exactamente el caso que se colaba.
+    const ha = relHorizonte(a.q), hb = relHorizonte(b.q);
+    if (ha !== null && hb !== null && ha !== hb) rel = "NINGUNA";
+  }
+  if (rel === "EXCLUYE") {
+    // 2. Pregunta de control al reves. Si dice que SI pueden darse ambas, se cae.
+    let reto = "SI";
+    const men3 = [
+      { role: "system", content: REL_RETO },
+      { role: "user", content: "1: " + a.q + BR + "2: " + b.q }
+    ];
+    for (const modelo of CHAT_MODELOS) {
+      try {
+        const r = await Promise.race([
+          env.AI.run(modelo, { messages: men3, max_tokens: 8 }),
+          new Promise((_, rj) => setTimeout(() => rj(new Error("lento")), 12000))
+        ]);
+        const t = ((r && (r.response || r.result || "")) + "").toUpperCase();
+        if (/\bNO\b/.test(t)) { reto = "NO"; break; }
+        if (/\bS[IÍ]\b|\bYES\b/.test(t)) { reto = "SI"; break; }
+      } catch (e) {}
+    }
+    if (reto !== "NO") rel = "NINGUNA";
   }
 
   if (env.RADAR) await env.RADAR.put(clave, rel, { expirationTtl: 2592000 });
@@ -1526,7 +1581,7 @@ async function relAcumulado(env) {
   out.sort((a, b) => b.neto - a.neto);
   // cuantas relaciones lleva clasificadas el grafo
   const rel = await env.RADAR.list({ prefix: "rel:", limit: 1000 });
-  const clasificadas = rel.keys.filter(k => k.name.indexOf("rel:hallazgo:") !== 0).length;
+  const clasificadas = rel.keys.filter(k => k.name.indexOf("rel:v2:") === 0).length;
   return { hallazgos: out, clasificadas: clasificadas };
 }
 
