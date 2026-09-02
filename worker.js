@@ -1276,10 +1276,20 @@ function relClaves(q) {
 
 /* Candidatos: mercados de EVENTOS DISTINTOS que comparten entidades. Sin este
    filtro serian 400x400 = 160.000 pares y no cabria ni en tiempo ni en cuota.   */
-function relCandidatos(markets, maxPares) {
+/* Amplitud del barrido. Estricto encuentra pocos pares pero casi todos tienen
+   sentido; amplio encuentra muchos mas pero la mayoria son ruido que gasta
+   consultas. Como la cache es permanente, un barrido amplio se paga una vez.   */
+const REL_AMPLITUD = {
+  estricto: { minComunes: 2, minFuerza: 5.0, maxMercados: 140 },
+  medio:    { minComunes: 2, minFuerza: 3.5, maxMercados: 180 },
+  amplio:   { minComunes: 1, minFuerza: 2.0, maxMercados: 240 }
+};
+
+function relCandidatos(markets, maxPares, amplitud) {
+  const A = REL_AMPLITUD[amplitud] || REL_AMPLITUD.estricto;
   const vivos = markets.filter(m => m.live && m.liq > 3000 && m.p > 0.01 && m.p < 0.99
                                     && !REL_DEPORTE.test(m.q))
-                       .slice(0, 140)
+                       .slice(0, A.maxMercados)
                        .map(m => ({ m: m, k: relClaves(m.q) }));
 
   /* Rareza de cada palabra. Sin esto el emparejador se llena de partidas de
@@ -1301,7 +1311,7 @@ function relCandidatos(markets, maxPares) {
       if (a.m.evSlug && a.m.evSlug === b.m.evSlug) continue;   // mismo evento: ya cubierto
       let comunes = 0, fuerza = 0;
       for (const w of a.k) if (b.k.has(w)) { const p = peso(w); if (p > 0) { comunes++; fuerza += p; } }
-      if (comunes < 2 || fuerza < 5) continue;
+      if (comunes < A.minComunes || fuerza < A.minFuerza) continue;
       /* Dos preguntas casi identicas salvo por los numeros son tramos del mismo
          indicador (rangos de tuits, de temperatura, de precio). Eso es exclusion,
          no implicacion, y es donde el modelo mas se equivoca. Fuera.            */
@@ -1399,10 +1409,18 @@ function relVerificar(rel, a, b) {
   return { viola: false };
 }
 
-async function fetchRelaciones(env, maxPares) {
-  const N = Math.max(4, Math.min(24, maxPares || 12));
+async function fetchRelaciones(env, maxPares, desde, amplitud) {
+  /* Tope por peticion: cada par son DOS consultas al modelo (ida y vuelta para la
+     comprobacion de coherencia) y Cloudflare gratis corta en 50 subpeticiones. Con
+     18 pares son 36 llamadas mas las 2 de datos: cabe justo.                     */
+  const N = Math.max(4, Math.min(18, maxPares || 12));
+  const off = Math.max(0, desde || 0);
   const datos = await fetchPMQ(2);
-  const pares = relCandidatos(datos.markets, N);
+  /* Se piden mas candidatos de los que se van a mirar y se avanza con un cursor.
+     Como las relaciones se cachean para siempre -la logica entre dos preguntas no
+     cambia- cada pasada cubre terreno NUEVO y el grafo se va llenando solo.      */
+  const todos = relCandidatos(datos.markets, off + N + 2000, amplitud);
+  const pares = todos.slice(off, off + N);
 
   const hallazgos = [], revisados = [];
   let deCache = 0, consultas = 0;
@@ -1427,8 +1445,21 @@ async function fetchRelaciones(env, maxPares) {
     });
   }
   hallazgos.sort((x, y) => y.neto - x.neto);
+
+  // Los hallazgos se guardan: encontrar una contradiccion y perderla al recargar
+  // no sirve de nada cuando el barrido dura dias.
+  if (env.RADAR) {
+    for (const h of hallazgos) {
+      const k = "rel:hallazgo:" + (await sha256(h.a.q + "||" + h.b.q)).slice(0, 20);
+      await env.RADAR.put(k, JSON.stringify(Object.assign({ visto: new Date().toISOString() }, h)),
+        { expirationTtl: 604800 });
+    }
+  }
+
   return {
     ts: new Date().toISOString(),
+    desde: off, siguiente: off + N, totalCandidatos: todos.length,
+    amplitud: amplitud || "estricto",
     paresCandidatos: pares.length, consultasIA: consultas, deCache: deCache,
     hallazgos: hallazgos, revisados: revisados.slice(0, 30),
     aviso: "PROPUESTAS, no confirmaciones. La IA solo propone la relacion logica y la " +
@@ -1438,6 +1469,58 @@ async function fetchRelaciones(env, maxPares) {
            "PRIMERA VUELTA\", y no lo son porque hay segunda vuelta. Lee las dos preguntas " +
            "enteras antes de operar."
   };
+}
+
+/* AGENTE DE BARRIDO. El cron avanza un trozo cada dia y guarda el cursor. Como
+   las relaciones se cachean, en una semana el grafo cubre miles de parejas sin
+   pasarse nunca del limite de subpeticiones de una sola peticion.               */
+async function relAgente(env) {
+  if (!env.RADAR) return { note: "KV no configurado" };
+  const cur = Number(await env.RADAR.get("rel:cursor")) || 0;
+  const amp = (await env.RADAR.get("rel:amplitud")) || "estricto";
+  const r = await fetchRelaciones(env, 18, cur, amp);
+
+  // Al llegar al final se vuelve a empezar: los mercados cambian y hay pares nuevos.
+  const sig = (r.siguiente >= r.totalCandidatos) ? 0 : r.siguiente;
+  await env.RADAR.put("rel:cursor", String(sig));
+
+  // Solo se avisa de lo NUEVO, o el cron repetiria la misma alerta cada dia.
+  const nuevos = [];
+  for (const h of r.hallazgos) {
+    const k = "rel:avisado:" + (await sha256(h.a.q + "||" + h.b.q)).slice(0, 20);
+    if (await env.RADAR.get(k)) continue;
+    await env.RADAR.put(k, "1", { expirationTtl: 2592000 });
+    nuevos.push(h);
+  }
+
+  if (nuevos.length) {
+    const li = nuevos.slice(0, 4).map(h =>
+      "- +" + (h.neto * 100).toFixed(2) + "% neto" + BR +
+      "  " + (h.a.p * 100).toFixed(1) + "% " + h.a.q.slice(0, 70) + BR +
+      "  " + (h.b.p * 100).toFixed(1) + "% " + h.b.q.slice(0, 70));
+    await sendTelegram(env,
+      "MOR TERMINAL - " + nuevos.length + " contradiccion(es) entre mercados:" + BR +
+      li.join(BR) + BR +
+      "PROPUESTAS, no confirmaciones: lee las dos preguntas enteras antes de operar.");
+  }
+  return { cursor: cur, siguiente: sig, total: r.totalCandidatos,
+           revisados: r.paresCandidatos, hallazgos: r.hallazgos.length, avisados: nuevos.length };
+}
+
+/* Todo lo que los agentes han encontrado, aunque fuera hace dias. */
+async function relAcumulado(env) {
+  if (!env.RADAR) return { hallazgos: [], nota: "KV no configurado" };
+  const l = await env.RADAR.list({ prefix: "rel:hallazgo:", limit: 200 });
+  const out = [];
+  for (const k of l.keys) {
+    const v = await env.RADAR.get(k.name, "json");
+    if (v) out.push(v);
+  }
+  out.sort((a, b) => b.neto - a.neto);
+  // cuantas relaciones lleva clasificadas el grafo
+  const rel = await env.RADAR.list({ prefix: "rel:", limit: 1000 });
+  const clasificadas = rel.keys.filter(k => k.name.indexOf("rel:hallazgo:") !== 0).length;
+  return { hallazgos: out, clasificadas: clasificadas };
 }
 
 /* ---------- MOTOR DE PAPEL ----------
@@ -2044,8 +2127,14 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 
   <div class="p" style="margin-bottom:8px">
     <h3>CONTRADICCIONES ENTRE MERCADOS <span id="rl-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— apuestas de eventos distintos que se contradicen entre sí</span></h3>
+    <div class="st" style="padding:6px 10px 0">Un agente barre un trozo cada día con el cron y guarda lo que encuentra. Como la lógica entre dos preguntas no cambia nunca, lo ya clasificado no se vuelve a consultar: el grafo se llena solo y sale gratis.</div>
     <div class="chips" style="align-items:center;gap:8px">
-      <label class="st">Pares a revisar <select id="rl-n"><option value="8">8</option><option value="14" selected>14</option><option value="24">24</option></select></label>
+      <label class="st">Amplitud <select id="rl-a">
+        <option value="estricto" selected>estricta · ~65 pares</option>
+        <option value="medio">media · ~120 pares</option>
+        <option value="amplio">amplia · ~1.070 pares</option>
+      </select></label>
+      <label class="st">Por pasada <select id="rl-n"><option value="8">8</option><option value="14" selected>14</option><option value="18">18</option></select></label>
       <button id="rl-run">⟳ Buscar contradicciones</button>
       <span class="st" id="rl-st">Polymarket trata cada evento por separado, así que nadie comprueba si se contradicen entre sí.</span>
     </div>
@@ -2871,13 +2960,14 @@ var RL=null,RLLOAD=false;
 function loadRel(){
  if(RLLOAD)return;RLLOAD=true;
  $("rl-st").textContent="Buscando… la IA clasifica cada par y la aritmética lo comprueba.";
- api("/api/relaciones?n="+(+$("rl-n").value||14),{cache:"no-store"})
+ api("/api/relaciones?n="+(+$("rl-n").value||14)+"&amplitud="+$("rl-a").value,{cache:"no-store"})
   .then(function(r){return r.json()})
   .then(function(j){
    if(j.error)throw new Error(j.error);
    RL=j;
-   $("rl-st").textContent=j.paresCandidatos+" pares revisados · "+j.consultasIA+" consultas a la IA · "+
-     j.deCache+" de memoria · "+j.hallazgos.length+" contradicción(es)"})
+   $("rl-st").textContent=j.paresCandidatos+" de "+j.totalCandidatos+" pares · "+j.consultasIA+
+     " consultas · "+j.deCache+" de memoria · "+j.hallazgos.length+" contradicción(es)"+
+     " · el agente del cron sigue barriendo solo"})
   .catch(function(e){RL=null;$("rl-st").textContent="Error: "+(e.message||e)})
   .then(function(){RLLOAD=false;render()})}
 
@@ -4760,7 +4850,9 @@ export default {
       if (p === "/api/news") return json(await fetchNews(url.searchParams.get("region") || "Pentágono"), cab);
       if (p === "/api/pmq") return json(await fetchPMQ(Number(url.searchParams.get("pages")) || 3), cab);
       if (p === "/api/pmh") return json(await fetchPMHist(url.searchParams.get("t"), url.searchParams.get("i")), cab);
-      if (p === "/api/relaciones") return json(await fetchRelaciones(env, Number(url.searchParams.get("n")) || 12), cab);
+      if (p === "/api/relaciones") return json(await fetchRelaciones(env, Number(url.searchParams.get("n")) || 12, Number(url.searchParams.get("desde")) || 0, url.searchParams.get("amplitud")), cab);
+      if (p === "/api/relaciones/todo") return json(await relAcumulado(env), cab);
+      if (p === "/api/relaciones/agente") return json(await relAgente(env), cab);
       if (p === "/api/pago") return json(await verificarPago(env, url.searchParams.get("sig")), cab);
       if (p === "/api/chat") return json(await chatResponder(env, url.searchParams.get("q")), cab);
       if (p === "/api/ynews") return json(await fetchYNews(url.searchParams.get("s")), cab);
@@ -4784,6 +4876,8 @@ export default {
       // El motor de papel vive del cron: anota las senales del dia y liquida las
       // que ya hayan resuelto. Si falla, no debe tumbar el trabajo de contratos.
       try { await edgarJob(env); } catch (e) {}
+      // Agente de barrido logico: avanza un trozo del grafo cada dia.
+      try { await relAgente(env); } catch (e) {}
       try { await paperSnap(env); } catch (e) {}
       try { await paperSettle(env, 40); } catch (e) {}
     })());
