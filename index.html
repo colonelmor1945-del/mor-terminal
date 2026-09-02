@@ -391,12 +391,19 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 
 <div class="view" id="v-pm">
   <div class="p" style="height:calc(100vh - 180px);min-height:320px">
-    <h3>POLYMARKET · MERCADOS POR VOLUMEN 24H <span id="p-cnt"></span></h3>
-    <div class="chips"><button id="pa" class="on">TODOS</button><button id="ps">⚡ CON SEÑAL</button><span class="st" id="p-st"></span></div>
+    <h3>POLYMARKET <span id="p-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— clic en cualquier fila para el desglose completo</span></h3>
+    <div class="chips" id="pm-cat" style="gap:5px;flex-wrap:wrap"></div>
+    <div class="chips" style="align-items:center;gap:8px">
+      <input id="pm-q" placeholder="Buscar dentro de estos mercados…" style="width:230px" autocomplete="off">
+      <button id="pa" class="on">Todos</button><button id="ps">⚡ Con señal</button>
+      <button id="pf">🟢 Solo fiables</button>
+      <span class="st" id="p-st"></span>
+    </div>
     <div class="bd"><table><thead><tr>
-      <th data-k="q">Mercado</th><th data-k="price" style="width:9%">Prob.</th><th data-k="chg" style="width:8%">Δ24h</th>
-      <th data-k="vol24" style="width:9%">Vol 24h</th><th data-k="liq" style="width:9%">Liquidez</th>
-      <th data-k="spread" style="width:7%">Spread</th><th style="width:18%">Señales</th>
+      <th style="width:9%">Fiabilidad</th><th data-k="q">Mercado</th>
+      <th data-k="p" style="width:8%">Prob.</th><th style="width:8%">Estimado</th>
+      <th data-k="c1d" style="width:7%">Δ24h</th><th data-k="vol24" style="width:9%">Vol 24h</th>
+      <th data-k="liq" style="width:9%">Liquidez</th><th style="width:16%">Señales</th>
     </tr></thead><tbody id="p-rows"></tbody></table></div>
   </div>
 </div>
@@ -1157,17 +1164,50 @@ function render(){
    :"<tr><td colspan='6'>"+emp("🔍","Ninguna empresa con esos filtros")+"</td></tr>"}
 
  if(VIEW==="pm"){
-  var r3=PM.filter(function(m){return (PF==="all"||m.sg.length)&&(!Q||m.q.toLowerCase().indexOf(Q)>=0)});
-  $("p-cnt").textContent=r3.length+" mercados";
-  $("p-st").textContent=r3.length?("vol 24h "+f$(r3.reduce(function(a,m){return a+m.vol24},0))):"";
-  r3=srt(r3,"vol24");
-  $("p-rows").innerHTML=r3.length?r3.map(function(m){var p=(m.price*100).toFixed(1);
-   return "<tr><td class='el'><a target='_blank' rel='noopener' href='"+m.url+"'>"+esc(m.q)+"</a></td>"+
-   "<td class='n'>"+p+"%<div class='pbar'><i style='width:"+p+"%'></i></div></td>"+
-   "<td class='n "+(m.chg>=0?"up":"dn")+"'>"+(m.chg>=0?"+":"")+(m.chg*100).toFixed(1)+"</td>"+
-   "<td class='n'>"+f$(m.vol24)+"</td><td class='n dsc'>"+f$(m.liq)+"</td><td class='n dsc'>"+(m.spread*100).toFixed(1)+"¢</td>"+
-   "<td>"+m.sg.map(function(g){return "<span class='tg "+g[1]+"'>"+g[0]+"</span>"}).join("")+"</td></tr>"}).join("")
-   :"<tr><td colspan='7'>"+(PM.length?emp("🔍","Ningún mercado con esos filtros"):(ERR.pm?emp("⚠","Polymarket no responde"):sk(5)))+"</td></tr>"}
+  /* Se pinta desde BQ (datos enriquecidos del Worker: semaforo, estimacion, evento)
+     en vez de la consulta basica. Antes habia DOS fuentes para lo mismo y la vista
+     de Polymarket era la pobre: sin semaforo, sin estimacion y sin poder abrir el
+     detalle al hacer clic. */
+  var fuente = (BQ && BQ.markets && BQ.markets.length) ? BQ.markets : null;
+  if(!fuente){
+   $("p-rows").innerHTML = "<tr><td colspan='8'>" + (BLOAD ? sk(6) : emp("\u23F3","Cargando mercados\u2026")) + "</td></tr>";
+   if(!BLOAD) loadBrain();
+  } else {
+   pmPintarCategorias(fuente);
+   var qb = ($("pm-q").value || "").toLowerCase();
+   var r3 = fuente.filter(function(m){
+    if(PMCAT !== "todas" && pmCategoria(m) !== PMCAT) return false;
+    if(PF === "sig" && !(m.sg && m.sg.length)) return false;
+    if(PF === "fiable" && !(m.sem && m.sem.luz === "verde")) return false;
+    var t = (m.q + " " + (m.ev || "")).toLowerCase();
+    if(qb && t.indexOf(qb) < 0) return false;
+    if(Q && t.indexOf(Q) < 0) return false;
+    return true });
+   $("p-cnt").textContent = "(" + r3.length + ")";
+   $("p-st").textContent = r3.length ? ("vol 24h " + f$(r3.reduce(function(a,m){ return a + (m.vol24||0) }, 0))) : "";
+   r3 = r3.slice().sort(function(a,b){ return (b.vol24||0) - (a.vol24||0) });
+   var LUZ = { verde:"fiable", ambar:"reservas", rojo:"cuidado" };
+   $("p-rows").innerHTML = r3.length ? r3.slice(0,200).map(function(m){
+    var sm = m.sem || { luz:"ambar", avisos:[], texto:"" };
+    var es = m.est || { est:m.p, confianza:"baja" };
+    var p = (m.p*100).toFixed(1);
+    return "<tr data-mid='" + m.id + "' style='cursor:pointer'>" +
+     "<td><span class='sem " + sm.luz + "' title='" +
+       esc(sm.texto + (sm.avisos.length ? " \u2014 " + sm.avisos.join(" \u00B7 ") : "")) +
+       "'><i></i>" + LUZ[sm.luz] + "</span></td>" +
+     "<td class='el' title='" + esc(m.q) + "'>" + esc(m.q.slice(0,72)) +
+       (m.ev ? "<div class='dsc'>" + esc(m.ev.slice(0,50)) + "</div>" : "") + "</td>" +
+     "<td class='n'>" + p + "%<div class='pbar'><i style='width:" + p + "%'></i></div></td>" +
+     "<td class='n'>" + (es.est*100).toFixed(1) + "%<div class='conf'>" + esc(es.confianza) + "</div></td>" +
+     "<td class='n " + ((m.c1d||0) >= 0 ? "up" : "dn") + "'>" +
+       ((m.c1d||0) >= 0 ? "+" : "") + ((m.c1d||0)*100).toFixed(1) + "</td>" +
+     "<td class='n'>" + f$(m.vol24||0) + "</td>" +
+     "<td class='n dsc'>" + f$(m.liq||0) + "</td>" +
+     "<td>" + (m.sg||[]).map(function(g){ return "<span class='tg " + g[1] + "'>" + g[0] + "</span>" }).join("") + "</td>" +
+    "</tr>" }).join("")
+    : "<tr><td colspan='8'>" + emp("\uD83D\uDD0D","Ning\u00FAn mercado con esos filtros") + "</td></tr>";
+  }
+ }
 
  if(VIEW==="quant"){renderQuant()}
  if(VIEW==="brain"){renderBrain()}
@@ -1340,6 +1380,31 @@ function renderRel(){
    "<div class='st' style='padding:6px 0 0'>"+esc(h.dice)+" → <b>"+esc(h.accion)+"</b></div>"+
    "<div class='st' style='padding:2px 0 0;color:var(--am)'>⚠ "+esc(h.comprobar)+"</div>"+
   "</div>"}).join("")}
+
+/* Categorias. Se deducen de la pregunta porque la API no las da de forma fiable.
+   Es lo que convierte una lista de 400 mercados en algo navegable. */
+var PMCAT = "todas";
+var PMCATS = [
+ ["politica","Política",/\b(election|president|senate|congress|parliament|minister|vote|poll|candidate|nomin|party|government|impeach)/i],
+ ["geopolitica","Geopolítica",/\b(war|invade|invasion|strike|ceasefire|nato|troops|military|nuclear|missile|sanction|iran|ukraine|russia|israel|taiwan|china|venezuela|blockade|hostage)/i],
+ ["cripto","Cripto",/\b(bitcoin|btc|ethereum|eth|solana|crypto|coin|token|blockchain|stablecoin)/i],
+ ["economia","Economía",/\b(fed|rate|inflation|gdp|recession|unemploy|cpi|tariff|ipo|earnings|nasdaq)/i],
+ ["clima","Clima",/\b(temperature|weather|rain|snow|hurricane|storm|celsius|fahrenheit|degrees)/i],
+ ["tecnologia","Tecnología",/\b(openai|gpt|gemini|claude|anthropic|spacex|tesla|apple|google|nvidia|chip)/i],
+ ["deporte","Deporte",/\b(vs\.?|nba|nfl|mlb|nhl|ufc|champion|league|cup|open|tournament|match|winner|premier|liga)/i],
+ ["cultura","Cultura",/\b(movie|film|oscar|grammy|album|box office|netflix|celebrity|nobel|ballon)/i]
+];
+function pmCategoria(m){
+ var t = (m.q||"") + " " + (m.ev||"");
+ for(var i=0;i<PMCATS.length;i++) if(PMCATS[i][2].test(t)) return PMCATS[i][0];
+ return "otros"}
+function pmPintarCategorias(ms){
+ var c = {todas: ms.length};
+ ms.forEach(function(m){ var k = pmCategoria(m); c[k] = (c[k]||0) + 1 });
+ var lista = [["todas","Todas"]].concat(PMCATS.map(function(x){return [x[0],x[1]]}), [["otros","Otros"]]);
+ $("pm-cat").innerHTML = lista.filter(function(x){return c[x[0]]}).map(function(x){
+  return "<button data-pc='" + x[0] + "' class='" + (PMCAT===x[0]?"on":"") + "'>" + x[1] +
+         " <span class='dim'>" + c[x[0]] + "</span></button>" }).join("")}
 
 var BQ=null,BVOL={},BLOAD=false,BSORT={k:"vol24",d:-1},BLAM=0,BNLAM=0;
 
@@ -3045,8 +3110,13 @@ $("b-kf").onchange=kellyCalc;
 $("fa").onclick=function(){FP="all";$("fa").classList.add("on");$("fr").classList.remove("on");render()};
 $("fr").onclick=function(){FP="r";$("fr").classList.add("on");$("fa").classList.remove("on");render()};
 $("fm").onchange=render;
-$("pa").onclick=function(){PF="all";$("pa").classList.add("on");$("ps").classList.remove("on");render()};
-$("ps").onclick=function(){PF="s";$("ps").classList.add("on");$("pa").classList.remove("on");render()};
+$("pf").onclick = function(){ PF="fiable"; ["pa","ps","pf"].forEach(function(i){ $(i).classList.toggle("on", i==="pf") }); render() };
+$("pm-q").oninput = render;
+$("pm-cat").addEventListener("click", function(e){
+ var b = e.target.closest ? e.target.closest("[data-pc]") : null;
+ if(b && b.dataset.pc){ PMCAT = b.dataset.pc; render() }});
+$("pa").onclick = function(){PF="all";["pa","ps","pf"].forEach(function(i){$(i).classList.toggle("on",i==="pa")});render()};
+$("ps").onclick=function(){PF="sig";["pa","ps","pf"].forEach(function(i){$(i).classList.toggle("on",i==="ps")});render()};
 $("swl").onclick=function(){WO=!WO;$("swl").classList.toggle("on",WO);render()};
 $("scsv").onclick=function(){
  var NL=String.fromCharCode(10),rows=[["Empresa","Ticker","Pais","Region","Tamano","Nicho","Watchlist"]];
