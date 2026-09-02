@@ -2,8 +2,11 @@ name = "mor-terminal"
 main = "worker.js"
 compatibility_date = "2026-07-01"
 
-# Ejecutar SIEMPRE `node sync.mjs` antes de desplegar: worker.js lleva index.html
-# dentro y si no se regenera se sube la interfaz vieja.
+# worker.js lleva index.html dentro. Este paso lo regenera ANTES de cada
+# despliegue, asi que es imposible subir la interfaz vieja por olvido: es
+# justamente el error que provoco los acentos rotos en produccion.
+[build]
+command = "node sync.mjs"
 
 [[kv_namespaces]]
 binding = "RADAR"
