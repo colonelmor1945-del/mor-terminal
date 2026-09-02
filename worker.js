@@ -353,6 +353,8 @@ function pmEnrich(m, ev) {
     tok: (function () { try { return JSON.parse(m.clobTokenIds || "[]")[0] || ""; } catch (e) { return ""; } })(),
 
     p: p,
+    bid: isFinite(bid) ? bid : null,
+    ask: isFinite(ask) ? ask : null,
     spread: spread,
     // Un spread de 0.001 sobre p=0.02 es el 5%: en absoluto engaña, en relativo no.
     spreadRel: p > 0 ? spread / p : null,
@@ -473,6 +475,77 @@ function pmMonoCadena(ev, arr, tipo, cadena, live) {
   };
 }
 
+/* ---------- SEMAFORO DE FIABILIDAD Y PROBABILIDAD PROPIA ----------
+   Distincion que hay que mantener o esto vende humo: el terminal NO dice si una
+   apuesta va a salir bien -el Monte Carlo con 4.010 millones de operaciones no
+   encontro ninguna estrategia que superara al azar-. Dice si la apuesta es SOLIDA
+   o es una trampa, que es otra cosa y si la sostienen los datos.
+
+   La probabilidad propia se construye con tres pasos, todos defendibles:
+     1. Precio medio del libro (bid+ask)/2 en vez del ultimo cruce, que puede ser
+        viejo o de un lote minusculo.
+     2. Normalizar por la suma del grupo excluyente. Si las patas suman 1,0475 hay
+        un 4,75% de sobre-redondeo repartido; quitarlo es ARITMETICA, no modelo.
+     3. Corregir el sesgo favorito-longshot con la transformada de Wang.
+
+   IMPORTANTE sobre la lambda: NO se usa la que sale de nuestra muestra. Con n=107
+   dio -0,366 y era ruido. Se usa 0,183, calibrada por oracle3 sobre 291.000
+   contratos resueltos (Apache-2.0, con paper). Nuestro dato no llegaba ni de lejos.
+   Cuando el mercado no esta en un grupo completo, la estimacion pierde el paso 2 y
+   se marca como de menor confianza: hay que decirlo, no disimularlo.            */
+
+const LAMBDA_LIT = 0.183;   // oracle3, 291k contratos resueltos
+
+function pmSemaforo(m) {
+  const av = [];
+  let mal = 0, reg = 0;
+
+  if (!m.live) { av.push("sin libro de ordenes"); mal++; }
+  if (m.liq < 2000) { av.push("liquidez muy baja"); mal++; }
+  else if (m.liq < 15000) { av.push("liquidez justa"); reg++; }
+
+  if (m.spreadRel !== null) {
+    if (m.spreadRel > 0.15) { av.push("entrar cuesta mas del 15%"); mal++; }
+    else if (m.spreadRel > 0.05) { av.push("coste de entrada alto"); reg++; }
+  }
+
+  if (m.turn !== null && m.turn < 0.02) { av.push("casi no se negocia"); mal++; }
+  if (m.days !== null && m.days < 1) { av.push("cierra en menos de un dia"); reg++; }
+  if (m.p < 0.02 || m.p > 0.98) { av.push("precio en el extremo: poco margen"); reg++; }
+
+  const luz = mal > 0 ? "rojo" : (reg > 1 ? "ambar" : (reg === 1 ? "ambar" : "verde"));
+  return {
+    luz: luz,
+    avisos: av,
+    texto: luz === "verde" ? "Mercado solido: hay libro, liquidez y el coste de entrar es razonable."
+         : luz === "ambar" ? "Se puede operar, pero con reservas."
+         : "Cuidado: aqui entrar o salir puede costarte mas que la ventaja."
+  };
+}
+
+function pmEstimacion(m, sumaGrupo, grupoCompleto) {
+  // 1. Precio medio del libro si lo hay
+  const bid = m.bid, ask = m.ask;
+  const mid = (isFinite(bid) && isFinite(ask) && bid > 0 && ask < 1) ? (bid + ask) / 2 : m.p;
+
+  // 2. Quitar el sobre-redondeo repartido (solo si el grupo esta completo)
+  let base = mid, paso2 = false;
+  if (grupoCompleto && sumaGrupo > 0.5 && sumaGrupo < 5) { base = mid / sumaGrupo; paso2 = true; }
+
+  // 3. Corregir el sesgo favorito-longshot
+  const est = Math.max(0.001, Math.min(0.999, wangInv(base, LAMBDA_LIT)));
+
+  // Confianza: sin el paso 2 la estimacion es bastante mas floja, y hay que decirlo.
+  const conf = (paso2 && m.live && m.liq > 15000) ? "alta"
+             : (paso2 || (m.live && m.liq > 15000)) ? "media" : "baja";
+
+  return {
+    est: est, mid: mid, dif: est - m.p, normalizado: paso2, confianza: conf,
+    como: (paso2 ? "precio medio del libro, sin el sobre-redondeo del grupo, " :
+                   "precio medio del libro, ") + "corregido por sesgo longshot (λ=" + LAMBDA_LIT + ")"
+  };
+}
+
 async function fetchPMQ(pages = 3) {
   const evs = [];
   for (let i = 0; i < pages; i++) {
@@ -552,6 +625,16 @@ async function fetchPMQ(pages = 3) {
     markets.forEach(m => { m["z" + k] = isFinite(m[k]) ? (m[k] - mu) / sg : 0; });
   });
   markets.forEach(m => { m.z = (m.zc1d + m.zc1w + m.zc1m) / 3; });
+
+  /* Semaforo y estimacion propia. Se hace al final porque la estimacion necesita
+     saber la suma del grupo al que pertenece cada mercado. */
+  const sumaPorEvento = {};
+  groups.forEach(g => { sumaPorEvento[g.slug] = { suma: g.sum, completo: g.completo }; });
+  markets.forEach(m => {
+    m.sem = pmSemaforo(m);
+    const g = sumaPorEvento[m.evSlug];
+    m.est = pmEstimacion(m, g ? g.suma : 1, !!(g && g.completo));
+  });
 
   groups.sort((a, b) => b.net - a.net);
   mono.sort((a, b) => b.neto - a.neto);
@@ -1406,6 +1489,14 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 .t2{color:var(--dim);border-color:#232d3d}
 .t3{color:var(--gr);border-color:#12432f}.t4{color:var(--rd);border-color:#43151d}
 .t5{color:var(--cy);border-color:#0d3d4a}.t6{color:var(--vi);border-color:#2f2456;background:rgba(167,139,250,.1)}
+/* semaforo de fiabilidad */
+.sem{display:inline-flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap}
+.sem i{width:8px;height:8px;border-radius:50%;flex:0 0 auto;display:block}
+.sem.verde i{background:var(--gr);box-shadow:0 0 6px rgba(63,185,80,.55)}
+.sem.ambar i{background:var(--am);box-shadow:0 0 6px rgba(227,164,74,.5)}
+.sem.rojo  i{background:var(--rd);box-shadow:0 0 6px rgba(240,96,93,.5)}
+.sem.verde{color:var(--gr)} .sem.ambar{color:var(--am)} .sem.rojo{color:var(--rd)}
+.conf{font-size:9.5px;color:var(--dim2);letter-spacing:.3px}
 .hb{display:flex;align-items:center;gap:10px;padding:5px 13px;font-size:11.5px}
 .hb .nm{width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt)}
 .hb .tr{flex:1;height:7px;background:rgba(255,255,255,.035);position:relative;overflow:hidden;border-radius:4px}
@@ -1763,13 +1854,14 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
       <span class="st" id="b-st">Necesita los endpoints /api/pmq y /api/pmh en tu Worker.</span>
     </div>
     <div class="bd"><table><thead><tr>
-      <th data-k="q" style="width:26%">Mercado</th><th data-k="p" style="width:7%">Precio</th>
-      <th data-k="fair" style="width:8%">Justo (Wang)</th><th data-k="edge" style="width:7%">Sesgo</th>
+      <th style="width:9%">Fiabilidad</th>
+      <th data-k="q" style="width:22%">Mercado</th><th data-k="p" style="width:7%">Precio</th>
+      <th style="width:9%">Estimado</th><th data-k="edge" style="width:7%">Sesgo</th>
       <th data-k="spreadRel" style="width:8%">Spread rel.</th><th data-k="turn" style="width:7%">Rotación</th>
       <th data-k="snorm" style="width:8%">σ norm.</th><th data-k="urg" style="width:7%">Urgencia</th>
       <th data-k="days" style="width:7%">Días</th><th data-k="z" style="width:7%">Z mom.</th><th style="width:8%">Señal</th>
     </tr></thead><tbody id="b-rows"></tbody></table></div>
-    <div class="st">Justo (Wang) = g⁻¹(precio) = Φ(Φ⁻¹(p) − λ), la probabilidad sin la prima de riesgo que el mercado incorpora. Sesgo = precio − justo: positivo significa longshot caro. σ norm. = volatilidad realizada ÷ √(p(1−p)), comparable entre niveles de precio. Urgencia = 2p(1−p)/√días. Informativo, no es recomendación.</div>
+    <div class="st"><b>Fiabilidad</b> no dice si vas a ganar: dice si el mercado tiene libro, liquidez y un coste de entrar razonable, o si es una trampa donde entrar y salir te cuesta más que la ventaja. <b>Estimado</b> es la probabilidad que calcula el terminal: precio medio del libro, sin el sobre-redondeo del grupo, y corregido por el sesgo favorito-longshot con λ=0,183 — calibrada sobre 291.000 contratos resueltos, no sobre nuestra muestra, que era demasiado pequeña para fiarse. Mira siempre la confianza debajo. <b>Que el estimado difiera del precio NO es una predicción</b>: ninguna estrategia direccional superó al azar en 4.010 millones de operaciones simuladas.<br>Justo (Wang) = g⁻¹(precio) = Φ(Φ⁻¹(p) − λ), la probabilidad sin la prima de riesgo que el mercado incorpora. Sesgo = precio − justo: positivo significa longshot caro. σ norm. = volatilidad realizada ÷ √(p(1−p)), comparable entre niveles de precio. Urgencia = 2p(1−p)/√días. Informativo, no es recomendación.</div>
   </div>
 </div>
 
@@ -2715,12 +2807,18 @@ function renderBrain(){
   return BSORT.d*(((y===null||!isFinite(y))?-1e9:y)-((x===null||!isFinite(x))?-1e9:x))});
  $("b-cnt").textContent="("+rows.length+")";
  $("b-rows").innerHTML=rows.slice(0,150).map(function(m){
+  var sm=m.sem||{luz:"ambar",avisos:[],texto:""};
+  var es=m.est||{est:m.p,dif:0,confianza:"baja",como:""};
+  var LUZ={verde:"fiable",ambar:"con reservas",rojo:"cuidado"};
   return "<tr data-mid='"+m.id+"' style='cursor:pointer'>"+
-   "<td title='"+esc(m.q)+"'>"+esc(m.q.slice(0,58))+
+   "<td><span class='sem "+sm.luz+"' title='"+esc(sm.texto+(sm.avisos.length?" — "+sm.avisos.join(" · "):""))+"'>"+
+     "<i></i>"+LUZ[sm.luz]+"</span></td>"+
+   "<td title='"+esc(m.q)+"'>"+esc(m.q.slice(0,52))+
      (m.leg?" <span class='dim'>· "+esc(m.leg.slice(0,20))+"</span>":"")+"</td>"+
    "<td><b>"+bfmt(m.p,1)+"</b></td>"+
-   "<td class='dim'>"+bfmt(m.fair,1)+"</td>"+
-   "<td class='"+(m.edge>0?"dn":"up")+"'>"+(m.edge>=0?"+":"")+(m.edge*100).toFixed(1)+"</td>"+
+   "<td title='"+esc(es.como)+"'>"+bfmt(es.est,1)+
+     "<br><span class='conf'>"+esc(es.confianza)+"</span></td>"+
+   "<td class='"+(es.dif>0?"up":"dn")+"'>"+(es.dif>=0?"+":"")+(es.dif*100).toFixed(1)+"</td>"+
    "<td class='"+(m.spreadRel>0.1?"dn":"")+"'>"+bfmt(m.spreadRel,1)+"</td>"+
    "<td class='"+(m.turn!==null&&m.turn<0.02?"dn":"")+"'>"+(m.turn===null?"—":m.turn.toFixed(2))+"</td>"+
    "<td>"+(m.snorm===null?"<span class='dim'>—</span>":m.snorm.toFixed(2))+"</td>"+
