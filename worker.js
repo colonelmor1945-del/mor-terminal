@@ -349,7 +349,14 @@ function pmEnrich(m, ev) {
     negRisk: !!(ev && ev.negRisk),
     live: pmLive(m),
     cid: m.conditionId || "",
-    url: "https://polymarket.com/market/" + (m.slug || ""),
+    slug: m.slug || "",
+    /* Polymarket sirve los mercados bajo /event/<evento>/<mercado>, no bajo
+       /market/<mercado>, que era lo que se estaba enlazando y daba 404. Si no hay
+       slug de evento se cae al del mercado, y si no hay ninguno a la busqueda. */
+    url: (ev && ev.slug)
+      ? ("https://polymarket.com/event/" + ev.slug + (m.slug ? "/" + m.slug : ""))
+      : (m.slug ? "https://polymarket.com/event/" + m.slug
+                : "https://polymarket.com/markets?_q=" + encodeURIComponent((m.question || "").slice(0, 60))),
     tok: (function () { try { return JSON.parse(m.clobTokenIds || "[]")[0] || ""; } catch (e) { return ""; } })(),
 
     p: p,
@@ -1832,7 +1839,8 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 .fila b{font-size:12px}
 .fila .m{color:var(--dim);font-size:10.5px}
 /* ---- asistente ---- */
-#iabtn{position:fixed;right:16px;bottom:16px;z-index:70;background:var(--pane);
+#iabtn.abierto{right:16px;bottom:calc(min(560px,100vh - 90px) + 26px)}
+#iabtn{position:fixed;right:16px;bottom:16px;z-index:72;background:var(--pane);
  border:1px solid var(--am);color:var(--am);padding:9px 15px;font:inherit;font-size:11px;
  letter-spacing:.06em;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.6)}
 #iabtn:hover{background:rgba(255,159,26,.12)}
@@ -1945,6 +1953,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
  </div>
  <div class="st" style="padding:0 11px 8px;display:flex;align-items:center;gap:8px">
    <label style="cursor:pointer"><input type="checkbox" id="iavoz"> leer en voz alta</label>
+   <label style="cursor:pointer"><input type="checkbox" id="iaconv"> chat de voz continuo</label>
    <span style="margin-left:auto">puede moverse por el terminal y lanzar simulaciones</span>
  </div>
 </div>
@@ -3714,8 +3723,22 @@ function feAbrir(tk,sinApilar){
  if(!e)return;
  FE=e;$("fe").classList.add("on");
  $("fe-n").textContent=e.name;
- $("fe-s").innerHTML=esc(e.tk)+" · "+esc(e.c)+" · "+esc(e.n)+
-  " · <a href='https://www.tradingview.com/symbols/"+esc(e.tk.replace(":","-"))+"/' target='_blank' rel='noopener'>ver gráfico ↗</a>";
+ var tkc=e.tk.split(":").pop();
+ /* Enlaces al exterior. Robinhood solo lista valores de EE.UU., asi que solo se
+    ofrece cuando el mercado es estadounidense: un enlace roto es peor que ninguno. */
+ var esUS=["NASDAQ","NYSE","AMEX"].indexOf(e.tk.split(":")[0])>=0;
+ var enl=[
+  ["TradingView","https://www.tradingview.com/symbols/"+e.tk.replace(":","-")+"/"],
+  ["Yahoo Finance","https://finance.yahoo.com/quote/"+encodeURIComponent(SMAP[e.tk]||tkc)],
+  ["Google Finance","https://www.google.com/finance/quote/"+encodeURIComponent(tkc)],
+  ["Simply Wall St","https://simplywall.st/search?query="+encodeURIComponent(e.name)]
+ ];
+ if(esUS){
+  enl.push(["Robinhood","https://robinhood.com/stocks/"+encodeURIComponent(tkc)]);
+  enl.push(["SEC EDGAR","https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&company="+encodeURIComponent(e.name)+"&type=8-K"]);
+ }
+ $("fe-s").innerHTML=esc(e.tk)+" \\u00b7 "+esc(e.c)+" \\u00b7 "+esc(e.n)+"<br>"+
+  enl.map(function(x){return "<a href='"+esc(x[1])+"' target='_blank' rel='noopener'>"+esc(x[0])+" \\u2197</a>"}).join(" \\u00b7 ");
 
  var sim=SMAP[e.tk];
  // --- lo esencial ---
@@ -3730,22 +3753,41 @@ function feAbrir(tk,sinApilar){
      k(MODO==="simple"?"PEOR CAÍDA":"MAX DD",pct(q.dd),"dn")+
      k(MODO==="simple"?"FUERZA":"Z-SCORE",q.z.toFixed(2),q.z>0?"up":"dn")
    :k("PRECIOS","<span class='dim'>sin cargar</span>"))+
+  (q?"":"<div class='pxlive'><div class='l'>PRECIO</div><div class='v dim'>\\u2026</div></div>")+
   k("EN TU LISTA",W[e.tk]?"sí":"no")+
   (sim?k("SÍMBOLO",esc(sim)):"");
 
  // --- precio ---
- $("fe-px").innerHTML=q&&q.c?areaChart(q.c):emp("📈",MODO==="simple"?
-  "Pulsa «Cargar precios» en ANÁLISIS DE EMPRESAS.":"Carga los precios en la vista QUANT.");
+ if(q&&q.c){ $("fe-px").innerHTML=areaChart(q.c) }
+ else {
+  $("fe-px").innerHTML=emp("&#9203;","Descargando el precio\\u2026");
+  // Se descarga SOLO el de esta empresa: cargar las 33 aqui seria absurdo.
+  if(sim){
+   api("/api/px?s="+encodeURIComponent(sim),{cache:"no-store"})
+    .then(function(r){return r.json()})
+    .then(function(j){
+     if(!j||!j.c||j.c.length<5)throw 0;
+     PX[e.tk]={c:j.c,d:j.d};
+     if(!FE||FE.tk!==e.tk)return;
+     $("fe-px").innerHTML=areaChart(j.c);
+     var u=j.c[j.c.length-1];
+     var m1=j.c.length>21?((u/j.c[j.c.length-22]-1)*100):null;
+     var celda=$("fe-met").querySelector(".pxlive");
+     if(celda)celda.innerHTML="<div class='l'>PRECIO</div><div class='v'>"+u.toFixed(2)+"</div>"+
+      (m1!==null?"<div class='l "+(m1>=0?"up":"dn")+"'>"+(m1>=0?"+":"")+m1.toFixed(1)+"% en el mes</div>":"");
+    })
+    .catch(function(){ if(FE&&FE.tk===e.tk)$("fe-px").innerHTML=emp("&#9888;","Precio no disponible ahora mismo.") });
+  } else $("fe-px").innerHTML=emp("&#8212;","Esta empresa no tiene s\\u00edmbolo de precios mapeado.");
+ }
 
  // --- 8-K ---
- var tkc=e.tk.split(":").pop();
  if(EDG){
   var f=EDG.todas.filter(function(x){return x.tk===tkc});
   $("fe-8k").innerHTML=f.length?f.map(function(x){
    return "<div class='fila'><b><a href='"+esc(x.url)+"' target='_blank' rel='noopener'>"+esc(x.fecha)+"</a></b> · "+
     esc(x.sector)+"<div class='m'>"+esc(x.etiquetas.join(", "))+"</div></div>"}).join("")
-   :emp("—","Sin avisos en los últimos "+(EDG.desde?("días desde "+EDG.desde):"30 días")+
-     ".<br>Amplía la ventana en CONTRATOS para mirar más atrás.")}
+   :emp("—","Sin avisos que citen defensa desde "+esc(EDG.desde||"")+".<br>"+
+     "<span style='font-size:11px'>Es lo normal: la mayoría de empresas no presentan 8-K citando al Pentágono.</span>")}
  else $("fe-8k").innerHTML=emp("⏳","Cargando avisos…");
 
  // --- pleitos ---
@@ -3779,7 +3821,8 @@ function feAbrir(tk,sinApilar){
   return "<div class='fila'><b>"+f$(c.amount)+"</b> · "+esc(c.name.slice(0,44))+
    "<div class='m'>"+esc(c.date)+" · "+esc((c.desc||"").slice(0,90))+"</div></div>"}).join("")+
   "<div class='st' style='margin-top:7px'>Coincidencia por nombre. <b>Verifícalo a mano</b>: que el nombre encaje no significa que sea la misma empresa.</div>"
-  :emp("—","Ningún contrato coincide con este nombre en los últimos 30 días.");
+  :emp("—","Ningún contrato del Pentágono coincide con este nombre en 30 días.<br>"+
+    "<span style='font-size:11px'>Lo habitual: solo un puñado de las 33 aparece cada mes.</span>");
 }
 
 /* Panel para un adjudicatario de contrato. Si esta en tu universo abre su ficha
@@ -4263,7 +4306,56 @@ var EN={
  // botones y controles
  "MODO SENCILLO":"SIMPLE MODE","MODO COMPLETO":"FULL MODE","← VOLVER":"← BACK",
  "🧠 PREGUNTA AL TERMINAL":"🧠 ASK THE TERMINAL","Enviar":"Send","Guardar":"Save","Canjear":"Redeem",
- "ASISTENTE":"ASSISTANT","Vaciar":"Clear","+ Añadir":"+ Add"
+ "ASISTENTE":"ASSISTANT","Vaciar":"Clear","+ Añadir":"+ Add",
+ // --- frases completas ---
+ "Vista general de todo a la vez: contratos del Pentágono, tus empresas, apuestas y noticias.":
+   "Everything at a glance: Pentagon contracts, your companies, markets and news.",
+ "responde solo con tus datos":"answers only from your data",
+ "leer en voz alta":"read answers aloud",
+ "puede moverse por el terminal y lanzar simulaciones":"can navigate the terminal and run simulations",
+ "Pregunta o pulsa el micrófono":"Ask, or tap the microphone",
+ "Ningún cruce en 30 días.":"No matches in 30 days.",
+ "Es lo normal: cuando salte uno, será señal de verdad.":"That is normal — when one appears, it means something.",
+ "— el instante en que la información privada se vuelve pública":
+   "— the moment private information becomes public",
+ "— clic en una fila para el desglose completo":"— click a row for the full breakdown",
+ "— clic en una empresa para su ficha completa":"— click a company for its full profile",
+ "— clic en cualquier fila para el desglose completo":"— click any row for the full breakdown",
+ "— apuestas de eventos distintos que se contradicen entre sí":
+   "— markets from different events that contradict each other",
+ "Buscar dentro de estos mercados…":"Search within these markets…",
+ "Ningún mercado con esos filtros":"No markets match those filters",
+ "Cargando mercados…":"Loading markets…",
+ "Descargando el precio…":"Downloading price…",
+ "Precio no disponible ahora mismo.":"Price not available right now.",
+ "Lo esencial":"Key figures","Precio · último año":"Price · last year",
+ "Avisos oficiales a la SEC (8-K)":"Official SEC filings (8-K)",
+ "Pleitos en tribunales":"Court cases","Noticias":"News",
+ "Contratos del Pentágono que podrían ser suyos":"Pentagon contracts that might be theirs",
+ "Todas las probabilidades del grupo":"All probabilities in the group",
+ "Histórico y niveles de Fibonacci":"History and Fibonacci levels",
+ "Matrix · profundidad del libro":"Matrix · order book depth",
+ "Delta · flujo de órdenes (CVD)":"Delta · order flow (CVD)",
+ "Métricas":"Metrics","Zona de investigación":"Research area",
+ "Qué ha pasado hoy":"What happened today","Qué es esto":"What this is",
+ "LO QUE MERECE UN VISTAZO HOY":"WORTH A LOOK TODAY",
+ "SI TE PREGUNTAS QUÉ SIGNIFICA CADA COSA":"IF YOU WONDER WHAT EACH TERM MEANS",
+ "Clave de acceso":"Access key","Guardar":"Save","Acceso":"Access",
+ "Amplitud":"Breadth","Por pasada":"Per pass","Buscar contradicciones":"Find contradictions",
+ "Ninguna contradicción ahora mismo.":"No contradictions right now.",
+ "Todos":"All","Con señal":"With signal","Solo fiables":"Reliable only",
+ "Cargar / actualizar cerebro":"Load / refresh engine",
+ "Cargar / actualizar precios":"Load / refresh prices",
+ "Ejecutar simulación":"Run simulation","Ejecutar prueba de choque":"Run stress test",
+ "Anotar señales de hoy":"Log today's signals","Liquidar resueltas":"Settle resolved",
+ "Buscar presentaciones":"Search filings","Ventana":"Window",
+ "Capital":"Capital","Tope por posición":"Cap per position","Tope total":"Total cap",
+ "Fracción Kelly":"Kelly fraction","Tu probabilidad":"Your probability",
+ "Mercados":"Markets","Entrada a":"Entry at","del cierre":"before close",
+ "Volumen mínimo":"Minimum volume","Repeticiones":"Repetitions",
+ "fiable":"reliable","reservas":"caution","cuidado":"risky",
+ "alta":"high","media":"medium","baja":"low",
+ "días":"days","día":"day","mes":"month","meses":"months"
 };
 var ENK=Object.keys(EN).sort(function(a,b){return b.length-a.length});
 var IDIOMA=(function(){try{return localStorage.getItem("mor_lang")||"es"}catch(e){return "es"}})();
@@ -4309,6 +4401,14 @@ var TRAD={
 // Claves ordenadas de mas larga a mas corta: la coincidencia mas especifica gana.
 var TRADK=Object.keys(TRAD).sort(function(a,b){return b.length-a.length});
 
+var AYUDA_EN={
+ quant:"The 33 companies with price and recent moves. «Strength» compares each one against the rest: above 0 means it is doing better than the group average.",
+ brain:"Each line is an open Polymarket bet. What matters is at the top: «where the math does not add up» are places where probabilities do not sum to 100% and money is left on the table without having to be right about anything. Click any row for the full breakdown.",
+ sim:"This checks whether an idea would actually have worked, using data that already happened. Look at the «Reliable?» column: if it says noise, the pretty result was luck.",
+ cart:"You set how likely you think something is and how much money you have; this works out what you would risk. Below, the trades where no forecasting is needed because the math already fails.",
+ lib:"The seven big families of quantitative analysis and whether they apply here. A prediction contract is not a stock, which is why half the classic techniques do not carry over.",
+ dash:"Everything at once: Pentagon contracts, your companies, markets and news."
+};
 /* Ayudas por vista: una frase que dice para que sirve la pantalla. */
 var AYUDA={
  quant:"Aquí ves las 33 empresas con su precio y cuánto se han movido. «Fuerza» compara cada una con las demás: por encima de 0 va mejor que la media del grupo.",
@@ -4322,7 +4422,7 @@ var AYUDA={
 function traducir(){
  var simple=MODO==="simple";
  var en=IDIOMA==="en";
- [].forEach.call(document.querySelectorAll("#nav button[data-v], th, h3, .kpi .k, .tarj .t"),function(el){
+ [].forEach.call(document.querySelectorAll("#nav button[data-v], th, h3, .kpi .k, .kpi .s, .tarj .t, .tarj .x, .tarj .y, .st, .ayuda, .expl, .gloss .k, .gloss .v, .emp, .dp>h4, .chips label, .chips button"),function(el){
   if(el.dataset.oTxt===undefined)el.dataset.oTxt=el.innerHTML;
   var o=el.dataset.oTxt;
   if(!simple){el.innerHTML=o;return}
@@ -4344,7 +4444,7 @@ function traducir(){
   var cont=$("v-"+v);if(!cont)continue;
   var a=cont.querySelector(".ayuda");
   if(!a){a=document.createElement("div");a.className="ayuda";cont.insertBefore(a,cont.firstChild)}
-  a.innerHTML=AYUDA[v]}}
+  a.innerHTML=(IDIOMA==="en"&&AYUDA_EN[v])?AYUDA_EN[v]:AYUDA[v]}}
 
 /* ================= FONDO TOPOGRAFICO =================
    Curvas de nivel sobre un campo de ruido suave, extraidas con marching squares.
@@ -4461,15 +4561,20 @@ function iaEjecutar(a){
  return null}
 
 /* ---- voz ---- */
-var VOZ=null,VOZON=false,HABLAR=false;
+var VOZ=null,VOZON=false,HABLAR=false,CONVERSA=false;
 function vozIniciar(){
  var R=window.SpeechRecognition||window.webkitSpeechRecognition;
  if(!R)return false;
- VOZ=new R();VOZ.lang="es-ES";VOZ.continuous=false;VOZ.interimResults=false;
+ VOZ=new R();VOZ.lang=(IDIOMA==="en"?"en-US":"es-ES");VOZ.continuous=false;VOZ.interimResults=false;
  VOZ.onresult=function(e){
   var t=e.results[0][0].transcript;
   $("iaq").value=t;iaPreguntar(t)};
- VOZ.onend=function(){VOZON=false;$("iamic").textContent="🎤";$("iamic").style.color=""};
+ VOZ.onend=function(){
+  VOZON=false;$("iamic").textContent="\\uD83C\\uDFA4";$("iamic").style.color="";
+  // En modo conversacion se vuelve a escuchar en cuanto acaba de hablar.
+  if(CONVERSA&&!IABUSY&&!(window.speechSynthesis&&speechSynthesis.speaking))
+   setTimeout(function(){ if(CONVERSA&&!VOZON&&!IABUSY)vozAlternar() },700);
+ };
  VOZ.onerror=function(){VOZON=false;$("iamic").textContent="🎤";$("iamic").style.color=""};
  return true}
 
@@ -4485,7 +4590,9 @@ function decir(txt){
  try{
   speechSynthesis.cancel();
   var u=new SpeechSynthesisUtterance(String(txt).slice(0,600));
-  u.lang="es-ES";u.rate=1.05;
+  u.lang=(IDIOMA==="en"?"en-US":"es-ES");u.rate=1.05;
+  // Al terminar de leer, si estamos conversando, vuelve a abrir el microfono.
+  u.onend=function(){ if(CONVERSA&&!VOZON&&!IABUSY)setTimeout(vozAlternar,350) };
   speechSynthesis.speak(u)}catch(e){}}
 
 function iaPreguntar(q){
@@ -4507,7 +4614,8 @@ function iaPreguntar(q){
 
 function iaAbrir(v){
  $("iap").classList.toggle("on",v);
- $("iabtn").style.display=v?"none":"";
+ $("iabtn").classList.toggle("abierto",v);
+ $("iabtn").textContent=v?"\\u2715 CERRAR" : "\\uD83E\\uDDE0 PREGUNTA AL TERMINAL";
  if(v){
   if(!$("iam").children.length){
    iaMsg("Pregúntame por lo que hay hoy. Solo respondo con los datos que el terminal "+
@@ -4563,6 +4671,7 @@ function aplicarModo(){
  [].forEach.call($("nav").querySelectorAll("button[data-v]"),function(b){
   if(MODO==="simple")b.textContent=b.textContent.replace(/^F\\d+\\s+/,"")});}
 
+function T(es,en){return IDIOMA==="en"?en:es}
 function nEmp(n,sing,plur){return n+" "+(n===1?sing:plur)}
 
 function renderIni(){
@@ -4571,17 +4680,22 @@ function renderIni(){
  // --- contratos ---
  var radar=CON.filter(function(c){return !c.prime});
  if(CON.length){
-  tarj.push({c:"",t:"Contratos vigilados",g:CON.length,
-   x:nEmp(radar.length,"no va","no van")+" a los gigantes",
-   y:"Últimos 30 días del Pentágono"});
-  hoy.push("El Pentágono ha repartido <b>"+CON.length+"</b> contratos en 30 días. "+
-   "<b>"+radar.length+"</b> no se los llevan los gigantes de siempre, que son los que pueden mover una empresa pequeña.");
+  tarj.push({c:"",t:T("Contratos vigilados","Contracts tracked"),g:CON.length,
+   x:T(nEmp(radar.length,"no va","no van")+" a los gigantes", radar.length+" not going to the primes"),
+   y:T("Últimos 30 días del Pentágono","Pentagon, last 30 days")});
+  hoy.push(T("El Pentágono ha repartido <b>"+CON.length+"</b> contratos en 30 días. "+
+   "<b>"+radar.length+"</b> no se los llevan los gigantes de siempre, que son los que pueden mover una empresa pequeña.",
+   "The Pentagon awarded <b>"+CON.length+"</b> contracts in 30 days. <b>"+radar.length+
+   "</b> did not go to the usual primes — those are the ones that can move a small company."));
  }
  if(MATCH&&MATCH.length){
-  tarj.push({c:"ok",t:"Cruces detectados",g:MATCH.length,
-   x:"Coinciden con tu lista de empresas",y:"Verifícalo a mano antes de nada"});
-  hoy.push("Hay <b>"+MATCH.length+"</b> "+(MATCH.length===1?"coincidencia":"coincidencias")+
-   " entre quien gana contratos y tus empresas seguidas. Es la señal más fuerte que da el terminal.");
+  tarj.push({c:"ok",t:T("Cruces detectados","Matches found"),g:MATCH.length,
+   x:T("Coinciden con tu lista de empresas","Match your company list"),
+   y:T("Verifícalo a mano antes de nada","Verify by hand before anything else")});
+  hoy.push(T("Hay <b>"+MATCH.length+"</b> "+(MATCH.length===1?"coincidencia":"coincidencias")+
+   " entre quien gana contratos y tus empresas seguidas. Es la señal más fuerte que da el terminal.",
+   "There "+(MATCH.length===1?"is":"are")+" <b>"+MATCH.length+"</b> match"+(MATCH.length===1?"":"es")+
+   " between contract winners and the companies you follow. It is the strongest signal this terminal produces."));
   MATCH.slice(0,4).forEach(function(m){
    lista.push(["ok","Cruce",m.company+" podría estar detrás de un contrato de "+f$(m.amount),
     "Coincide el nombre con "+m.recipient+". Compruébalo antes de dar nada por hecho."])});
@@ -4590,9 +4704,9 @@ function renderIni(){
  // --- 8-K ---
  if(EDG){
   var cr=EDG.cruces.length,ca=EDG.candidatas.length;
-  tarj.push({c:cr?"ok":"inf",t:"Avisos oficiales (8-K)",g:cr+ca,
-   x:cr?nEmp(cr,"es de tu lista","son de tu lista"):"ninguno es de tu lista",
-   y:"Empresas que han comunicado algo a la SEC"});
+  tarj.push({c:cr?"ok":"inf",t:T("Avisos oficiales (8-K)","Official filings (8-K)"),g:cr+ca,
+   x:cr?T(nEmp(cr,"es de tu lista","son de tu lista"), cr+" from your list"):T("ninguno es de tu lista","none from your list"),
+   y:T("Empresas que han comunicado algo a la SEC","Companies that filed something with the SEC")});
   if(cr) EDG.cruces.slice(0,3).forEach(function(x){
    lista.push(["ok","Tu lista",x.universo+" ha publicado un aviso oficial el "+x.fecha,
     "Citando al Departamento de Defensa. "+x.etiquetas.join(", ")+"."])});
@@ -4604,22 +4718,26 @@ function renderIni(){
  // --- arbitraje ---
  if(BQ){
   var op=(BQ.groups||[]).filter(function(g){return g.net>0}).length+(BQ.mono||[]).length;
-  tarj.push({c:op?"ok":"inf",t:"Cuentas que no cuadran",g:op,
-   x:op?"apuestas donde sobra dinero":"hoy todo cuadra",
-   y:"Sin tener que adivinar nada"});
+  tarj.push({c:op?"ok":"inf",t:T("Cuentas que no cuadran","Math that doesn't add up"),g:op,
+   x:op?T("apuestas donde sobra dinero","markets with money left over"):T("hoy todo cuadra","everything adds up today"),
+   y:T("Sin tener que adivinar nada","No forecasting required")});
   if(op){
    var mej=(BQ.groups||[]).filter(function(g){return g.net>0})[0];
    if(mej)lista.push(["ok","Arbitraje","«"+mej.ev+"» suma "+(mej.sum*100).toFixed(1)+"% en vez de 100%",
     "Sobra un "+(mej.net*100).toFixed(2)+"% después de comisiones. Ojo: hay que poder entrar en todas las opciones a la vez."]);
-   hoy.push("En los mercados de apuestas hay <b>"+op+"</b> "+(op===1?"sitio":"sitios")+
-    " donde las probabilidades no suman lo que deberían. Ahí no hace falta acertar nada, solo que las cuentas cuadren.");
+   hoy.push(T("En los mercados de apuestas hay <b>"+op+"</b> "+(op===1?"sitio":"sitios")+
+    " donde las probabilidades no suman lo que deberían. Ahí no hace falta acertar nada, solo que las cuentas cuadren.",
+    "There "+(op===1?"is":"are")+" <b>"+op+"</b> spot"+(op===1?"":"s")+
+    " where probabilities do not add up as they should. No forecasting needed there — just arithmetic."));
   }
  }else{
   tarj.push({c:"inf",t:"Cuentas que no cuadran",g:"—",x:"pulsa para analizar",y:"Necesita cargar los mercados"});
  }
 
- if(!hoy.length)hoy.push("Cargando los datos del día… si tarda, pulsa <b>⟳ REFRESH</b> arriba a la derecha.");
- $("i-hoy").innerHTML="<div class='t' style='font-size:11px;letter-spacing:.08em;color:var(--dim);text-transform:uppercase;margin-bottom:8px'>Qué ha pasado hoy</div>"+hoy.join("<br><br>");
+ if(!hoy.length)hoy.push(T("Cargando los datos del día… si tarda, pulsa <b>⟳ REFRESH</b> arriba a la derecha.",
+   "Loading today's data… if it takes a while, press <b>⟳ REFRESH</b> at the top right."));
+ $("i-hoy").innerHTML="<div class='t' style='font-size:11px;letter-spacing:.08em;color:var(--dim);text-transform:uppercase;margin-bottom:8px'>"+
+  T("Qué ha pasado hoy","What happened today")+"</div>"+hoy.join("<br><br>");
 
  $("i-tarj").innerHTML=tarj.map(function(t){
   return "<div class='tarj "+t.c+"'><div class='t'>"+esc(t.t)+"</div><div class='g'>"+t.g+"</div>"+
@@ -4630,7 +4748,8 @@ function renderIni(){
    "<span class='"+(l[0]==="ok"?"t3":"t2")+"'>"+esc(l[1])+"</span> "+
    "<b style='font-size:12.5px'>"+esc(l[2])+"</b><br>"+
    "<span style='font-size:11.5px;color:var(--dim)'>"+esc(l[3])+"</span></div>"}).join("")
-  :emp("👀","Nada llamativo por ahora.<br>El terminal avisa cuando algo se cruza.");}
+  :emp("👀",T("Nada llamativo por ahora.<br>El terminal avisa cuando algo se cruza.",
+    "Nothing notable yet.<br>The terminal alerts you when something crosses."));}
 
 /* ================= NAVEGACIÓN =================
    Historial propio: al saltar entre vistas y fichas es facil perderse, y el boton
@@ -4732,10 +4851,20 @@ $("i-keyok").onclick=function(){
  var v=$("i-key").value.trim();setKey(v);$("i-key").value="";
  $("i-keyst").textContent=v?"Clave guardada. Recargando…":"Clave borrada. Recargando…";
  setTimeout(function(){location.reload()},700)};
-$("iabtn").onclick=function(){iaAbrir(true)};
+$("iabtn").onclick=function(){iaAbrir(!$("iap").classList.contains("on"))};
 $("iax").onclick=function(){iaAbrir(false)};
 $("iag").onclick=function(){iaPreguntar()};
 $("iamic").onclick=vozAlternar;
+$("iaconv").onchange=function(){
+ CONVERSA=this.checked;
+ if(CONVERSA){
+  // Sin lectura en voz alta, un chat de voz es media conversacion: se activa sola.
+  if(!HABLAR){HABLAR=true;$("iavoz").checked=true}
+  iaMsg(IDIOMA==="en"?"Voice chat on. Speak after the tone; I will keep listening.":
+        "Chat de voz activado. Habla cuando quieras: seguiré escuchando sola tras cada respuesta.","ia");
+  if(!VOZON)vozAlternar();
+ } else if(VOZ&&VOZON){ VOZ.stop() }
+};
 $("iavoz").onchange=function(){HABLAR=this.checked;
  if(HABLAR)decir("Voz activada. Te leeré las respuestas.")};
 $("iaq").addEventListener("keydown",function(e){if(e.key==="Enter")iaPreguntar()});
