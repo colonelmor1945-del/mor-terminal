@@ -1088,6 +1088,7 @@ const CHAT_ACCIONES = [
   ["ver_metodos",    "ir a la biblioteca de metodos"],
   ["ficha:TICKER",   "abrir la ficha de una empresa, p.ej. ficha:NASDAQ:BYRN"],
   ["cargar_precios", "descargar los precios de las 33 empresas"],
+  ["cargar_divisas", "descargar y analizar las 18 divisas (momentum, regimen, cointegracion)"],
   ["simular",        "lanzar el backtest sobre Polymarket (tarda 1-3 min)"],
   ["simular_divisas","lanzar el backtest sobre divisas"],
   ["prueba_choque",  "lanzar el Monte Carlo contra el azar"],
@@ -1172,7 +1173,7 @@ async function chatContexto(pregunta) {
       : "ninguno cubre costes"));
     if ((pmq.mono || []).length)
       partes.push("MONOTONIA VIOLADA: " + pmq.mono.slice(0, 2).map(g =>
-        g.ev + ":  + g.caro +  no puede superar a  + g.barato + ").join(" | "));
+        g.ev + ": " + g.caro + " no puede superar a " + g.barato).join(" | "));
   } else partes.push("ARBITRAJE: no se pudo consultar ahora mismo");
 
   if (ed) {
@@ -1197,8 +1198,9 @@ async function chatContexto(pregunta) {
   return partes.join(String.fromCharCode(10));
 }
 
-async function chatResponder(env, pregunta) {
+async function chatResponder(env, pregunta, estado) {
   const p = String(pregunta || "").trim().slice(0, 400);
+  const est = String(estado || "").trim().slice(0, 1500);
   if (!p) return { error: "pregunta vacia" };
   if (!env.AI) return {
     error: "Falta el binding AI. En el panel de Cloudflare: Settings -> Bindings -> " +
@@ -1209,6 +1211,7 @@ async function chatResponder(env, pregunta) {
   const mensajes = [
     { role: "system", content: CHAT_SISTEMA },
     { role: "user", content: "CONTEXTO (datos reales de ahora mismo):\n" + ctx +
+                             (est ? "\n\nLO QUE EL USUARIO TIENE EN PANTALLA:\n" + est : "") +
                              "\n\nPREGUNTA: " + p }
   ];
 
@@ -2197,6 +2200,34 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     </tr></thead><tbody id="q-rows"></tbody></table></div>
     <div class="st">Z-score = media de los z de los retornos 1M/3M/6M (momentum compuesto transversal). Vol. anual = desviación típica de retornos diarios × √252. Max DD = mayor caída desde máximo. Informativo, no es recomendación.</div>
   </div>
+
+  <div class="p" style="margin-top:8px">
+    <h3>DIVISAS · QUANT <span id="fx-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— clic en un par para su gráfico</span></h3>
+    <div class="chips"><button id="fxload">⟳ Cargar divisas</button><span class="st" id="fx-st">18 pares: mayores, cruces y emergentes. Pasan por tu Worker (Yahoo Finance).</span></div>
+    <div class="grid g4" style="margin:8px 0">
+      <div class="kpi"><div class="k">PARES CARGADOS</div><div class="v" id="fx1">—</div><div class="s" id="fx1s">series de 400 sesiones</div></div>
+      <div class="kpi c2"><div class="k">MEJOR MOMENTUM</div><div class="v" id="fx2">—</div><div class="s" id="fx2s">—</div></div>
+      <div class="kpi c3"><div class="k">EN TENSIÓN</div><div class="v" id="fx3">—</div><div class="s" id="fx3s">volatilidad reciente por encima de la normal</div></div>
+      <div class="kpi c4"><div class="k">PARES ESTIRADOS</div><div class="v" id="fx4">—</div><div class="s" id="fx4s">diferencias que suelen volver a su sitio</div></div>
+    </div>
+    <div class="bd" style="max-height:420px;overflow:auto"><table><thead><tr>
+      <th style="width:12%">Par</th><th style="width:8%">Último</th>
+      <th style="width:7%">1M</th><th style="width:7%">3M</th><th style="width:7%">6M</th>
+      <th class="mates" style="width:8%">Vol.anual</th><th style="width:10%">Régimen</th>
+      <th class="mates" style="width:7%">Hurst</th><th class="mates" style="width:7%">Z mom.</th>
+      <th style="width:11%">Tendencia</th><th class="mates" style="width:8%">Kelly</th><th style="width:8%">Señal</th>
+    </tr></thead><tbody id="fx-rows"><tr><td colspan="12"><div class="emp"><b>💱</b>Pulsa <b>⟳ Cargar divisas</b>.</div></td></tr></tbody></table></div>
+    <div class="grid g2" style="margin-top:8px">
+      <div class="p" style="height:300px"><h3 id="fx-ch-t">GRÁFICO</h3><div class="bd" id="fx-chart"><div class="emp"><b>📈</b>Elige un par en la tabla.</div></div></div>
+      <div class="p" style="height:300px"><h3>PARES QUE SE MUEVEN JUNTOS <span class="st" style="font-weight:400;text-transform:none">— cointegración</span></h3>
+        <div class="bd" style="overflow:auto"><table><thead><tr><th>Par A</th><th>Par B</th><th class="mates">β</th><th>Diferencia (z)</th><th class="mates">Vida media</th><th>Lectura</th></tr></thead><tbody id="fx-coint"></tbody></table></div></div>
+    </div>
+    <div class="p" style="margin-top:8px"><h3>COHERENCIA TRIANGULAR <span class="st" style="font-weight:400;text-transform:none">— EUR/USD × USD/JPY debería dar EUR/JPY</span></h3>
+      <div class="bd" style="overflow:auto"><table><thead><tr><th>Cruce</th><th>Cotizado</th><th>Implícito</th><th>Desvío</th><th>Lectura</th></tr></thead><tbody id="fx-tri"></tbody></table></div>
+      <div class="st">Con cierres diarios los desvíos de unos pocos puntos básicos son ruido de horario (cada par cierra en un instante distinto), no arbitraje. Es un control de calidad del dato; un desvío grande señala un precio malo.</div>
+    </div>
+    <div class="st">Régimen = vol. 20 sesiones / vol. 100 sesiones. Hurst (R/S) &gt;0,55 tendencial, &lt;0,45 reversión. Z mom. = media de los z transversales de 1M/3M/6M. Kelly continuo = μ/σ² diario, teórico y sin costes. Informativo, no es recomendación.</div>
+  </div>
 </div>
 
 <div class="view" id="v-brain">
@@ -2839,9 +2870,11 @@ function hist(el,vals){
 function scatter(el,ms){
  if(!ms.length){el.innerHTML=sk(4);return}
  var W=740,H=190,ml=44,mb=22,mt=12,mr=10,iw=W-ml-mr,ih=H-mt-mb;
+ var vs=ms.map(function(m){return Math.log10(1+m.vol24)});
  var mv=Math.max.apply(null,ms.map(function(m){return m.vol24}))||1;
+ var lmin=Math.min.apply(null,vs), lmax=Math.max.apply(null,vs), lrg=(lmax-lmin)||1;
  var pts=ms.map(function(m){
-  var x=ml+(m.price)*iw, lv=Math.log10(1+m.vol24)/Math.log10(1+mv);
+  var x=ml+(m.price)*iw, lv=(Math.log10(1+m.vol24)-lmin)/lrg;
   var y=mt+ih-lv*ih, r=Math.max(2.2,Math.min(9,Math.sqrt(m.vol24/mv)*13));
   var c=m.chg>=0?"#00e08a":"#ff4d5e";
   return "<circle cx='"+x.toFixed(1)+"' cy='"+y.toFixed(1)+"' r='"+r.toFixed(1)+"' fill='"+c+"' opacity='.45' stroke='"+c+"' stroke-width='.7'><title>"+esc(m.q.slice(0,70))+"\\n"+(m.price*100).toFixed(1)+"% · vol "+f$(m.vol24)+" · Δ"+(m.chg*100).toFixed(1)+"</title></circle>"}).join("");
@@ -2925,7 +2958,7 @@ function tape(){
 
 /* ---------- RENDER ---------- */
 function hbars(l,mx){return l.map(function(x){var w=Math.max(2,Math.round(100*x.amount/mx));
- return "<div class='hb"+(x.prime?" pr":"")+"'><div class='nm' title='"+esc(x.name)+"'>"+esc(x.name)+"</div><div class='tr'><i style='width:"+w+"%'></i></div><div class='vl'>"+f$(x.amount)+"</div></div>"}).join("")}
+ return "<div class='hb"+(x.prime?" pr":"")+"' data-con='"+esc(x.name)+"' style='cursor:pointer'><div class='nm' title='"+esc(x.name)+"'>"+esc(x.name)+"</div><div class='tr'><i style='width:"+w+"%'></i></div><div class='vl'>"+f$(x.amount)+"</div></div>"}).join("")}
 function srt(rows,def){if(!rows.length)return rows;var k=SORT.k in rows[0]?SORT.k:def;
  rows.sort(function(a,b){var x=a[k],y=b[k];return (x>y?1:x<y?-1:0)*SORT.d});return rows}
 function qv(){return $("cmd").dataset.q||""}
@@ -2965,7 +2998,7 @@ function render(){
  $("d-bars").innerHTML=CON.length?hbars(CON.slice(0,12),CON[0].amount):(ERR.con?emp("⚠","Sin datos"):sk(6));
 
  $("d-match").innerHTML=MATCH.length?MATCH.map(function(m){
-  return "<div class='mt-row'><span class='tg t6'>MATCH</span> <b>"+esc(m.c.name)+"</b><div style='margin-top:4px' class='dsc'>"+f$(m.c.amount)+" — coincide con <b style='color:var(--vi)'>"+esc(m.s.name)+"</b> ("+m.s.tk+") · <a target='_blank' rel='noopener' href='https://simplywall.st/search?query="+encodeURIComponent(m.s.name)+"'>ficha →</a></div></div>"}).join("")
+  return "<div class='mt-row' data-emp='"+esc(m.s.tk)+"' style='cursor:pointer'><span class='tg t6'>MATCH</span> <b>"+esc(m.c.name)+"</b><div style='margin-top:4px' class='dsc'>"+f$(m.c.amount)+" — coincide con <b style='color:var(--vi)'>"+esc(m.s.name)+"</b> ("+m.s.tk+") · <a target='_blank' rel='noopener' href='https://simplywall.st/search?query="+encodeURIComponent(m.s.name)+"'>ficha →</a></div></div>"}).join("")
   :(CON.length?emp("🎯","Ningún cruce en 30 días.<br>Es lo normal: cuando salte uno, será señal de verdad."):(ERR.con?emp("⚠","Sin datos"):sk(3)));
 
  scatter($("d-scat"),PM.slice(0,60));
@@ -2973,15 +3006,15 @@ function render(){
 
  var mv=PM.slice().sort(function(a,b){return Math.abs(b.chg)-Math.abs(a.chg)}).slice(0,12);
  $("d-mov").innerHTML=mv.length?"<table><tbody>"+mv.map(function(m){
-  return "<tr><td class='el'><a target='_blank' rel='noopener' href='"+m.url+"'>"+esc(m.q.slice(0,56))+"</a></td>"+
+  return "<tr data-q='"+esc(m.q)+"' style='cursor:pointer' title='"+esc(m.q)+"'><td class='el'><a target='_blank' rel='noopener' href='"+m.url+"'>"+esc(m.q.slice(0,56))+"</a></td>"+
   "<td class='n' style='width:50px'>"+(m.price*100).toFixed(1)+"%</td>"+
   "<td class='n "+(m.chg>=0?"up":"dn")+"' style='width:54px'>"+(m.chg>=0?"+":"")+(m.chg*100).toFixed(1)+"</td>"+
   "<td class='n dsc' style='width:58px'>"+f$(m.vol24)+"</td></tr>"}).join("")+"</tbody></table>":sk(5);
 
- $("d-heat").innerHTML=PM.length?"<div class='heat'>"+PM.slice(0,30).map(function(m){var p=m.price,c;
+ $("d-heat").innerHTML=PM.length?"<div class='heat'>"+PM.filter(function(m){return m.price>0.005&&m.price<0.995}).slice(0,30).map(function(m){var p=m.price,c;
   if(p>=.75)c="rgba(0,224,138,.30)";else if(p>=.55)c="rgba(0,224,138,.16)";
   else if(p>=.45)c="rgba(120,140,160,.13)";else if(p>=.25)c="rgba(255,77,94,.16)";else c="rgba(255,77,94,.30)";
-  return "<div class='hc' style='background:"+c+"' title='"+esc(m.q)+"'><div class='t'>"+esc(m.q.slice(0,24))+"</div><div class='m'>"+(p*100).toFixed(0)+"%<span class='"+(m.chg>=0?"up":"dn")+"' style='font-size:9px;margin-left:4px'>"+(m.chg>=0?"+":"")+(m.chg*100).toFixed(1)+"</span></div></div>"}).join("")+"</div>":sk(6);
+  return "<div class='hc' data-id='"+esc(String(m.id||""))+"' data-q='"+esc(m.q)+"' style='background:"+c+";cursor:pointer' title='"+esc(m.q)+"'><div class='t'>"+esc(m.q.slice(0,24))+"</div><div class='m'>"+(p*100).toFixed(0)+"%<span class='"+(m.chg>=0?"up":"dn")+"' style='font-size:9px;margin-left:4px'>"+(m.chg>=0?"+":"")+(m.chg*100).toFixed(1)+"</span></div></div>"}).join("")+"</div>":sk(6);
 
  var wl=SC.filter(function(s){return W[s.tk]});
  $("d-wl").innerHTML=wl.length?"<table><tbody>"+wl.map(function(s){
@@ -3088,6 +3121,8 @@ function render(){
     return "<div class='ni'><a target='_blank' rel='noopener' href='"+n.l+"'>"+esc(n.t)+"</a>"+
     (n.x?"<div class='sm'>"+esc(n.x)+"…</div>":"")+"<div class='mt'>"+esc(n.s)+(n.s?" · ":"")+n.d+"</div></div>"}).join("")
     :emp("📰",arr.length?"Nada coincide con la búsqueda.":"Ninguna fuente disponible ahora.<br>Prueba otra región o ⟳ reintentar.")}}
+ // Lo recien pintado sale en castellano: se vuelve a pasar el diccionario.
+ if(typeof traducir==="function"&&(MODO==="simple"||IDIOMA==="en"))traducir();
 }
 
 
@@ -3409,7 +3444,7 @@ function renderBrain(){
  $("b-acnt").textContent="("+opor.length+")";
  $("b-arb").innerHTML=opor.slice(0,40).map(function(g){
   var pos=g.neto>0;
-  return "<tr>"+
+  return "<tr data-ev='"+esc(g.ev)+"' style='cursor:pointer'>"+
    "<td title='"+esc(g.ev)+"'><a href='https://polymarket.com/event/"+esc(g.slug)+"' target='_blank' rel='noopener'>"+esc(g.ev.slice(0,48))+"</a></td>"+
    "<td><span class='"+(g.k==="mono"?"t5":"t2")+"' title='"+esc(g.det)+"'>"+(g.k==="mono"?"monotonía":"Σ excluyente")+"</span></td>"+
    "<td>"+g.n+"</td>"+
@@ -3846,7 +3881,7 @@ function renderPaper(){
  var todas=PAP.cerradas.map(function(x){return {c:1,x:x}}).concat(PAP.abiertas.map(function(x){return {c:0,x:x}}));
  $("pa-cnt").textContent="("+PAP.nAbiertas+" abiertas / "+PAP.nCerradas+" liquidadas)";
  $("pa-rows").innerHTML=todas.slice(0,60).map(function(r){var x=r.x;
-  return "<tr>"+
+  return "<tr"+(x.tipo==="momentum"&&x.id?" data-mid='"+esc(String(x.id))+"' style='cursor:pointer'":(x.q?" data-ev='"+esc(x.q)+"' style='cursor:pointer'":""))+">"+
    "<td><span class='"+(r.c?"t3":"t2")+"'>"+(r.c?"liquidada":"abierta")+"</span></td>"+
    "<td class='dim'>"+esc(x.tipo)+"</td>"+
    "<td>"+esc(x.senal||"—")+"</td>"+
@@ -4317,7 +4352,7 @@ function renderCart(){
  $("c4s").textContent=ar.length?(ar.length+" operaciones · mejor retorno s/capital"):"nada cubre costes";
 
  $("ca-rows").innerHTML=r.filas.map(function(x){
-  return "<tr>"+
+  return "<tr data-mid='"+esc(String(x.m.id))+"' style='cursor:pointer'>"+
    "<td title='"+esc(x.m.q)+"'>"+esc(x.m.q.slice(0,52))+
      (x.delirio?"<br><span class='t4' style='font-size:9px'>⚠ dices "+(x.p/x.m.p).toFixed(0)+"× lo que dice el mercado — ¿seguro?</span>":"")+"</td>"+
    "<td>"+(x.m.p*100).toFixed(2)+"%</td>"+
@@ -4334,7 +4369,7 @@ function renderCart(){
  $("c-acnt").textContent="("+ar.length+")";
  $("ca-arb").innerHTML=ar.slice(0,25).map(function(a){
   var esc3=cap>0?Math.min(1,cap/ (a.coste*100) ):0;   // referencia: 100 uds nominales
-  return "<tr>"+
+  return "<tr data-ev='"+esc(a.ev)+"' style='cursor:pointer'>"+
    "<td title='"+esc(a.ev)+"'><a href='https://polymarket.com/event/"+esc(a.slug)+"' target='_blank' rel='noopener'>"+esc(a.ev.slice(0,44))+"</a></td>"+
    "<td><span class='"+(a.k==="monotonía"?"t5":"t2")+"'>"+a.k+"</span></td>"+
    "<td class='dim'>"+a.n+"</td>"+
@@ -4412,7 +4447,8 @@ function renderEdgar(){
  $("e-cnt").textContent="("+f.length+")";
  $("e-rows").innerHTML=f.map(function(x){
   var sg=x.enUniverso?["CRUCE","t1"]:(x.firma?["contrato firmado","t3"]:["mención","t2"]);
-  return "<tr>"+
+  var tkSC=tkCompleto(x.tk);
+  return "<tr"+(tkSC?" data-tk='"+esc(tkSC)+"' style='cursor:pointer'":"")+">"+
    "<td class='dim'>"+esc(x.fecha)+"</td>"+
    "<td><b>"+esc(x.tk||"—")+"</b></td>"+
    "<td title='"+esc(x.nombre)+"'>"+(x.enUniverso?
@@ -4616,7 +4652,7 @@ function traducir(){
  [].forEach.call(document.querySelectorAll("#nav button[data-v], th, h3, .kpi .k, .kpi .s, .tarj .t, .tarj .x, .tarj .y, .st, .ayuda, .expl, .gloss .k, .gloss .v, .emp, .dp>h4, .chips label, .chips button"),function(el){
   if(el.dataset.oTxt===undefined)el.dataset.oTxt=el.innerHTML;
   var o=el.dataset.oTxt;
-  if(!simple){el.innerHTML=o;return}
+  if(!simple&&!en){el.innerHTML=o;return}
   // Se traduce por trozos porque muchos titulos llevan contadores detras. Las
   // claves van de mas larga a mas corta: si no, "6M" casa antes que
   // "MEJOR MOMENTUM 6M" y sale "MEJOR MOMENTUM 6 meses".
@@ -4731,6 +4767,37 @@ function iaMsg(txt,clase){
 
 /* Ejecuta lo que pide el asistente. Lista CERRADA: si llega algo que no esta aqui
    no pasa nada. El worker ya valida, esto es la segunda barrera.                 */
+/* Resumen de lo que hay en pantalla para que la IA lo vea. Corto a proposito:
+   va en la URL y el modelo no necesita mas. */
+function iaEstado(){
+ var p=[];
+ try{
+  var VN={ini:"inicio",dash:"resumen",con:"contratos",sc:"empresas",pm:"apuestas",news:"noticias",
+   quant:"análisis de empresas",brain:"oportunidades",sim:"simulador",cart:"calculadora",inv:"investigación",lib:"biblioteca"};
+  p.push("VISTA ACTUAL: "+(VN[VIEW]||VIEW)+" · modo "+(MODO==="simple"?"sencillo":"completo"));
+  if(QUANT.length){
+   var q=QUANT.slice().sort(function(a,b){return b.r1-a.r1});
+   p.push("EMPRESAS, MEJOR MES: "+q.slice(0,3).map(function(x){return x.s.name+" "+(x.r1*100).toFixed(1)+"%"}).join(", "));
+   p.push("EMPRESAS, PEOR MES: "+q.slice(-3).reverse().map(function(x){return x.s.name+" "+(x.r1*100).toFixed(1)+"%"}).join(", "));
+   var z=QUANT.slice().sort(function(a,b){return b.z-a.z});
+   p.push("MAYOR MOMENTUM: "+z.slice(0,3).map(function(x){return x.s.name+" z="+x.z.toFixed(2)}).join(", "));
+  } else p.push("EMPRESAS: precios sin cargar (accion cargar_precios)");
+  if(BT&&BT.strats&&BT.strats.length){
+   p.push("SIMULACION ("+(BT.fx?"divisas":"Polymarket")+", "+BT.S.length+" operaciones): "+
+    BT.strats.map(function(s){return s.name+": "+(s.total>=0?"+":"")+s.total.toFixed(1)+"u, acierto "+(s.win*100).toFixed(0)+"%, t="+s.t.toFixed(2)}).join(" | "));
+  } else p.push("SIMULACION: no ejecutada (accion simular)");
+  if(FXQ.length){
+   var fz=FXQ.slice().sort(function(a,b){return b.z-a.z});
+   p.push("DIVISAS, MEJOR MOMENTUM: "+fz.slice(0,3).map(function(x){return x.n+" z="+x.z.toFixed(2)+" 6M "+(x.r6*100).toFixed(1)+"%"}).join(", "));
+   p.push("DIVISAS EN TENSION: "+(FXQ.filter(function(x){return x.reg>1.25}).map(function(x){return x.n}).join(", ")||"ninguna"));
+  }
+  if(FE)p.push("FICHA ABIERTA: "+FE.name+" ("+FE.tk+")");
+  if(DT)p.push("MERCADO ABIERTO: "+DT.q);
+  var wl=SC.filter(function(x){return W[x.tk]});
+  if(wl.length)p.push("SEGUIDAS: "+wl.map(function(x){return x.name}).join(", "));
+ }catch(e){}
+ return p.join("\\n").slice(0,1500);
+}
 function iaEjecutar(a){
  if(!a)return null;
  var V={ver_inicio:["ini","a la portada"],ver_contratos:["con","a contratos y avisos 8-K"],
@@ -4744,6 +4811,7 @@ function iaEjecutar(a){
   for(var i=0;i<SC.length;i++)if(SC[i].tk===tk){feAbrir(tk);return "Te abro la ficha de "+SC[i].name+"."}
   return null}
  if(a==="cargar_precios"){go("quant");if(!QLOAD)loadPx();return "Descargando precios, tarda unos segundos."}
+ if(a==="cargar_divisas"){go("quant");fxLoad();setTimeout(function(){try{$("fxload").scrollIntoView({block:"start"})}catch(e){}},300);return "Descargando las 18 divisas."}
  if(a==="simular"){go("sim");setUniv("pm");btRun();return "Simulación lanzada. Tarda 1–3 minutos."}
  if(a==="simular_divisas"){go("sim");setUniv("fx");fxRun();return "Simulando divisas."}
  if(a==="prueba_choque"){go("sim");if(BT&&!BT.fx){mcRun();return "Prueba de choque lanzada."}
@@ -4792,7 +4860,7 @@ function iaPreguntar(q){
  IABUSY=true;$("iaq").value="";
  iaMsg(q,"tu");
  var esp=iaMsg("Consultando tus datos…","ia");
- api("/api/chat?q="+encodeURIComponent(q),{cache:"no-store"})
+ api("/api/chat?q="+encodeURIComponent(q)+"&estado="+encodeURIComponent(iaEstado()),{cache:"no-store"})
   .then(function(r){return r.json()})
   .then(function(j){
    if(j.error){esp.className="iab err";esp.textContent=j.error;return}
@@ -4980,6 +5048,154 @@ function go(v,sinApilar){
  render()}
 [].forEach.call($("nav").querySelectorAll("button[data-v]"),function(b){b.onclick=function(){go(b.dataset.v)}});
 
+
+/* ===================== DIVISAS · QUANT ===================== */
+var FXQ=[],FXQLOAD=false,FXSEL=null;
+var FXQP=[["EURUSD=X","EUR/USD"],["GBPUSD=X","GBP/USD"],["USDJPY=X","USD/JPY"],["AUDUSD=X","AUD/USD"],
+ ["NZDUSD=X","NZD/USD"],["USDCHF=X","USD/CHF"],["USDCAD=X","USD/CAD"],["EURJPY=X","EUR/JPY"],
+ ["GBPJPY=X","GBP/JPY"],["EURGBP=X","EUR/GBP"],["EURCHF=X","EUR/CHF"],["AUDJPY=X","AUD/JPY"],
+ ["EURPLN=X","EUR/PLN"],["EURSEK=X","EUR/SEK"],["USDINR=X","USD/INR"],["USDKRW=X","USD/KRW"],
+ ["USDTRY=X","USD/TRY"],["DX-Y.NYB","Índice dólar"]];
+/* Triangulos: el cruce debe ser el producto (o cociente) de sus dos patas. */
+var FXTRI=[["EUR/JPY","EUR/USD","USD/JPY","*"],["GBP/JPY","GBP/USD","USD/JPY","*"],
+ ["AUD/JPY","AUD/USD","USD/JPY","*"],["EUR/CHF","EUR/USD","USD/CHF","*"],["EUR/GBP","EUR/USD","GBP/USD","/"]];
+/* Pares candidatos a moverse juntos. */
+var FXPAR=[["EUR/USD","GBP/USD"],["AUD/USD","NZD/USD"],["EUR/JPY","GBP/JPY"],["EUR/CHF","USD/CHF"],["EUR/USD","EUR/CHF"]];
+
+function fxRets(c){var r=[];for(var i=1;i<c.length;i++)r.push(Math.log(c[i]/c[i-1]));return r}
+function fxVol(r,nn){var x=r.slice(-nn);return sd(x)*Math.sqrt(252)}
+function fxDD(c){var pk=c[0],w=0;for(var i=0;i<c.length;i++){if(c[i]>pk)pk=c[i];var d=c[i]/pk-1;if(d<w)w=d}return w}
+/* Exponente de Hurst por rango reescalado sobre los retornos: pendiente de
+   log(R/S) frente a log(n) con n = 16, 32, 64, 128. */
+function fxHurst(r){
+ var ns=[16,32,64,128],xs=[],ys=[];
+ ns.forEach(function(nn){
+  if(r.length<nn*2)return;
+  var rs=[];
+  for(var i=0;i+nn<=r.length;i+=nn){
+   var seg=r.slice(i,i+nn),m=mean(seg),acc=0,mx=-1e9,mn=1e9;
+   for(var j=0;j<seg.length;j++){acc+=seg[j]-m;if(acc>mx)mx=acc;if(acc<mn)mn=acc}
+   var sg=sd(seg); if(sg>0)rs.push((mx-mn)/sg);
+  }
+  if(rs.length){xs.push(Math.log(nn));ys.push(Math.log(mean(rs)))}
+ });
+ if(xs.length<3)return null;
+ var mx=mean(xs),my=mean(ys),num=0,den=0;
+ for(var i=0;i<xs.length;i++){num+=(xs[i]-mx)*(ys[i]-my);den+=(xs[i]-mx)*(xs[i]-mx)}
+ return den>0?num/den:null;
+}
+/* Cointegracion sencilla: beta por minimos cuadrados sobre logaritmos, spread,
+   z del spread hoy y vida media Ornstein-Uhlenbeck por AR(1). */
+function fxCoint(a,b){
+ var L=Math.min(a.length,b.length),la=[],lb=[];
+ for(var i=0;i<L;i++){la.push(Math.log(a[a.length-L+i]));lb.push(Math.log(b[b.length-L+i]))}
+ var ma=mean(la),mb=mean(lb),num=0,den=0;
+ for(var i=0;i<L;i++){num+=(la[i]-ma)*(lb[i]-mb);den+=(lb[i]-mb)*(lb[i]-mb)}
+ var beta=den>0?num/den:0,sp=[];
+ for(var i=0;i<L;i++)sp.push(la[i]-beta*lb[i]);
+ var ms=mean(sp),ss=sd(sp),z=ss>0?(sp[L-1]-ms)/ss:0;
+ var dn=0,dd=0,ml=mean(sp.slice(0,-1));
+ for(var i=1;i<L;i++){var x=sp[i-1]-ml;dn+=(sp[i]-sp[i-1])*x;dd+=x*x}
+ var lam=dd>0?dn/dd:0, hl=lam<0?-Math.log(2)/lam:null;
+ return {beta:beta,z:z,hl:hl};
+}
+
+function fxLoad(){
+ if(FXQLOAD)return;FXQLOAD=true;
+ $("fx-st").textContent=T("Descargando divisas…","Downloading currencies…");
+ pool(FXQP,function(par){
+  return api("/api/px?s="+encodeURIComponent(par[0]),{cache:"no-store"})
+   .then(function(r){return r.json()})
+   .then(function(j){return (j&&j.c&&j.c.length>150)?{s:par[0],n:par[1],c:j.c}:null})
+   .catch(function(){return null})},4,
+  function(a,b){$("fx-st").textContent=T("Descargando divisas… ","Downloading… ")+a+"/"+b})
+ .then(function(rs){
+  var out=rs.filter(Boolean).map(function(x){
+   var c=x.c,r=fxRets(c),u=c[c.length-1];
+   var r1=c.length>21?u/c[c.length-22]-1:0,r3=c.length>63?u/c[c.length-64]-1:0,r6=c.length>126?u/c[c.length-127]-1:0;
+   var v20=fxVol(r,20),v100=fxVol(r,100),reg=v100>0?v20/v100:1;
+   var s50=mean(c.slice(-50)),s200=mean(c.slice(-200));
+   var mu=mean(r.slice(-120)),va=Math.pow(sd(r.slice(-120)),2);
+   return {s:x.s,n:x.n,c:c,u:u,r1:r1,r3:r3,r6:r6,vol:fxVol(r,252),dd:fxDD(c),reg:reg,
+    hurst:fxHurst(r),s50:s50,s200:s200,kelly:va>0?mu/va:0};
+  });
+  // Momentum transversal: z de cada horizonte contra el resto de pares, y media.
+  ["r1","r3","r6"].forEach(function(k){
+   var v=out.map(function(x){return x[k]}),m=mean(v),g=sd(v)||1;
+   out.forEach(function(x){x["z"+k]=(x[k]-m)/g})});
+  out.forEach(function(x){x.z=(x.zr1+x.zr3+x.zr6)/3;
+   x.trend=x.s50>x.s200?"alcista":"bajista";
+   x.sig=(x.z>0.5&&x.trend==="alcista")?"COMPRA":((x.z<-0.5&&x.trend==="bajista")?"VENTA":"—")});
+  FXQ=out;
+  $("fx-st").textContent=out.length+T(" pares · ",": pairs · ")+T("calculado en tu navegador","computed in your browser");
+ })
+ .catch(function(e){$("fx-st").textContent="Error: "+(e.message||e)})
+ .then(function(){FXQLOAD=false;fxRender()});
+}
+
+function fxRender(){
+ if(!FXQ.length)return;
+ var idx={};FXQ.forEach(function(x){idx[x.n]=x});
+ var best=FXQ.slice().sort(function(a,b){return b.z-a.z})[0];
+ var tens=FXQ.filter(function(x){return x.reg>1.25}).length;
+ $("fx1").textContent=FXQ.length;$("fx-cnt").textContent="("+FXQ.length+")";
+ $("fx2").textContent=best.n;$("fx2s").textContent="z "+best.z.toFixed(2)+" · 6M "+(best.r6>=0?"+":"")+(best.r6*100).toFixed(1)+"%";
+ $("fx3").textContent=tens;
+ var fila=function(x){
+  var rg=x.reg>1.25?["tensión","dn"]:(x.reg<0.8?["calma","up"]:["normal",""]);
+  var hu=x.hurst===null?"—":x.hurst.toFixed(2);
+  var pc=function(v){return "<td class='"+(v>=0?"up":"dn")+"'>"+(v>=0?"+":"")+(v*100).toFixed(1)+"%</td>"};
+  return "<tr data-fx='"+esc(x.n)+"' style='cursor:pointer"+(FXSEL===x.n?";background:var(--pane2)":"")+"'>"+
+   "<td><b>"+esc(x.n)+"</b></td><td>"+x.u.toFixed(x.u<10?4:2)+"</td>"+pc(x.r1)+pc(x.r3)+pc(x.r6)+
+   "<td class='mates'>"+(x.vol*100).toFixed(1)+"%</td>"+
+   "<td><span class='"+rg[1]+"'>"+rg[0]+"</span> <span class='dim' style='font-size:9px'>"+x.reg.toFixed(2)+"×</span></td>"+
+   "<td class='mates'>"+hu+(x.hurst===null?"":" <span class='dim' style='font-size:9px'>"+(x.hurst>0.55?"tend.":(x.hurst<0.45?"rev.":"aleat."))+"</span>")+"</td>"+
+   "<td class='mates "+(x.z>0?"up":"dn")+"'>"+x.z.toFixed(2)+"</td>"+
+   "<td class='"+(x.trend==="alcista"?"up":"dn")+"'>"+x.trend+" <span class='dim' style='font-size:9px'>50/200</span></td>"+
+   "<td class='mates'>"+(x.kelly*100>=0?"+":"")+Math.max(-300,Math.min(300,x.kelly*100)).toFixed(0)+"%</td>"+
+   "<td><span class='"+(x.sig==="COMPRA"?"t3":(x.sig==="VENTA"?"t4":""))+"'>"+x.sig+"</span></td></tr>";
+ };
+ $("fx-rows").innerHTML=FXQ.slice().sort(function(a,b){return b.z-a.z}).map(fila).join("");
+
+ // Coherencia triangular
+ $("fx-tri").innerHTML=FXTRI.map(function(t){
+  var c=idx[t[0]],a=idx[t[1]],b=idx[t[2]]; if(!c||!a||!b)return "";
+  var imp=t[3]==="*"?a.u*b.u:a.u/b.u, bp=(c.u/imp-1)*1e4;
+  var lec=Math.abs(bp)<8?["coherente","up"]:(Math.abs(bp)<30?["ruido de horario",""]:["dato sospechoso","dn"]);
+  return "<tr><td><b>"+t[0]+"</b> <span class='dim' style='font-size:9px'>= "+t[1]+" "+(t[3]==="*"?"×":"÷")+" "+t[2]+"</span></td>"+
+   "<td>"+c.u.toFixed(4)+"</td><td>"+imp.toFixed(4)+"</td><td class='"+(Math.abs(bp)<8?"":"dn")+"'>"+(bp>=0?"+":"")+bp.toFixed(1)+" pb</td>"+
+   "<td class='"+lec[1]+"'>"+lec[0]+"</td></tr>"}).join("")||"<tr><td colspan='5'>—</td></tr>";
+
+ // Pares cointegrados
+ var est=0;
+ $("fx-coint").innerHTML=FXPAR.map(function(p){
+  var a=idx[p[0]],b=idx[p[1]]; if(!a||!b)return "";
+  var k=fxCoint(a.c,b.c), rev=k.hl!==null&&k.hl<90;
+  var lec;
+  if(Math.abs(k.z)>2&&rev){lec=[(k.z>0?p[0]:p[1])+T(" va caro frente a "," is rich vs ")+(k.z>0?p[1]:p[0])+T(", suele volver en ~"+Math.round(k.hl)+" sesiones",", tends to revert in ~"+Math.round(k.hl)+" sessions"),"t5"];est++}
+  else if(!rev)lec=[T("no revierte: no sirve como par","does not revert: not a pair"),"dim"];
+  else lec=[T("en su sitio","in line"),""];
+  return "<tr><td><b>"+p[0]+"</b></td><td><b>"+p[1]+"</b></td><td class='mates'>"+k.beta.toFixed(2)+"</td>"+
+   "<td class='"+(Math.abs(k.z)>2?"dn":"")+"'>"+(k.z>=0?"+":"")+k.z.toFixed(2)+"</td>"+
+   "<td class='mates'>"+(k.hl===null?"∞":Math.round(k.hl)+" d")+"</td><td><span class='"+lec[1]+"'>"+lec[0]+"</span></td></tr>"}).join("");
+ $("fx4").textContent=est;
+
+ if(FXSEL&&idx[FXSEL])fxChart(idx[FXSEL]);
+}
+function fxChart(x){
+ FXSEL=x.n;
+ $("fx-ch-t").textContent=x.n+" · "+T("400 sesiones","400 sessions");
+ precioChart($("fx-chart"),x.c);
+ [].forEach.call($("fx-rows").querySelectorAll("tr[data-fx]"),function(tr){tr.style.background=tr.dataset.fx===x.n?"var(--pane2)":""});
+}
+(function(){
+ $("fxload").onclick=fxLoad;
+ $("fx-rows").onclick=function(ev){
+  var tr=ev.target.closest?ev.target.closest("tr[data-fx]"):null; if(!tr)return;
+  for(var i=0;i<FXQ.length;i++)if(FXQ[i].n===tr.dataset.fx){fxChart(FXQ[i]);break}
+ };
+})();
+
 /* ============ BUSCADOR GLOBAL, DIRECCIONES Y BOTON ATRAS ============ */
 
 var PAL_VISTAS=[
@@ -5035,6 +5251,16 @@ function palPinta(){
  $("palr").innerHTML=h||"<div class='it' style='color:var(--dim2)'>"+T("Nada coincide.","No matches.")+"</div>";
  var sel=$("palr").querySelector(".sel"); if(sel&&sel.scrollIntoView)sel.scrollIntoView({block:"nearest"});
 }
+/* Llevar al usuario a un mercado concreto desde cualquier sitio. Con el cerebro
+   cargado se abre la ficha directamente; si no, se va a APUESTAS con el buscador
+   ya relleno, que es lo mas cerca que se puede llegar sin descargar 900 mercados. */
+function pmIrA(id,q){
+ if(id&&typeof BQ!=="undefined"&&BQ&&BQ.markets){
+  for(var i=0;i<BQ.markets.length;i++)if(String(BQ.markets[i].id)===String(id)){go("pm");dtOpen(id);return}
+ }
+ go("pm");
+ buscarGlobal(q||"");
+}
 function palAbrir(){
  $("pal").classList.add("on"); $("palq").value=""; PALI=0;
  PALR=palBuscar(""); palPinta(); setTimeout(function(){$("palq").focus()},30);
@@ -5065,6 +5291,11 @@ function rutaLee(){
 
 (function(){
  $("buscar").onclick=palAbrir;
+ // Celdas del mapa de calor y filas de "mayores movimientos": abren el mercado.
+ $("d-heat").onclick=function(ev){
+  var c=ev.target.closest?ev.target.closest(".hc"):null; if(!c)return;
+  pmIrA(c.dataset.id,c.dataset.q);
+ };
  $("pal").onclick=function(ev){ if(ev.target===$("pal"))palCerrar() };
  $("palq").oninput=function(){ PALR=palBuscar(this.value); PALI=0; palPinta() };
  $("palq").onkeydown=function(ev){
@@ -5122,10 +5353,30 @@ document.addEventListener("click",function(e){var t=e.target;
   if(fr&&t.tagName!=="A"&&!t.classList.contains("str")){feAbrir(fr.dataset.tk);return}
   var ec=t.closest("[data-emp]");
   if(ec&&ec.dataset.emp){feAbrir(ec.dataset.emp);return}
-  var cr=t.closest("tr[data-con]");
+  var cr=t.closest("[data-con]");
   if(cr&&t.tagName!=="A"){conAbrir(cr.dataset.con);return}
   var tr=t.closest("tr[data-mid]");
-  if(tr&&t.tagName!=="A"){dtOpen(tr.dataset.mid)}}});
+  if(tr&&t.tagName!=="A"){dtOpen(tr.dataset.mid);return}
+  // Mercado por titulo (la lista de portada no trae id).
+  var tq=t.closest("[data-q]");
+  if(tq&&t.tagName!=="A"){pmIrA(null,tq.dataset.q);return}
+  // Grupo/evento: al cerebro con el buscador global relleno.
+  var te=t.closest("[data-ev]");
+  if(te&&t.tagName!=="A"){go("brain");buscarGlobal(te.dataset.ev);return}}});
+
+/* Ticker corto de EDGAR ("AVAV") -> ticker completo de la lista ("NASDAQ:AVAV"). */
+function tkCompleto(tk){
+ if(!tk)return "";
+ tk=String(tk).toUpperCase();
+ for(var i=0;i<SC.length;i++){var c=SC[i].tk;if(c===tk||c.split(":").pop()===tk)return c}
+ return "";
+}
+/* Rellena el buscador global y repinta: es el filtro comun de todas las tablas. */
+function buscarGlobal(q){
+ var c=$("cmd"); if(!c)return;
+ c.value=q||""; c.dataset.q=q||""; render();
+ try{c.scrollIntoView({block:"nearest"})}catch(e){}
+}
 [].forEach.call(document.querySelectorAll("th[data-k]"),function(th){
  var enBrain=!!(th.closest&&th.closest("#v-brain"));
  th.onclick=function(){var k=th.dataset.k;
@@ -5383,7 +5634,7 @@ export default {
       if (p === "/api/relaciones/todo") return json(await relAcumulado(env), cab);
       if (p === "/api/relaciones/agente") return json(await relAgente(env), cab);
       if (p === "/api/pago") return json(await verificarPago(env, url.searchParams.get("sig")), cab);
-      if (p === "/api/chat") return json(await chatResponder(env, url.searchParams.get("q")), cab);
+      if (p === "/api/chat") return json(await chatResponder(env, url.searchParams.get("q"), url.searchParams.get("estado")), cab);
       if (p === "/api/ynews") return json(await fetchYNews(url.searchParams.get("s")), cab);
       if (p === "/api/litigios") return json(await fetchLitigios(Number(url.searchParams.get("d")) || 365, url.searchParams.get("tk")), cab);
       if (p === "/api/edgar") return json(await fetchEdgar(Number(url.searchParams.get("d")) || 30), cab);

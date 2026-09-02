@@ -219,3 +219,31 @@ con el tiempo. Segunda ejecución: 0 consultas al modelo.
 - Los cruces son coincidencias de nombre: siempre marcarlos como "verificar a mano".
 - No construir bots de trading automático ni HFT. El producto es información, no ejecución.
 - `ASX:XTE` (XTEK) está deslistada: sigue en `SC` pero sin símbolo en `SMAP`. Revisar si sustituirla.
+
+## Trampas encontradas en la auditoría del 2 de septiembre de 2026
+
+- **Las funciones de gráfico escriben DENTRO del elemento**: `areaChart(el,pts,col,fmtY)`,
+  `precioChart(el,cierres)`, `donut(el,…)`, `hist(el,…)`, `scatter(el,…)`. Ninguna
+  devuelve HTML. `x.innerHTML = areaChart(datos)` revienta y, como la excepción corta
+  la función a medias, deja en blanco todo lo que se pinta después (así se vaciaban
+  cinco paneles de la ficha de empresa). Si un popup sale medio vacío, buscar una
+  excepción a mitad de su función antes que un problema de datos.
+- **`traducir()` hay que llamarla tras cada `render()`**: los repintados escriben
+  castellano encima. Ya está al final de `render()`; si se añade otra función de
+  pintado que no pase por `render()`, llamarla también.
+- **El idioma es independiente del modo**: inglés tiene que funcionar en modo completo.
+  El guard de `traducir()` es `if(!simple&&!en)`, no `if(!simple)`.
+- **`/api/pm` (lista de portada) no trae `id`**: solo `q, price, chg, vol24, liq, spread,
+  url`. Para abrir un mercado desde ahí se usa `pmIrA(null, q)` → APUESTAS con el
+  buscador global relleno. Los ids solo están en `BQ.markets` (cerebro).
+- **Clics por delegación**: una fila/celda es navegable si lleva `data-tk` (ficha
+  empresa), `data-emp` (ídem), `data-con` (ficha contratista), `data-mid` (mercado),
+  `data-q` (mercado por título) o `data-ev` (cerebro filtrado por evento). Una tabla
+  nueva sin uno de estos atributos está muerta al clic.
+- **`#cmd` es el buscador global**: filtra todas las tablas vía `dataset.q` + `render()`.
+  Rellenarlo con `buscarGlobal(texto)`.
+- **`resize_window` en el navegador embebido deja una emulación pegada**: si una
+  captura sale como una cajita diminuta en negro, no es la app; hay que hacer
+  `resize_window preset:desktop` antes de juzgar el diseño.
+- **El buscador Ctrl+K y las rutas `#emp/…`, `#mer/…`, `#vista`** viven al final del
+  script principal; `go()`, `feAbrir()`, `dtOpen()` y sus cierres escriben la ruta.
