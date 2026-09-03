@@ -2463,6 +2463,156 @@ async function paperState(env) {
 /* Todo lo que se puede saber de una empresa a partir de su NOMBRE. Las cuatro
    consultas van en paralelo y cada una con su tope: si una fuente falla, la
    ficha se rellena con las demas en vez de quedarse en blanco. */
+
+/* Sesgo rejilla-estacion medido sobre 16 dias resueltos por ciudad, y
+   dispersion residual una vez corregido. Hay que volver a medirlo cada cierto
+   tiempo: si la estacion o la rejilla cambian, esto envejece. */
+const CLIMA_CIUDADES = {
+  "hong kong":     { lat:22.302, lon:114.174, tz:"Asia/Hong_Kong",      sesgo:-0.29, sd:0.90, n:16 },
+  "taipei":        { lat:25.038, lon:121.507, tz:"Asia/Taipei",         sesgo:-1.64, sd:0.96, n:16 },
+  "tokyo":         { lat:35.690, lon:139.700, tz:"Asia/Tokyo",          sesgo:+0.42, sd:1.31, n:16 },
+  "shanghai":      { lat:31.230, lon:121.470, tz:"Asia/Shanghai",       sesgo:+0.48, sd:0.83, n:16 },
+  "kuala lumpur":  { lat:3.139,  lon:101.687, tz:"Asia/Kuala_Lumpur",   sesgo:+1.51, sd:1.25, n:16 },
+  "seoul":         { lat:37.463, lon:126.440, tz:"Asia/Seoul",          sesgo:0,     sd:1.30, n:0  },
+  "new york":      { lat:40.779, lon:-73.969, tz:"America/New_York",    sesgo:0,     sd:1.30, n:0  },
+  "seattle":       { lat:47.449, lon:-122.309,tz:"America/Los_Angeles", sesgo:0,     sd:1.30, n:0  },
+  "london":        { lat:51.479, lon:-0.449,  tz:"Europe/London",       sesgo:0,     sd:1.30, n:0  }
+};
+
+function climaCiudad(q){
+  const t = String(q||"").toLowerCase();
+  for (const k of Object.keys(CLIMA_CIUDADES)) if (t.indexOf(k) >= 0) return { nombre:k, ...CLIMA_CIUDADES[k] };
+  return null;
+}
+/* "be 29°C on September 3" / "between 70-71°F" / "33°C or higher" */
+function climaTramo(q){
+  const t = String(q||"");
+  let m = t.match(/between\s*(-?\d+)\s*-\s*(-?\d+)\s*°?\s*([CF])/i);
+  if (m) return { lo:+m[1]-0.5, hi:+m[2]+0.5, u:m[3].toUpperCase(), et:m[1]+"-"+m[2] };
+  m = t.match(/be\s*(-?\d+)\s*°\s*([CF])\s*or higher/i);
+  if (m) return { lo:+m[1]-0.5, hi:999, u:m[2].toUpperCase(), et:m[1]+"+" };
+  m = t.match(/be\s*(-?\d+)\s*°\s*([CF])\s*or lower/i);
+  if (m) return { lo:-999, hi:+m[1]+0.5, u:m[2].toUpperCase(), et:"≤"+m[1] };
+  m = t.match(/be\s*(-?\d+)\s*°\s*([CF])/i);
+  if (m) return { lo:+m[1]-0.5, hi:+m[1]+0.5, u:m[2].toUpperCase(), et:m[1] };
+  return null;
+}
+
+async function clima(env, ciudadPedida){
+  /* Se piden los mercados de temperatura vivos. No van en /api/pmq porque el
+     volumen los deja fuera de los 400 primeros. */
+  const evs = [];
+  for (let pg = 0; pg < 4; pg++) {
+    const r = await fetch("https://gamma-api.polymarket.com/markets?active=true&closed=false&limit=100&offset=" +
+      (pg*100) + "&order=volume24hr&ascending=false");
+    if (!r.ok) break;
+    const l = await r.json();
+    if (!l || !l.length) break;
+    for (const m of l) if (/highest temperature in/i.test(m.question||"")) evs.push(m);
+  }
+  if (!evs.length) return { error: "No hay mercados de temperatura abiertos ahora mismo." };
+
+  /* Se agrupan por ciudad y dia: cada grupo es una escalera donde exactamente
+     un tramo gana, asi que sus probabilidades tienen que sumar 1. */
+  const grupos = {};
+  for (const m of evs) {
+    const c = climaCiudad(m.question), tr = climaTramo(m.question);
+    if (!c || !tr) continue;
+    if (ciudadPedida && c.nombre !== String(ciudadPedida).toLowerCase()) continue;
+    const dia = String(m.endDate||"").slice(0,10);
+    const k = c.nombre + "|" + dia;
+    let p = 0; try { p = parseFloat(JSON.parse(m.outcomePrices||"[]")[0]||0) } catch(e) {}
+    let bid=null, ask=null;
+    try { bid = parseFloat(m.bestBid); ask = parseFloat(m.bestAsk) } catch(e) {}
+    (grupos[k] = grupos[k] || { c, dia, patas: [] }).patas.push({
+      q:(m.question||"").slice(0,90), tr, p,
+      bid: isFinite(bid)?bid:null, ask: isFinite(ask)?ask:null, slug:m.slug
+    });
+  }
+
+  const salida = [];
+  for (const k of Object.keys(grupos)) {
+    const g = grupos[k];
+    if (g.patas.length < 3) continue;
+    /* Cuatro modelos distintos. Su dispersion es la incertidumbre de verdad:
+       cuando discrepan, el dia es dificil, y eso se nota en la anchura. */
+    const u = "https://api.open-meteo.com/v1/forecast?latitude=" + g.c.lat + "&longitude=" + g.c.lon +
+      "&daily=temperature_2m_max&timezone=" + encodeURIComponent(g.c.tz) +
+      "&forecast_days=3&models=ecmwf_ifs025,gfs_seamless,icon_seamless,jma_seamless";
+    let j = null;
+    try { const r = await fetch(u); if (r.ok) j = await r.json() } catch(e) {}
+    if (!j || !j.daily) continue;
+    const idx = (j.daily.time||[]).indexOf(g.dia);
+    if (idx < 0) continue;
+    const modelos = [];
+    for (const kk of Object.keys(j.daily)) {
+      if (kk.indexOf("temperature_2m_max") !== 0) continue;
+      const v = j.daily[kk][idx];
+      if (typeof v === "number") modelos.push({ modelo: kk.replace("temperature_2m_max_",""), v });
+    }
+    if (modelos.length < 2) continue;
+
+    const vals = modelos.map(x => x.v);
+    const media = vals.reduce((a,b)=>a+b,0)/vals.length;
+    const disp = vals.length > 1
+      ? Math.sqrt(vals.reduce((a,b)=>a+(b-media)*(b-media),0)/(vals.length-1)) : 0;
+    /* Se corrige el sesgo de la ciudad y se combinan las dos fuentes de
+       incertidumbre: la que ya tenia el residuo tras corregir, y la de que los
+       modelos discrepen hoy. */
+    const centro = media - g.c.sesgo;
+    const sigma = Math.sqrt(g.c.sd*g.c.sd + disp*disp);
+
+    const patas = g.patas.map(p => {
+      let lo = p.tr.lo, hi = p.tr.hi;
+      if (p.tr.u === "F") { lo = (lo-32)*5/9; hi = (hi-32)*5/9 }
+      const pr = nCdf((hi-centro)/sigma) - nCdf((lo-centro)/sigma);
+      return Object.assign({}, p, {
+        modelo: Math.max(0.001, Math.min(0.999, pr)),
+        dif: Math.max(0.001, Math.min(0.999, pr)) - p.p
+      });
+    });
+    /* Renormalizar: la escalera cubre todos los casos, asi que las
+       probabilidades del modelo tienen que sumar 1 igual que las del mercado. */
+    const tot = patas.reduce((a,x)=>a+x.modelo,0);
+    if (tot > 0) patas.forEach(x => { x.modelo = x.modelo/tot; x.dif = x.modelo - x.p });
+    patas.sort((a,b) => b.modelo - a.modelo);
+
+    /* Horas que quedan hasta que cierre. Es lo mas importante de todo el
+       bloque: cuando el dia ya ha ocurrido, la estacion ya ha registrado su
+       maximo y el mercado LO SABE, asi que cotiza 100% en un tramo y compararlo
+       con una prevision no tiene ningun sentido. Solo hay algo que mirar
+       mientras el dia sigue abierto. */
+    const finMs = new Date(g.dia + "T12:00:00Z").getTime();
+    const horas = (finMs - Date.now()) / 3600000;
+    const decidido = g.patas.some(x => x.p > 0.97);
+    salida.push({
+      horasRestantes: Math.round(horas*10)/10,
+      yaDecidido: decidido,
+      utilidad: decidido ? "el día ya ha ocurrido: el mercado conoce el dato y la previsión sobra"
+                         : (horas > 0 ? "el día sigue abierto: aquí sí tiene sentido comparar"
+                                      : "pendiente de publicación del dato oficial"),
+      ciudad: g.c.nombre, dia: g.dia,
+      sumaMercado: g.patas.reduce((a,x)=>a+x.p,0),
+      previsionCruda: media, sesgoCiudad: g.c.sesgo, previsionCorregida: centro,
+      dispersionModelos: disp, sigmaTotal: sigma,
+      calibradoCon: g.c.n,
+      modelos, patas
+    });
+  }
+  salida.sort((a,b) => (a.dia < b.dia ? -1 : 1));
+  return {
+    ts: new Date().toISOString(),
+    grupos: salida.length,
+    nota: "El mercado resuelve contra la lectura de una estación concreta, no contra un modelo. " +
+          "Open-Meteo da el valor de una celda de rejilla, que está en otro sitio: por eso se " +
+          "corrige un sesgo medido por ciudad sobre 16 días ya resueltos. Las ciudades con " +
+          "calibradoCon=0 NO están calibradas y su lectura es mucho más floja. " +
+          "AVISO: no se ha comprobado que esto gane dinero contra el precio de mercado; " +
+          "lo único demostrado es que la previsión corregida está centrada.",
+    datos: salida
+  };
+}
+
 async function fetchContratista(nombre) {
   const nom = String(nombre || "").trim().slice(0, 120);
   if (!nom) throw new Error("nombre vacío");
@@ -8497,7 +8647,7 @@ setInterval(function(){loadPM()},120000);
    con ADMIN_TOKEN, que se pone como variable secreta en Cloudflare.              */
 
 const PLANES = {
-  libre: { cuota: 50,   endpoints: ["pmq", "px", "intra", "bce", "contratista", "coherencia", "pm", "contracts", "news", "history"] },
+  libre: { cuota: 50,   endpoints: ["pmq", "px", "intra", "bce", "contratista", "coherencia", "clima", "pm", "contracts", "news", "history"] },
   pro:   { cuota: 5000, endpoints: "*" }
 };
 
@@ -8619,6 +8769,7 @@ export default {
       if (p === "/api/chat") return json(await chatResponder(env, url.searchParams.get("q"), url.searchParams.get("estado"), url.searchParams.get("hist")), cab);
       if (p === "/api/ynews") return json(await fetchYNews(url.searchParams.get("s")), cab);
       if (p === "/api/contratista") return json(await fetchContratista(url.searchParams.get("n")), cab);
+      if (p === "/api/clima") return json(await clima(env, url.searchParams.get("ciudad")), cab);
       if (p === "/api/litigios") return json(await fetchLitigios(Number(url.searchParams.get("d")) || 365, url.searchParams.get("tk")), cab);
       if (p === "/api/edgar") return json(await fetchEdgar(Number(url.searchParams.get("d")) || 30), cab);
       if (p === "/api/paper") return json(await paperState(env), cab);

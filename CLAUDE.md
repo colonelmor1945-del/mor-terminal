@@ -623,3 +623,56 @@ se intenta con mercados que TradingView reconoce (lista `TV_OK`); con el resto
 se explica por qué no se puede en vez de dejar un recuadro vacío. Al cambiar de
 empresa se vuelve al gráfico propio, para que no quede a la vista el de la
 empresa anterior.
+
+## Bitcoin arriba/abajo y temperatura (3 de septiembre de 2026)
+
+### Bitcoin: la regla, identificada al 100%
+
+`slug=bitcoin-up-or-down-on-{mes}-{dia}-{año}` **con `&closed=true`**, que es
+imprescindible: sin él las consultas por slug no devuelven los resueltos.
+
+Resuelve ARRIBA si el cierre de la vela de **1 minuto** de Binance BTC/USDT en el
+instante de `endDate` supera al de 24 horas antes. **Verificado: 40 de 40 días.**
+Con velas horarias solo explicaba el 92%, y con la ventana desplazada un día, el
+77%. La referencia se conoce desde el primer minuto y no cambia.
+
+**El modelo de volatilidad NO bate al mercado.** Sobre 80 días y 172
+observaciones, con `P = Φ(ln(S/A)/(σ√T))`:
+
+| Horas restantes | Brier mercado | Brier modelo | Gana |
+|---|---|---|---|
+| 12 | 0,2093 | 0,2340 | mercado |
+| 8 | 0,2121 | 0,2334 | mercado |
+| 4 | 0,2009 | 0,2040 | mercado |
+
+Remuestreando **por día** (no por observación), el modelo gana en el 2,9% de las
+réplicas a 12h y el 3,2% a 8h: el mercado es significativamente mejor. La
+aparente infravaloración del mercado en la tabla de calibración es un sesgo de
+muestra de 29 días con deriva alcista, no una ventaja.
+
+### Temperatura: el sesgo es por ciudad, y es grande
+
+El mercado resuelve contra una **estación** concreta (el Observatorio de Hong
+Kong, por ejemplo), no contra un modelo. Open-Meteo da el valor de una celda de
+rejilla que está en otro sitio. Medido sobre 16 días resueltos por ciudad:
+
+| Ciudad | Sesgo | Dispersión residual | Acierta el tramo |
+|---|---|---|---|
+| Taipéi | **−1,64 °C** | 0,96 | 38% |
+| Hong Kong | −0,29 | 0,90 | 44% |
+| Tokio | +0,42 | 1,31 | 19% |
+| Shanghái | +0,48 | 0,83 | 44% |
+| Kuala Lumpur | **+1,51 °C** | 1,25 | 56% |
+
+**3,2 °C de diferencia entre ciudades.** Quien use el valor crudo se equivoca de
+forma sistemática. `/api/clima` corrige por ciudad y combina la dispersión
+residual con la discrepancia entre los cuatro modelos (ECMWF, GFS, ICON, JMA).
+
+**Dos avisos que no hay que perder:** las ciudades con `calibradoCon:0` no están
+calibradas. Y cuando el día ya ha ocurrido el mercado conoce el dato y cotiza al
+100%: comparar entonces con una previsión no significa nada. Por eso la
+respuesta lleva `horasRestantes` y `yaDecidido`.
+
+**No está demostrado que esto gane dinero.** Lo demostrado es que la previsión
+corregida está centrada. Falta el contraste contra el precio de mercado, que es
+el que decide.
