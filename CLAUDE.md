@@ -800,3 +800,30 @@ la lista es el del canal cambiando `UC` por `UU`.
 bloque estaba entre dos vistas, así que no se mostraba nunca. **Comprobación
 útil tras insertar marcado:** todo panel nuevo tiene que devolver una vista con
 `closest('.view')`.
+
+## Vídeo de YouTube: tres intentos y por qué fallaron los dos primeros
+
+1. **Incrustar por búsqueda** (`listType=search`): retirado por YouTube desde
+   2020. Devuelve HTTP 200 con un reproductor que dice "vídeo no disponible", así
+   que **pasa cualquier comprobación automática** y no funciona.
+2. **Lista de subidas del canal** (`UC` → `UU`): mejor, pero dos de los seis
+   identificadores que puse **no correspondían a ningún canal** — los escribí de
+   memoria sin verificarlos. Además muchos canales no permiten incrustar esa
+   lista.
+3. **Canal RSS** (`youtube.com/feeds/videos.xml?channel_id=UC…`): da los 15
+   vídeos más recientes con identificador, titular y fecha, gratis y sin clave.
+   Con el identificador se incrusta el vídeo concreto, que **siempre** funciona.
+
+**Regla:** todo identificador de canal se comprueba pidiendo su canal RSS y
+contando los vídeos antes de añadirlo. Un identificador inventado da 404 y deja
+el panel medio vacío sin decir por qué.
+
+Canales verificados: The War Zone `UCIUg-gNzeWPEvt-GXQwPBdg`, Task & Purpose
+`UCSq3p5NKEtyp5Rjd4ctiEbg`, CSIS `UCr5jq6MC_VCe1c5ciIZtk_w`, Reuters
+`UChqUTb7kYRX8-EiaN3XFrSQ`, Bloomberg TV `UCIALMKvObZNtJ6AmdCLP7Lg`, CNBC
+`UCH5_L3ytGbBziX0CLuYdQ1Q`, Yahoo Finance `UCEAZeUIeJs0IjQiqTCdVSIg`, WSJ
+`UCMliswJ7oukCeW35GSayhRA`, Coin Bureau `UCnThE8FLrlN-tYvZhZL0uaA`.
+
+El buscador filtra sobre los vídeos ya descargados (instantáneo) y, para lo que
+no esté ahí, lleva la búsqueda a YouTube en una pestaña nueva. Incrustar
+resultados de búsqueda no se puede; abrirlos fuera, sí.

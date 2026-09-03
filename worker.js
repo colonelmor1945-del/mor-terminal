@@ -2850,6 +2850,66 @@ async function vhla(seccion) {
   };
 }
 
+
+/* Canales verificados uno a uno consultando su pagina y su canal RSS. Los que no
+   respondian con un titulo real se han quitado en vez de dejarlos rotos. */
+/* Identificadores COMPROBADOS uno a uno pidiendo su canal RSS y contando los
+   videos que devuelve. Los anteriores los puse de memoria y dos de seis no
+   existian: un identificador inventado da 404 y deja el panel medio vacio sin
+   decir por que. Si se anade un canal nuevo, hay que comprobarlo antes. */
+const YT_CANALES = {
+  defensa:    [["The War Zone","UCIUg-gNzeWPEvt-GXQwPBdg"], ["Task & Purpose","UCSq3p5NKEtyp5Rjd4ctiEbg"],
+               ["CSIS","UCr5jq6MC_VCe1c5ciIZtk_w"], ["Reuters","UChqUTb7kYRX8-EiaN3XFrSQ"]],
+  pentagono:  [["CSIS","UCr5jq6MC_VCe1c5ciIZtk_w"], ["The War Zone","UCIUg-gNzeWPEvt-GXQwPBdg"],
+               ["Reuters","UChqUTb7kYRX8-EiaN3XFrSQ"], ["Task & Purpose","UCSq3p5NKEtyp5Rjd4ctiEbg"]],
+  prediccion: [["Bloomberg TV","UCIALMKvObZNtJ6AmdCLP7Lg"], ["CNBC","UCH5_L3ytGbBziX0CLuYdQ1Q"],
+               ["Yahoo Finance","UCEAZeUIeJs0IjQiqTCdVSIg"], ["Reuters","UChqUTb7kYRX8-EiaN3XFrSQ"]],
+  macro:      [["Bloomberg TV","UCIALMKvObZNtJ6AmdCLP7Lg"], ["Wall Street Journal","UCMliswJ7oukCeW35GSayhRA"],
+               ["CNBC","UCH5_L3ytGbBziX0CLuYdQ1Q"], ["Yahoo Finance","UCEAZeUIeJs0IjQiqTCdVSIg"]],
+  cripto:     [["Coin Bureau","UCnThE8FLrlN-tYvZhZL0uaA"], ["Bloomberg TV","UCIALMKvObZNtJ6AmdCLP7Lg"],
+               ["CNBC","UCH5_L3ytGbBziX0CLuYdQ1Q"], ["Yahoo Finance","UCEAZeUIeJs0IjQiqTCdVSIg"]],
+  vhla:       [["Bloomberg TV","UCIALMKvObZNtJ6AmdCLP7Lg"], ["Wall Street Journal","UCMliswJ7oukCeW35GSayhRA"],
+               ["Yahoo Finance","UCEAZeUIeJs0IjQiqTCdVSIg"], ["Reuters","UChqUTb7kYRX8-EiaN3XFrSQ"]]
+};
+
+async function videos(tema) {
+  const lista = YT_CANALES[String(tema || "defensa")] || YT_CANALES.defensa;
+  const tope = (p, seg) => Promise.race([
+    Promise.resolve(p).catch(() => null),
+    new Promise(r => setTimeout(() => r(null), seg * 1000))
+  ]);
+  const res = await Promise.all(lista.map(([nombre, cid]) => tope((async () => {
+    const r = await fetch("https://www.youtube.com/feeds/videos.xml?channel_id=" + cid,
+      { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const x = await r.text();
+    /* Se toman los tres mas recientes de cada canal. El identificador viene en
+       yt:videoId y el titulo en el primer <title> de cada <entry>. */
+    const out = [];
+    const partes = x.split("<entry>").slice(1);
+    for (const p of partes.slice(0, 5)) {
+      const id = (p.match(/<yt:videoId>([^<]+)<\/yt:videoId>/) || [])[1];
+      const t = (p.match(/<title>([^<]*)<\/title>/) || [])[1] || "";
+      const f = (p.match(/<published>([^<]+)<\/published>/) || [])[1] || "";
+      if (!id) continue;
+      out.push({ id, titulo: t.slice(0, 110), fecha: f.slice(0, 10), canal: nombre });
+    }
+    return out;
+  })(), 7)));
+  const items = [];
+  res.forEach(x => { if (x) items.push.apply(items, x) });
+  /* Se intercalan los canales para que no salgan cuatro seguidos del mismo. */
+  const porCanal = {};
+  items.forEach(x => { (porCanal[x.canal] = porCanal[x.canal] || []).push(x) });
+  const nombres = Object.keys(porCanal), mezcla = [];
+  for (let i = 0; i < 5; i++) for (const nm of nombres) if (porCanal[nm][i]) mezcla.push(porCanal[nm][i]);
+  return {
+    tema: tema || "defensa", ts: new Date().toISOString(), n: mezcla.length,
+    nota: mezcla.length ? null : "Ningún canal respondió. YouTube sirve estos canales sin clave; si falla, es temporal.",
+    items: mezcla.slice(0, 20)
+  };
+}
+
 async function fetchContratista(nombre) {
   const nom = String(nombre || "").trim().slice(0, 120);
   if (!nom) throw new Error("nombre vacío");
@@ -3830,6 +3890,11 @@ body:not(.claro) #iag:hover{background:rgba(176,140,255,.12);
   <div class="p" style="margin-top:9px">
     <h3>VÍDEO CORTO <span class="st" style="font-weight:400;text-transform:none">— canales temáticos, sin salir del terminal</span></h3>
     <div class="chips" id="vh-temas"></div>
+    <div class="chips">
+      <input type="text" id="vh-q" placeholder="Buscar entre los últimos vídeos…" style="flex:1;min-width:180px">
+      <button id="vh-yt">Buscar en YouTube ↗</button>
+      <span class="st" id="vh-vst"></span>
+    </div>
     <div class="bd"><div class="reels" id="vh-reels"></div></div>
     <div class="st">Se incrusta la búsqueda de YouTube, que no necesita clave. X, TikTok, Instagram y LinkedIn exigen clave de API o bloquean el incrustado, así que van como búsquedas preparadas abajo: un recuadro vacío con su logo no sería integrarse con ellos.</div>
     <div class="enlaces-red" id="vh-redes"></div>
@@ -8221,18 +8286,51 @@ var VH_CANALES={
  vhla:[["Bloomberg TV","UCIALMKvObZNtJ6AmdCLP7Lg"],["CNBC","UCvJJ_dzjViJCoLf5uKUTwoA"],
        ["Reuters","UChqUTb7kYRX8-EiaN3XFrSQ"],["Financial Times","UCoUxsWakJucWg46KW5RsvPw"]]
 };
-function vhReels(){
- var t=VH_TEMAS.filter(function(x){return x.k===VH_TEMA})[0]||VH_TEMAS[0];
- var cs=VH_CANALES[VH_TEMA]||VH_CANALES.defensa;
- $("vh-reels").innerHTML=cs.map(function(c){
-  var lista="UU"+c[1].slice(2);   // lista de subidas del canal
+/* Se piden los identificadores al Worker y se incrusta cada VIDEO CONCRETO, que
+   es lo unico que funciona siempre. Incrustar por busqueda esta retirado, y las
+   listas de subidas no todos los canales las dejan incrustar. */
+var VH_VIDEOS=[];
+function vhPintarVideos(){
+ var q=($("vh-q").value||"").toLowerCase().trim();
+ var it=VH_VIDEOS;
+ if(q) it=it.filter(function(v){return (v.titulo+" "+v.canal).toLowerCase().indexOf(q)>=0});
+ $("vh-vst").textContent = q
+  ? T(it.length+" de "+VH_VIDEOS.length+" coinciden", it.length+" of "+VH_VIDEOS.length+" match")
+  : T(VH_VIDEOS.length+" vídeos de "+[...new Set(VH_VIDEOS.map(function(v){return v.canal}))].length+" canales",
+      VH_VIDEOS.length+" videos");
+ if(!it.length){
+  /* Si nada coincide, se ofrece llevar la busqueda a YouTube en vez de dejar el
+     panel vacio: incrustar resultados de busqueda esta retirado, pero abrirla
+     fuera funciona igual de bien. */
+  $("vh-reels").innerHTML=emp("\\uD83D\\uDD0D",
+   T("Nada coincide entre los últimos vídeos de estos canales.<br>Pulsa «Buscar en YouTube» para llevar la búsqueda allí.",
+     "Nothing matches among these channels' latest videos.<br>Press «Search on YouTube» to take it there."));
+  return;
+ }
+ $("vh-reels").innerHTML=it.map(function(v){
   return "<div class='reel'><div class='marco'>"+
-   "<iframe loading='lazy' allow='accelerometer; encrypted-media; picture-in-picture' "+
+   "<iframe loading='lazy' allow='accelerometer; encrypted-media; picture-in-picture; fullscreen' "+
    "allowfullscreen referrerpolicy='strict-origin-when-cross-origin' "+
-   "src='https://www.youtube-nocookie.com/embed/videoseries?list="+lista+"&rel=0'></iframe>"+
-   "</div><div class='pie'>"+esc(c[0])+
-   "<div class='fuente'>"+T("últimos vídeos","latest videos")+"</div></div></div>"}).join("");
+   "src='https://www.youtube-nocookie.com/embed/"+esc(v.id)+"?rel=0&modestbranding=1'></iframe>"+
+   "</div><div class='pie'>"+esc(v.titulo)+
+   "<div class='fuente'>"+esc(v.canal)+(v.fecha?" · "+esc(v.fecha):"")+"</div></div></div>"}).join("");
+}
+function vhReels(){
+ $("vh-reels").innerHTML="<div class='emp'><b>\\u23F3</b>"+T("Buscando los últimos vídeos…","Fetching the latest videos…")+"</div>";
  vhRedes();
+ api("/api/videos?t="+encodeURIComponent(VH_TEMA),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){
+   VH_VIDEOS=(j&&j.items)||[];
+   if(!VH_VIDEOS.length){
+    $("vh-reels").innerHTML=emp("\\uD83D\\uDCF9",esc((j&&j.nota)||T("No hay vídeos ahora mismo.","No videos right now.")));
+    return;
+   }
+   vhPintarVideos();
+  })
+  .catch(function(e){
+   $("vh-reels").innerHTML=emp("\\u26A0",T("No se pudieron cargar los vídeos: ","Could not load videos: ")+esc(e.message||e));
+  });
 }
 function vhTemas(){
  $("vh-temas").innerHTML=VH_TEMAS.map(function(t){
@@ -8259,6 +8357,15 @@ function vhArticulos(){
 }
 (function(){
  $("vh-run").onclick=vhArticulos;
+ /* El buscador filtra sobre los videos ya descargados, que es instantaneo. Para
+    lo que no este ahi, se lleva la busqueda a YouTube. */
+ $("vh-q").oninput=function(){ if(VH_VIDEOS.length)vhPintarVideos() };
+ $("vh-q").onkeydown=function(ev){ if(ev.key==="Enter")$("vh-yt").click() };
+ $("vh-yt").onclick=function(){
+  var q=($("vh-q").value||"").trim();
+  var t=VH_TEMAS.filter(function(x){return x.k===VH_TEMA})[0]||VH_TEMAS[0];
+  window.open("https://www.youtube.com/results?search_query="+encodeURIComponent(q||t.q),"_blank","noopener");
+ };
  $("vh-temas").onclick=function(ev){
   var b=ev.target.closest?ev.target.closest("[data-tema]"):null;
   if(!b)return;
@@ -9581,7 +9688,7 @@ setInterval(function(){loadPM()},120000);
    con ADMIN_TOKEN, que se pone como variable secreta en Cloudflare.              */
 
 const PLANES = {
-  libre: { cuota: 50,   endpoints: ["pmq", "px", "intra", "bce", "contratista", "coherencia", "clima", "vhla", "pm", "contracts", "news", "history"] },
+  libre: { cuota: 50,   endpoints: ["pmq", "px", "intra", "bce", "contratista", "coherencia", "clima", "vhla", "videos", "pm", "contracts", "news", "history"] },
   pro:   { cuota: 5000, endpoints: "*" }
 };
 
@@ -9705,6 +9812,7 @@ export default {
       if (p === "/api/contratista") return json(await fetchContratista(url.searchParams.get("n")), cab);
       if (p === "/api/clima") return json(await clima(env, url.searchParams.get("ciudad")), cab);
       if (p === "/api/vhla") return json(await vhla(url.searchParams.get("s")), cab);
+      if (p === "/api/videos") return json(await videos(url.searchParams.get("t")), cab);
       if (p === "/api/litigios") return json(await fetchLitigios(Number(url.searchParams.get("d")) || 365, url.searchParams.get("tk")), cab);
       if (p === "/api/edgar") return json(await fetchEdgar(Number(url.searchParams.get("d")) || 30), cab);
       if (p === "/api/paper") return json(await paperState(env), cab);

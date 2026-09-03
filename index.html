@@ -843,6 +843,11 @@ body:not(.claro) #iag:hover{background:rgba(176,140,255,.12);
   <div class="p" style="margin-top:9px">
     <h3>VÍDEO CORTO <span class="st" style="font-weight:400;text-transform:none">— canales temáticos, sin salir del terminal</span></h3>
     <div class="chips" id="vh-temas"></div>
+    <div class="chips">
+      <input type="text" id="vh-q" placeholder="Buscar entre los últimos vídeos…" style="flex:1;min-width:180px">
+      <button id="vh-yt">Buscar en YouTube ↗</button>
+      <span class="st" id="vh-vst"></span>
+    </div>
     <div class="bd"><div class="reels" id="vh-reels"></div></div>
     <div class="st">Se incrusta la búsqueda de YouTube, que no necesita clave. X, TikTok, Instagram y LinkedIn exigen clave de API o bloquean el incrustado, así que van como búsquedas preparadas abajo: un recuadro vacío con su logo no sería integrarse con ellos.</div>
     <div class="enlaces-red" id="vh-redes"></div>
@@ -5234,18 +5239,51 @@ var VH_CANALES={
  vhla:[["Bloomberg TV","UCIALMKvObZNtJ6AmdCLP7Lg"],["CNBC","UCvJJ_dzjViJCoLf5uKUTwoA"],
        ["Reuters","UChqUTb7kYRX8-EiaN3XFrSQ"],["Financial Times","UCoUxsWakJucWg46KW5RsvPw"]]
 };
-function vhReels(){
- var t=VH_TEMAS.filter(function(x){return x.k===VH_TEMA})[0]||VH_TEMAS[0];
- var cs=VH_CANALES[VH_TEMA]||VH_CANALES.defensa;
- $("vh-reels").innerHTML=cs.map(function(c){
-  var lista="UU"+c[1].slice(2);   // lista de subidas del canal
+/* Se piden los identificadores al Worker y se incrusta cada VIDEO CONCRETO, que
+   es lo unico que funciona siempre. Incrustar por busqueda esta retirado, y las
+   listas de subidas no todos los canales las dejan incrustar. */
+var VH_VIDEOS=[];
+function vhPintarVideos(){
+ var q=($("vh-q").value||"").toLowerCase().trim();
+ var it=VH_VIDEOS;
+ if(q) it=it.filter(function(v){return (v.titulo+" "+v.canal).toLowerCase().indexOf(q)>=0});
+ $("vh-vst").textContent = q
+  ? T(it.length+" de "+VH_VIDEOS.length+" coinciden", it.length+" of "+VH_VIDEOS.length+" match")
+  : T(VH_VIDEOS.length+" vídeos de "+[...new Set(VH_VIDEOS.map(function(v){return v.canal}))].length+" canales",
+      VH_VIDEOS.length+" videos");
+ if(!it.length){
+  /* Si nada coincide, se ofrece llevar la busqueda a YouTube en vez de dejar el
+     panel vacio: incrustar resultados de busqueda esta retirado, pero abrirla
+     fuera funciona igual de bien. */
+  $("vh-reels").innerHTML=emp("\uD83D\uDD0D",
+   T("Nada coincide entre los últimos vídeos de estos canales.<br>Pulsa «Buscar en YouTube» para llevar la búsqueda allí.",
+     "Nothing matches among these channels' latest videos.<br>Press «Search on YouTube» to take it there."));
+  return;
+ }
+ $("vh-reels").innerHTML=it.map(function(v){
   return "<div class='reel'><div class='marco'>"+
-   "<iframe loading='lazy' allow='accelerometer; encrypted-media; picture-in-picture' "+
+   "<iframe loading='lazy' allow='accelerometer; encrypted-media; picture-in-picture; fullscreen' "+
    "allowfullscreen referrerpolicy='strict-origin-when-cross-origin' "+
-   "src='https://www.youtube-nocookie.com/embed/videoseries?list="+lista+"&rel=0'></iframe>"+
-   "</div><div class='pie'>"+esc(c[0])+
-   "<div class='fuente'>"+T("últimos vídeos","latest videos")+"</div></div></div>"}).join("");
+   "src='https://www.youtube-nocookie.com/embed/"+esc(v.id)+"?rel=0&modestbranding=1'></iframe>"+
+   "</div><div class='pie'>"+esc(v.titulo)+
+   "<div class='fuente'>"+esc(v.canal)+(v.fecha?" · "+esc(v.fecha):"")+"</div></div></div>"}).join("");
+}
+function vhReels(){
+ $("vh-reels").innerHTML="<div class='emp'><b>\u23F3</b>"+T("Buscando los últimos vídeos…","Fetching the latest videos…")+"</div>";
  vhRedes();
+ api("/api/videos?t="+encodeURIComponent(VH_TEMA),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){
+   VH_VIDEOS=(j&&j.items)||[];
+   if(!VH_VIDEOS.length){
+    $("vh-reels").innerHTML=emp("\uD83D\uDCF9",esc((j&&j.nota)||T("No hay vídeos ahora mismo.","No videos right now.")));
+    return;
+   }
+   vhPintarVideos();
+  })
+  .catch(function(e){
+   $("vh-reels").innerHTML=emp("\u26A0",T("No se pudieron cargar los vídeos: ","Could not load videos: ")+esc(e.message||e));
+  });
 }
 function vhTemas(){
  $("vh-temas").innerHTML=VH_TEMAS.map(function(t){
@@ -5272,6 +5310,15 @@ function vhArticulos(){
 }
 (function(){
  $("vh-run").onclick=vhArticulos;
+ /* El buscador filtra sobre los videos ya descargados, que es instantaneo. Para
+    lo que no este ahi, se lleva la busqueda a YouTube. */
+ $("vh-q").oninput=function(){ if(VH_VIDEOS.length)vhPintarVideos() };
+ $("vh-q").onkeydown=function(ev){ if(ev.key==="Enter")$("vh-yt").click() };
+ $("vh-yt").onclick=function(){
+  var q=($("vh-q").value||"").trim();
+  var t=VH_TEMAS.filter(function(x){return x.k===VH_TEMA})[0]||VH_TEMAS[0];
+  window.open("https://www.youtube.com/results?search_query="+encodeURIComponent(q||t.q),"_blank","noopener");
+ };
  $("vh-temas").onclick=function(ev){
   var b=ev.target.closest?ev.target.closest("[data-tema]"):null;
   if(!b)return;
