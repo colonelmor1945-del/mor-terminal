@@ -676,3 +676,33 @@ respuesta lleva `horasRestantes` y `yaDecidido`.
 **No está demostrado que esto gane dinero.** Lo demostrado es que la previsión
 corregida está centrada. Falta el contraste contra el precio de mercado, que es
 el que decide.
+
+## Versión clara, acabado neón y rastro de navegación (3 de septiembre de 2026)
+
+**El tema no se podía cambiar solo con variables.** Había **74 colores escritos a
+mano**: 44 en los gráficos generados desde JavaScript y 30 en el CSS. Al pasar a
+claro se quedaba media pantalla en negro. Se convirtieron todos a variables (los
+atributos `fill` y `stroke` de un SVG incrustado aceptan `var()`), y se añadieron
+tres niveles de fondo que faltaban: `--fondo0` (cinta, pie, barra de comandos),
+`--fondo1` (cabeceras pegajosas) y `--fondo2` (controles).
+
+El lienzo del fondo topográfico no entiende de CSS, así que `dibujarTopo()` lee
+el tema. Se descartó invertirlo con un filtro porque también invertía el color de
+las curvas y quedaba turbio.
+
+**La paleta clara no es la oscura invertida.** Sobre blanco, el ámbar y el verde
+brillantes no se leen, así que los acentos se oscurecen (`--am` pasa de `#e3a44a`
+a `#a86a12`) y los grises se recalculan para conservar la jerarquía.
+
+**Acabado neón, con una regla:** brilla lo que hay que mirar y nada más. Si todo
+brilla no destaca nada y se lee peor. El halo se reserva para la cifra grande de
+cada bloque, el filo superior de los paneles y lo que está vivo. En pantallas de
+menos de 560 px el brillo se quita: cansa más de cerca. Y se respeta
+`prefers-reduced-motion`.
+
+**Rastro de navegación.** Los atajos F1-F12 ya funcionaban y el buscador salta a
+cualquier sitio, pero faltaba lo más básico: saber dónde estás. Con dos niveles
+de pestañas y trece pantallas, eso desorienta. Ahora hay una línea con grupo y
+vista, cada parte pulsable, más el nivel de la ficha abierta. El botón de volver
+**solo aparece cuando hay a dónde volver**: un botón que no hace nada es peor que
+ninguno.

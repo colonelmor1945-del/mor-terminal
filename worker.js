@@ -2761,6 +2761,11 @@ const HTML = `<!DOCTYPE html>
  --bg:#07090c; --pane:#0d1117; --pane2:#111823; --line:#1d2430; --line2:#161d27;
  --txt:#e6edf3; --dim:#8b949e; --dim2:#5a636d;
  --am:#e3a44a; --gr:#3fb950; --rd:#f0605d; --cy:#5aa8c7; --vi:#8b7fc7;
+ /* Tres niveles de fondo por debajo del panel: barra de comandos y cinta
+    (fondo0), cabeceras pegajosas (fondo1) y controles (fondo2). Estaban
+    escritos a mano y por eso no cambiaban de tema. */
+ --fondo0:#05080c; --fondo1:#0a0f16; --fondo2:#0b1119;
+ --barra:#1d2635; --barra2:#2a3648; --rojoBorde:#3a1e26;
  --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
  --num:"SF Mono","Roboto Mono","Cascadia Mono",Consolas,monospace}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -2774,16 +2779,16 @@ body{background:var(--bg);color:var(--txt);font:13px/1.5 var(--ui);overflow:hidd
 /* Las cifras en monoespaciada y tabulares: en una tabla financiera las columnas
    tienen que alinearse solas. El texto va en sans, que se lee mucho mejor. */
 .amt,.n,.v,td.num,.num,.mg .v,.kpi .v,.tarj .g{font-family:var(--num);font-variant-numeric:tabular-nums}
-::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:#05070a}
-::-webkit-scrollbar-thumb{background:#1d2635;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#2a3648}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:var(--fondo0)}
+::-webkit-scrollbar-thumb{background:var(--barra);border-radius:4px}::-webkit-scrollbar-thumb:hover{background:var(--barra2)}
 #app{display:flex;flex-direction:column;height:100vh}
-.hdr{display:flex;align-items:center;gap:12px;padding:0 12px;height:40px;background:linear-gradient(180deg,#0b1017,#05080c);border-bottom:1px solid var(--line);flex:0 0 auto}
+.hdr{display:flex;align-items:center;gap:12px;padding:0 12px;height:40px;background:linear-gradient(180deg,var(--fondo0),var(--fondo0));border-bottom:1px solid var(--line);flex:0 0 auto}
 .brand{color:var(--am);font-weight:700;letter-spacing:3px;font-size:13px;white-space:nowrap}
 .brand em{font-style:normal;display:inline-block;width:7px;height:7px;background:var(--am);margin-right:7px;box-shadow:0 0 9px var(--am);animation:bl 2.4s infinite}
 @keyframes bl{0%,100%{opacity:1}50%{opacity:.25}}
 .cmd{flex:1;max-width:460px;position:relative}
-.cmd input{width:100%;background:#0a1017;border:1px solid var(--line);border-left:2px solid var(--am);color:var(--txt);padding:6px 10px;font:inherit;letter-spacing:1px;outline:none}
-.cmd input:focus{border-color:var(--am);background:#0d141d;box-shadow:0 0 0 1px rgba(255,159,26,.2)}
+.cmd input{width:100%;background:var(--fondo1);border:1px solid var(--line);border-left:2px solid var(--am);color:var(--txt);padding:6px 10px;font:inherit;letter-spacing:1px;outline:none}
+.cmd input:focus{border-color:var(--am);background:var(--fondo2);box-shadow:0 0 0 1px rgba(255,159,26,.2)}
 .cmd .hint{position:absolute;right:8px;top:6px;color:var(--dim2);font-size:10px;pointer-events:none}
 .lights{display:flex;gap:5px}
 .lt{display:flex;align-items:center;gap:5px;font-size:9.5px;color:var(--dim);border:1px solid var(--line);padding:3px 7px;background:var(--pane);white-space:nowrap}
@@ -2791,19 +2796,19 @@ body{background:var(--bg);color:var(--txt);font:13px/1.5 var(--ui);overflow:hidd
 .lt.ok b{background:var(--gr);box-shadow:0 0 7px var(--gr)}
 .lt.ld b{background:var(--am);animation:bl 1s infinite}
 .lt.er b{background:var(--rd);box-shadow:0 0 7px var(--rd)}
-.lt.ok{color:var(--txt)}.lt.er{color:var(--rd);border-color:#3a1e26}
+.lt.ok{color:var(--txt)}.lt.er{color:var(--rd);border-color:var(--rojoBorde)}
 .clk{color:var(--dim);font-size:11px;white-space:nowrap;font-variant-numeric:tabular-nums}
 .rl{background:var(--pane2);border:1px solid var(--line);color:var(--dim);padding:4px 9px;font:inherit;font-size:10px;cursor:pointer}
 .rl:hover{border-color:var(--am);color:var(--am)}
-.tape{height:24px;background:#04070a;border-bottom:1px solid var(--line);overflow:hidden;white-space:nowrap;flex:0 0 auto}
+.tape{height:24px;background:var(--fondo0);border-bottom:1px solid var(--line);overflow:hidden;white-space:nowrap;flex:0 0 auto}
 .tape .run{display:inline-block;padding-top:5px;animation:sc 80s linear infinite;will-change:transform}
 @keyframes sc{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .tk{margin:0 18px;font-size:10.5px;color:var(--dim)}
-.tk b{color:#9fb0c4;font-weight:400}
+.tk b{color:var(--dim);font-weight:400}
 .up{color:var(--gr)}.dn{color:var(--rd)}
 /* Dos niveles: once pestanas en fila no se leen. Arriba cuatro grupos, debajo
    solo las vistas del grupo activo. */
-.nav2{display:flex;gap:2px;background:#0a0e14;border-bottom:1px solid var(--line);
+.nav2{display:flex;gap:2px;background:var(--fondo0);border-bottom:1px solid var(--line);
  flex:0 0 auto;padding:0 10px}
 .nav2 button{background:none;border:0;color:var(--dim);padding:11px 16px;font:inherit;
  font-size:11.5px;font-weight:600;letter-spacing:.5px;cursor:pointer;position:relative}
@@ -2811,14 +2816,14 @@ body{background:var(--bg);color:var(--txt);font:13px/1.5 var(--ui);overflow:hidd
 .nav2 button.on{color:var(--am)}
 .nav2 button.on::after{content:"";position:absolute;left:14px;right:14px;bottom:-1px;
  height:2px;background:var(--am);border-radius:2px 2px 0 0}
-.nav{display:flex;background:#080b10;border-bottom:1px solid var(--line);flex:0 0 auto;
+.nav{display:flex;background:var(--fondo0);border-bottom:1px solid var(--line);flex:0 0 auto;
  overflow-x:auto;padding:0 8px;min-height:34px;align-items:center}
 .nav button[data-v]{display:none}
 .nav button[data-v].vis{display:inline-block}
 .nav button{background:none;border:none;color:var(--dim);padding:9px 14px;
  font:inherit;font-size:11px;font-weight:500;letter-spacing:.4px;cursor:pointer;
  transition:color .12s}
-.nav button:hover{color:var(--txt);background:#0b1119}
+.nav button:hover{color:var(--txt);background:var(--fondo2)}
 .nav button.on{color:var(--txt);background:rgba(227,164,74,.10);border-radius:3px;font-weight:600}
 .nav .sp{flex:1}
 .nav .meta{color:var(--dim2);font-size:10px;padding:7px 12px;font-family:var(--num)}
@@ -2847,7 +2852,7 @@ main{flex:1;overflow:auto;padding:8px}
 .kpi .s{color:var(--dim2);font-size:11px;margin-top:5px;line-height:1.4}
 .kpi .spark{margin-top:6px;height:28px}
 table{width:100%;border-collapse:collapse;font-size:12px}
-th{position:sticky;top:0;z-index:2;text-align:left;color:var(--dim);font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:6px 8px;background:#0a0f16;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;white-space:nowrap}
+th{position:sticky;top:0;z-index:2;text-align:left;color:var(--dim);font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:6px 8px;background:var(--fondo1);border-bottom:1px solid var(--line);cursor:pointer;user-select:none;white-space:nowrap}
 th:hover{color:var(--am)}
 td{padding:7px 10px;border-bottom:1px solid var(--line2);vertical-align:top}
 tbody tr:hover td{background:#0e151f}
@@ -2875,7 +2880,7 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 .hb .tr i{position:absolute;inset:0 auto 0 0;border-radius:4px;background:linear-gradient(90deg,rgba(227,164,74,.85),rgba(227,164,74,.28))}
 .hb.pr .tr i{background:linear-gradient(90deg,rgba(120,140,170,.42),rgba(120,140,170,.14))}
 .hb .vl{width:64px;text-align:right;color:var(--gr);font-variant-numeric:tabular-nums}
-.pbar{height:4px;background:#0d141d;position:relative;margin-top:3px;overflow:hidden}
+.pbar{height:4px;background:var(--fondo2);position:relative;margin-top:3px;overflow:hidden}
 .pbar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--cy),var(--gr))}
 .heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:3px;padding:8px}
 .hc{padding:6px;border:1px solid var(--line);min-height:50px;display:flex;flex-direction:column;justify-content:space-between}
@@ -2888,12 +2893,12 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 .st{color:var(--dim);font-size:11.5px;padding:8px 11px;line-height:1.5}
 .er{color:var(--rd)}
 .mt-row{border-left:2px solid var(--vi);padding:8px 10px;border-bottom:1px solid var(--line2);background:rgba(167,139,250,.05)}
-.sk{height:9px;margin:7px 10px;border-radius:2px;background:linear-gradient(90deg,#0d141d,#18202c,#0d141d);background-size:200% 100%;animation:shm 1.2s infinite}
+.sk{height:9px;margin:7px 10px;border-radius:2px;background:linear-gradient(90deg,var(--fondo2),#18202c,var(--fondo2));background-size:200% 100%;animation:shm 1.2s infinite}
 @keyframes shm{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .emp{padding:22px 12px;text-align:center;color:var(--dim);font-size:10.5px;line-height:1.8}
 .emp b{display:block;font-size:20px;opacity:.35;margin-bottom:5px;font-weight:400}
-.chips{display:flex;gap:4px;padding:6px 8px;flex-wrap:wrap;border-bottom:1px solid var(--line2);background:#070b10;align-items:center}
-.chips button,.chips select{background:#0b1119;border:1px solid var(--line);color:var(--dim);padding:4px 9px;font:inherit;font-size:10px;cursor:pointer}
+.chips{display:flex;gap:4px;padding:6px 8px;flex-wrap:wrap;border-bottom:1px solid var(--line2);background:var(--fondo0);align-items:center}
+.chips button,.chips select{background:var(--fondo2);border:1px solid var(--line);color:var(--dim);padding:4px 9px;font:inherit;font-size:10px;cursor:pointer}
 .chips button.on{border-color:var(--cy);color:var(--cy);background:rgba(34,211,238,.08)}
 .chips button:hover{color:var(--txt)}
 .str{cursor:pointer;color:#2b3a4d;font-size:13px}
@@ -2905,7 +2910,7 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 #feh{display:flex;align-items:flex-start;gap:12px;padding:10px 13px;border-bottom:1px solid var(--line);flex:0 0 auto}
 #feh h2{font-size:14px;font-weight:600;color:var(--txt)}
 #feh .sub{font-size:10.5px;color:var(--dim);margin-top:3px}
-#fex{margin-left:auto;background:#0b1119;border:1px solid var(--line);color:var(--dim);
+#fex{margin-left:auto;background:var(--fondo2);border:1px solid var(--line);color:var(--dim);
  padding:4px 10px;font:inherit;font-size:11px;cursor:pointer;flex:0 0 auto}
 #fex:hover{color:var(--rd);border-color:var(--rd)}
 #fec{flex:1;overflow:auto;padding:10px 13px;display:grid;gap:9px;grid-template-columns:1fr 1fr;grid-auto-rows:min-content}
@@ -2933,15 +2938,15 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 .iab.ia{background:rgba(255,159,26,.06);border-left:2px solid var(--am);align-self:flex-start}
 .iab.err{background:rgba(255,77,94,.08);border-left:2px solid var(--rd);align-self:flex-start;color:var(--txt)}
 #iaf{display:flex;gap:6px;padding:9px 11px;border-top:1px solid var(--line)}
-#iaq{flex:1;background:#0b1119;border:1px solid var(--line);color:var(--txt);
+#iaq{flex:1;background:var(--fondo2);border:1px solid var(--line);color:var(--txt);
  padding:7px 9px;font:inherit;font-size:12px}
-#iag{background:#0b1119;border:1px solid var(--am);color:var(--am);padding:7px 13px;
+#iag{background:var(--fondo2);border:1px solid var(--am);color:var(--am);padding:7px 13px;
  font:inherit;font-size:11px;cursor:pointer}
-#iamic{background:#0b1119;border:1px solid var(--line);color:var(--dim);padding:7px 10px;
+#iamic{background:var(--fondo2);border:1px solid var(--line);color:var(--dim);padding:7px 10px;
  font:inherit;font-size:13px;cursor:pointer;line-height:1}
 #iamic:hover{border-color:var(--am);color:var(--am)}
 .iaeg{display:flex;flex-wrap:wrap;gap:5px;padding:0 11px 9px}
-.iaeg button{background:#0b1119;border:1px solid var(--line2);color:var(--dim);
+.iaeg button{background:var(--fondo2);border:1px solid var(--line2);color:var(--dim);
  padding:4px 8px;font:inherit;font-size:10px;cursor:pointer}
 .iaeg button:hover{color:var(--am);border-color:var(--am)}
 #dt.on{display:flex;align-items:center;justify-content:center}
@@ -2950,7 +2955,7 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 #dth{display:flex;align-items:flex-start;gap:12px;padding:10px 13px;border-bottom:1px solid var(--line);flex:0 0 auto}
 #dth h2{font-size:13px;font-weight:600;color:var(--txt);line-height:1.35}
 #dth .sub{font-size:10px;color:var(--dim);margin-top:3px}
-#dtx{margin-left:auto;background:#0b1119;border:1px solid var(--line);color:var(--dim);
+#dtx{margin-left:auto;background:var(--fondo2);border:1px solid var(--line);color:var(--dim);
  padding:4px 10px;font:inherit;font-size:11px;cursor:pointer;flex:0 0 auto}
 #dtx:hover{color:var(--rd);border-color:var(--rd)}
 #dtc{flex:1;overflow:auto;padding:10px 13px;display:grid;gap:9px;
@@ -2960,22 +2965,22 @@ a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
 .dp>h4{font-size:9.5px;letter-spacing:.09em;color:var(--dim);padding:6px 9px;border-bottom:1px solid var(--line2);text-transform:uppercase}
 .dp>.c{padding:8px 9px;min-height:0}
 .mg{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:7px}
-.mg div{background:#0a0f16;border:1px solid var(--line2);padding:6px 8px}
+.mg div{background:var(--fondo1);border:1px solid var(--line2);padding:6px 8px}
 .mg .l{font-size:9px;color:var(--dim);letter-spacing:.05em}
 .mg .v{font-size:14px;margin-top:2px;font-variant-numeric:tabular-nums}
 .lg{display:flex;flex-direction:column;gap:3px;max-height:230px;overflow:auto}
 .lg .r{display:grid;grid-template-columns:1fr 54px 44px;gap:7px;align-items:center;font-size:10.5px}
-.lg .bar{position:relative;background:#0a0f16;height:16px;overflow:hidden}
+.lg .bar{position:relative;background:var(--fondo1);height:16px;overflow:hidden}
 .lg .bar i{position:absolute;inset:0 auto 0 0;background:rgba(255,159,26,.24);display:block}
 .lg .bar span{position:relative;padding-left:6px;line-height:16px;color:var(--txt)}
 .lg .pv{text-align:right;font-variant-numeric:tabular-nums;color:var(--txt)}
 .lg .sp{text-align:right;font-variant-numeric:tabular-nums;color:var(--dim);font-size:9.5px}
 .dom{display:grid;grid-template-columns:1fr 1fr;gap:9px;font-size:10.5px}
 /* ---- modo simple ---- */
-#lang{background:#0b1119;border:1px solid var(--line);color:var(--dim);padding:4px 10px;
+#lang{background:var(--fondo2);border:1px solid var(--line);color:var(--dim);padding:4px 10px;
  font:inherit;font-size:10px;letter-spacing:.08em;cursor:pointer}
 #lang:hover{color:var(--am);border-color:var(--am)}
-#modo{background:#0b1119;border:1px solid var(--line);color:var(--dim);padding:4px 11px;
+#modo{background:var(--fondo2);border:1px solid var(--line);color:var(--dim);padding:4px 11px;
  font:inherit;font-size:10px;letter-spacing:.06em;cursor:pointer;white-space:nowrap}
 #modo.pro{border-color:var(--am);color:var(--am)}
 /* El modo sencillo NO esconde herramientas: las traduce. Solo se oculta el
@@ -3002,13 +3007,13 @@ body.simple .ayuda{display:block}
 .su.on{border-color:var(--am) !important;color:var(--am) !important;background:rgba(255,159,26,.08) !important}
 .gloss .v{font-size:11.5px;color:var(--dim);line-height:1.45}
 .dom .side{display:flex;flex-direction:column;gap:2px}
-.dom .row{position:relative;display:flex;justify-content:space-between;padding:2px 6px;background:#0a0f16}
+.dom .row{position:relative;display:flex;justify-content:space-between;padding:2px 6px;background:var(--fondo1)}
 .dom .row i{position:absolute;top:0;bottom:0;left:0;display:block}
 .dom .row b,.dom .row em{position:relative;font-style:normal;font-variant-numeric:tabular-nums}
 .dom .bid i{background:rgba(0,224,138,.18)} .dom .ask i{background:rgba(255,77,94,.16)}
 .str.on{color:var(--am);text-shadow:0 0 7px rgba(255,159,26,.6)}
 .view{display:none}.view.on{display:block}
-.ftr{flex:0 0 auto;padding:5px 12px;border-top:1px solid var(--line);color:var(--dim2);font-size:9.5px;background:#05080c;display:flex;gap:14px;flex-wrap:wrap}
+.ftr{flex:0 0 auto;padding:5px 12px;border-top:1px solid var(--line);color:var(--dim2);font-size:9.5px;background:var(--fondo0);display:flex;gap:14px;flex-wrap:wrap}
 kbd{border:1px solid var(--line);padding:0 4px;color:var(--dim);font-size:9px}
 svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 .lg{display:flex;gap:12px;padding:4px 10px;font-size:9.5px;color:var(--dim);flex-wrap:wrap}
@@ -3113,6 +3118,183 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
  /* En pantallas asi de estrechas, la jerga sobra aunque estes en modo completo. */
  .mates{display:none !important}
 }
+
+/* ===================== VERSIÓN CLARA =====================
+   No es la oscura invertida. Sobre blanco, el ámbar y el verde brillantes no se
+   leen, así que los acentos se oscurecen hasta tener contraste suficiente y los
+   grises se recalculan para conservar la misma jerarquía visual. */
+body.claro{
+ --bg:#f4f6f8; --pane:#ffffff; --pane2:#eef1f5; --line:#d3dae2; --line2:#e4e9ef;
+ --txt:#16202b; --dim:#5b6875; --dim2:#8a97a5;
+ --am:#a86a12; --gr:#1d7a3c; --rd:#c02c34; --cy:#1f6d8c; --vi:#5b4da8;
+ --fondo0:#e9edf2; --fondo1:#f7f9fb; --fondo2:#f0f3f7;
+ --barra:#c8d1db; --barra2:#aeb9c6; --rojoBorde:#e8c0c3;
+}
+/* El fondo topográfico se dibuja en un lienzo, así que se atenúa aparte. */
+body.claro #topo{opacity:.55}
+body.claro .p{background:rgba(255,255,255,.96);box-shadow:0 1px 2px rgba(22,32,43,.05)}
+body.claro .kpi{background:linear-gradient(165deg,#ffffff,#f7f9fb)}
+body.claro .top,body.claro .nav,body.claro .nav2,body.claro .tape{background:#ffffff}
+body.claro .tape{border-bottom-color:var(--line)}
+body.claro .nav button.on{background:rgba(168,106,18,.12)}
+body.claro tr:hover td{background:#f3f6f9}
+body.claro .sk{background:linear-gradient(90deg,#e9edf2,#f3f6f9,#e9edf2)}
+body.claro #topo+*{}
+/* Las etiquetas de estado necesitan más cuerpo sobre blanco. */
+body.claro .t1,body.claro .t2,body.claro .t3,body.claro .t4,body.claro .t5,body.claro .t6{font-weight:600}
+body.claro .up{color:#12703a}body.claro .dn{color:#b3242c}
+body.claro #iap{background:#ffffff}
+body.claro .iab{background:#f2f5f8}
+body.claro #pal,body.claro .ov{background:rgba(244,246,248,.82)}
+body.claro #palc,body.claro #fe .box,body.claro #dt .box{background:#ffffff}
+/* El botón del tema, junto al de idioma. */
+#tema{background:var(--pane2);border:1px solid var(--line);border-radius:6px;
+ padding:5px 10px;color:var(--dim);font-size:11px;cursor:pointer;margin-left:6px}
+#tema:hover{border-color:var(--am);color:var(--txt)}
+
+/* ===================== PRESENTACIÓN =====================
+   Todo estaba al mismo peso y a la misma distancia, así que nada destacaba.
+   Se trabaja el ritmo vertical, la jerarquía de los títulos y el ruido de las
+   tablas, sin tocar ni un dato. */
+main{padding:12px 14px}
+.grid{gap:13px}
+.p{border-radius:7px}
+.p>h3{padding:11px 15px;font-size:10.5px;letter-spacing:.09em;font-weight:700}
+.p>h3 .st{font-weight:400;letter-spacing:0;text-transform:none;font-size:11px;color:var(--dim2)}
+/* Las cifras grandes son lo que se mira primero: se les da aire y peso. */
+.kpi{padding:15px 17px;border-radius:7px}
+.kpi .k{font-size:9.5px;letter-spacing:.11em;color:var(--dim2);font-weight:600}
+.kpi .v{font-size:27px;letter-spacing:-.02em;margin:5px 0 3px;font-weight:600;
+ font-variant-numeric:tabular-nums}
+.kpi .s{font-size:11px;color:var(--dim);line-height:1.35}
+/* Tablas: menos líneas y más aire. Las rayas de separación compiten con los
+   datos, así que se dejan solo entre filas y muy tenues. */
+table{border-collapse:collapse}
+th{font-size:9.5px;letter-spacing:.08em;font-weight:700;padding:9px 11px;
+ border-bottom:1px solid var(--line)}
+td{padding:10px 11px;border-bottom:1px solid var(--line2)}
+tbody tr:last-child td{border-bottom:0}
+tbody tr{transition:background .12s}
+.n,td.n{font-variant-numeric:tabular-nums}
+/* Las etiquetas de estado eran cajas gritonas; se rebajan a marcas discretas. */
+.t1,.t2,.t3,.t4,.t5,.t6{padding:2px 7px;border-radius:3px;font-size:10px;
+ letter-spacing:.03em;font-weight:600}
+/* Explicaciones: se leen mejor con medida corta y algo más de interlínea. */
+.expl,.ayuda{line-height:1.62;max-width:96ch}
+.st{line-height:1.5}
+/* Los estados vacíos ocupaban lo mismo que los llenos y desorientaban. */
+.emp{padding:26px 16px;text-align:center;color:var(--dim2);font-size:12px;line-height:1.6}
+.emp b{display:block;font-size:22px;margin-bottom:7px;opacity:.55}
+/* Separación entre grupos de paneles: sin esto la página es un muro. */
+.p+.p,.grid+.grid,.grid+.p,.p+.grid{margin-top:13px}
+/* Foco visible para quien navega con teclado. */
+button:focus-visible,input:focus-visible,select:focus-visible,[data-v]:focus-visible{
+ outline:2px solid var(--am);outline-offset:2px}
+body.claro .p{box-shadow:0 1px 2px rgba(22,32,43,.06),0 8px 22px -14px rgba(22,32,43,.18)}
+body.claro .kpi{box-shadow:0 1px 2px rgba(22,32,43,.05)}
+@media(max-width:900px){main{padding:8px}.grid{gap:9px}.kpi .v{font-size:21px}}
+
+/* ===================== ACABADO NEÓN =====================
+   Regla: brilla lo que hay que mirar, y nada más. Si todo brilla no destaca
+   nada y además se lee peor, que es lo contrario de lo que sirve un terminal. */
+:root{
+ /* Los neones son los mismos acentos, pero saturados para que el halo tenga
+    color propio en vez de ser un gris luminoso. */
+ --nAm:#ffb84d; --nGr:#3ff28a; --nCy:#4fd8ff; --nVi:#b08cff; --nRd:#ff6b78;
+ --halo:0 0 12px;
+}
+body.claro{ --nAm:#a86a12; --nGr:#1d7a3c; --nCy:#1f6d8c; --nVi:#5b4da8; --nRd:#c02c34 }
+
+/* --- rejilla de fondo: da sensación de instrumento sin robar atención --- */
+body:not(.claro) main::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+ background-image:linear-gradient(rgba(79,216,255,.028) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(79,216,255,.028) 1px,transparent 1px);
+ background-size:44px 44px;mask-image:radial-gradient(ellipse at 50% 0%,#000 35%,transparent 78%)}
+
+/* --- paneles: filo de luz arriba en vez de una caja más --- */
+.p{position:relative;overflow:hidden}
+body:not(.claro) .p::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;
+ background:linear-gradient(90deg,transparent,rgba(79,216,255,.45),transparent);opacity:.7}
+body:not(.claro) .p{border-color:#1a2432;
+ box-shadow:inset 0 0 0 1px rgba(79,216,255,.045), 0 10px 30px -20px rgba(0,0,0,.9)}
+
+/* --- la cifra grande: es lo único que brilla de verdad --- */
+body:not(.claro) .kpi .v{text-shadow:var(--halo) rgba(255,184,77,.30)}
+body:not(.claro) .kpi.c2 .v{text-shadow:var(--halo) rgba(63,242,138,.30)}
+body:not(.claro) .kpi.c3 .v{text-shadow:var(--halo) rgba(79,216,255,.32)}
+body:not(.claro) .kpi.c4 .v{text-shadow:var(--halo) rgba(176,140,255,.30)}
+body:not(.claro) .kpi{border-top-width:2px}
+body:not(.claro) .kpi::before{height:2px;filter:blur(.3px)}
+
+/* --- verde y rojo: los números que mueven dinero --- */
+body:not(.claro) .up{color:var(--nGr);text-shadow:0 0 9px rgba(63,242,138,.28)}
+body:not(.claro) .dn{color:var(--nRd);text-shadow:0 0 9px rgba(255,107,120,.26)}
+
+/* --- pestaña activa: un filo encendido, no un bloque de color --- */
+body:not(.claro) .nav2 button.on{color:var(--nAm);text-shadow:0 0 10px rgba(255,184,77,.45)}
+body:not(.claro) .nav2 button.on::after{background:var(--nAm);height:2px;
+ box-shadow:0 0 10px rgba(255,184,77,.7)}
+body:not(.claro) .nav button.on{background:rgba(255,184,77,.09);color:var(--nAm);
+ box-shadow:inset 0 -2px 0 var(--nAm)}
+
+/* --- lo que está vivo late; lo que no, no --- */
+body:not(.claro) #vivo.on{border-color:var(--nGr);box-shadow:0 0 14px -4px rgba(63,242,138,.5)}
+body:not(.claro) #vivo.on .pt{box-shadow:0 0 8px var(--nGr)}
+body:not(.claro) .lt.ok b{box-shadow:0 0 7px currentColor}
+
+/* --- botones: filo de luz al pasar por encima --- */
+body:not(.claro) .chips button:hover,body:not(.claro) .rl:hover,body:not(.claro) #buscar:hover{
+ border-color:var(--nCy);box-shadow:0 0 12px -4px rgba(79,216,255,.55);color:var(--txt)}
+body:not(.claro) .chips button.on{border-color:var(--nCy);color:var(--nCy);
+ background:rgba(79,216,255,.09);box-shadow:inset 0 0 12px -6px rgba(79,216,255,.6)}
+
+/* --- tablas: la fila bajo el cursor se enciende por el borde --- */
+body:not(.claro) tbody tr:hover td{background:rgba(79,216,255,.045)}
+body:not(.claro) tbody tr:hover td:first-child{box-shadow:inset 2px 0 0 var(--nCy)}
+body:not(.claro) th{color:var(--dim);border-bottom-color:rgba(79,216,255,.16)}
+
+/* --- barras de progreso y de reparto --- */
+body:not(.claro) .tr i,body:not(.claro) .pbar i{box-shadow:0 0 8px -2px currentColor}
+body:not(.claro) .hb .tr i{background:var(--nAm);box-shadow:0 0 9px -2px rgba(255,184,77,.7)}
+
+/* --- el asistente: es el único elemento que puede pedir atención sola --- */
+body:not(.claro) #iabtn{border-color:var(--nVi);
+ box-shadow:0 0 22px -8px rgba(176,140,255,.75), inset 0 0 14px -10px rgba(176,140,255,.6)}
+body:not(.claro) #iabtn:hover{box-shadow:0 0 28px -6px rgba(176,140,255,.9)}
+
+/* --- etiquetas de estado: marca fina encendida, no caja de color --- */
+body:not(.claro) .t1,body:not(.claro) .t3{box-shadow:inset 0 0 0 1px rgba(63,242,138,.35)}
+body:not(.claro) .t4{box-shadow:inset 0 0 0 1px rgba(255,107,120,.35)}
+body:not(.claro) .t5,body:not(.claro) .t6{box-shadow:inset 0 0 0 1px rgba(79,216,255,.35)}
+
+/* --- la marca --- */
+body:not(.claro) .brand{text-shadow:0 0 16px rgba(255,184,77,.4)}
+
+/* Quien haya pedido menos movimiento en su sistema, lo tiene. */
+@media(prefers-reduced-motion:reduce){
+ *{animation-duration:.001ms !important;animation-iteration-count:1 !important;
+   transition-duration:.001ms !important}}
+/* En pantallas pequeñas se rebaja el brillo: cansa más de cerca. */
+@media(max-width:560px){body:not(.claro) .kpi .v{text-shadow:none}
+ body:not(.claro) main::before{display:none}}
+
+/* --- rastro de navegación --- */
+#rastro{display:flex;align-items:center;gap:7px;padding:7px 15px;font-size:11px;
+ color:var(--dim2);border-bottom:1px solid var(--line2);background:var(--fondo0);
+ flex:0 0 auto;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+#rastro::-webkit-scrollbar{display:none}
+#rastro a{color:var(--dim);cursor:pointer;text-decoration:none}
+#rastro a:hover{color:var(--am)}
+#rastro .aqui{color:var(--txt);font-weight:600}
+#rastro .sep{opacity:.45}
+#rastro .atras{border:1px solid var(--line);border-radius:5px;padding:3px 9px;
+ color:var(--dim);cursor:pointer;background:none;font:inherit;margin-right:4px}
+#rastro .atras:hover{border-color:var(--am);color:var(--txt)}
+#rastro .pista{margin-left:auto;color:var(--dim2);font-size:10px}
+#rastro .pista kbd{background:var(--fondo2);border:1px solid var(--line);
+ border-radius:3px;padding:1px 5px;font-size:9px;margin:0 2px}
+body:not(.claro) #rastro .aqui{text-shadow:0 0 10px rgba(255,184,77,.25)}
+@media(max-width:900px){#rastro .pista{display:none}#rastro{padding:6px 10px}}
 </style>
 </head>
 <body>
@@ -3145,6 +3327,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="lt ld" id="L2"><b></b><span>PM</span></div>
     <div class="lt ld" id="L3"><b></b><span>NEWS</span></div>
   </div>
+  <button id="tema" title="Cambiar entre versión clara y oscura">☀ CLARO</button>
   <div id="vivo" title="Refresca los mercados de Polymarket automáticamente">
     <span class="pt"></span><span id="vivo-e">EN VIVO</span>
     <select id="vivo-n" onclick="event.stopPropagation()">
@@ -3180,6 +3363,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   <div class="sp"></div>
   <div class="meta" id="meta"></div>
 </div></div>
+<div id="rastro"></div>
 <main>
 
 <div class="view on" id="v-dash">
@@ -3991,33 +4175,33 @@ function precioChart(el,c,op){
  // rejilla y eje de precios a la derecha
  for(var k=0;k<=4;k++){
   var v=y0+yr*k/4, y=Y(v);
-  g+="<line x1='"+ml+"' y1='"+y.toFixed(1)+"' x2='"+(W-mr)+"' y2='"+y.toFixed(1)+"' stroke='#161d27'/>"+
-     "<text x='"+(W-mr+6)+"' y='"+(y+3.5).toFixed(1)+"' fill='#5a636d' font-size='10'>"+f(v)+"</text>";
+  g+="<line x1='"+ml+"' y1='"+y.toFixed(1)+"' x2='"+(W-mr)+"' y2='"+y.toFixed(1)+"' stroke='var(--line2)'/>"+
+     "<text x='"+(W-mr+6)+"' y='"+(y+3.5).toFixed(1)+"' fill='var(--dim2)' font-size='10'>"+f(v)+"</text>";
  }
  // --- retrocesos de Fibonacci sobre el rango del periodo ---
  if(op.fib!==false){
   [0,0.236,0.382,0.5,0.618,1].forEach(function(r){
    var v=hi-(hi-lo)*r, y=Y(v);
    g+="<line x1='"+ml+"' y1='"+y.toFixed(1)+"' x2='"+(W-mr)+"' y2='"+y.toFixed(1)+
-      "' stroke='#8b7fc7' stroke-width='.8' stroke-dasharray='2,4' opacity='.5'/>"+
-      "<text x='"+(ml+4)+"' y='"+(y-3).toFixed(1)+"' fill='#8b7fc7' font-size='9' opacity='.85'>"+
+      "' stroke='var(--vi)' stroke-width='.8' stroke-dasharray='2,4' opacity='.5'/>"+
+      "<text x='"+(ml+4)+"' y='"+(y-3).toFixed(1)+"' fill='var(--vi)' font-size='9' opacity='.85'>"+
       (r*100).toFixed(1).replace(".0","")+"%</text>";
   });
  }
  // --- zona de maxima caida ---
  if(peor<-0.05&&mejorValle>mejorPico){
   g+="<rect x='"+X(mejorPico).toFixed(1)+"' y='"+mt+"' width='"+(X(mejorValle)-X(mejorPico)).toFixed(1)+
-     "' height='"+ih+"' fill='#f0605d' opacity='.07'/>"+
+     "' height='"+ih+"' fill='var(--rd)' opacity='.07'/>"+
      "<text x='"+((X(mejorPico)+X(mejorValle))/2).toFixed(1)+"' y='"+(mt+12)+
-     "' text-anchor='middle' fill='#f0605d' font-size='9' opacity='.9'>"+(peor*100).toFixed(0)+"%</text>";
+     "' text-anchor='middle' fill='var(--rd)' font-size='9' opacity='.9'>"+(peor*100).toFixed(0)+"%</text>";
  }
  // --- area y linea de precio ---
  var pts=c.map(function(v,i){return X(i).toFixed(1)+","+Y(v).toFixed(1)}).join(" ");
  g+="<polygon points='"+ml+","+(mt+ih)+" "+pts+" "+X(c.length-1).toFixed(1)+","+(mt+ih)+
     "' fill='url(#gpx)' opacity='.5'/>"+
-    "<polyline points='"+pts+"' fill='none' stroke='#5aa8c7' stroke-width='1.5' vector-effect='non-scaling-stroke'/>";
+    "<polyline points='"+pts+"' fill='none' stroke='var(--cy)' stroke-width='1.5' vector-effect='non-scaling-stroke'/>";
  // --- medias moviles ---
- [[50,"#e3a44a"],[200,"#8b7fc7"]].forEach(function(m){
+ [[50,"var(--am)"],[200,"var(--vi)"]].forEach(function(m){
   if(c.length<m[0]+2)return;
   var mm=mediaMovil(c,m[0]),p=[];
   for(var i=0;i<mm.length;i++)if(mm[i]!==null)p.push(X(i).toFixed(1)+","+Y(mm[i]).toFixed(1));
@@ -4027,23 +4211,23 @@ function precioChart(el,c,op){
  // --- ultimo precio, con su etiqueta en el eje ---
  var uv=c[c.length-1],uy=Y(uv);
  g+="<line x1='"+ml+"' y1='"+uy.toFixed(1)+"' x2='"+(W-mr)+"' y2='"+uy.toFixed(1)+
-    "' stroke='#e6edf3' stroke-width='.7' stroke-dasharray='3,3' opacity='.55'/>"+
-    "<circle cx='"+X(c.length-1).toFixed(1)+"' cy='"+uy.toFixed(1)+"' r='3' fill='#e6edf3'/>"+
-    "<rect x='"+(W-mr+2)+"' y='"+(uy-8).toFixed(1)+"' width='56' height='16' rx='2' fill='#e6edf3'/>"+
-    "<text x='"+(W-mr+8)+"' y='"+(uy+3.5).toFixed(1)+"' fill='#07090c' font-size='10' font-weight='700'>"+f(uv)+"</text>";
+    "' stroke='var(--txt)' stroke-width='.7' stroke-dasharray='3,3' opacity='.55'/>"+
+    "<circle cx='"+X(c.length-1).toFixed(1)+"' cy='"+uy.toFixed(1)+"' r='3' fill='var(--txt)'/>"+
+    "<rect x='"+(W-mr+2)+"' y='"+(uy-8).toFixed(1)+"' width='56' height='16' rx='2' fill='var(--txt)'/>"+
+    "<text x='"+(W-mr+8)+"' y='"+(uy+3.5).toFixed(1)+"' fill='var(--bg)' font-size='10' font-weight='700'>"+f(uv)+"</text>";
 
  el.innerHTML=
   "<div style='display:flex;gap:12px;font-size:9px;color:var(--dim2);padding:0 4px 3px;flex-wrap:wrap'>"+
-   "<span><b style='color:#5aa8c7'>&#9473;</b> "+T("precio","price")+"</span>"+
-   "<span><b style='color:#e3a44a'>&#9473;</b> "+T("media 50","50-day avg")+"</span>"+
-   "<span><b style='color:#8b7fc7'>&#9473;</b> "+T("media 200","200-day avg")+"</span>"+
-   "<span><b style='color:#8b7fc7'>&#9476;</b> Fibonacci</span>"+
-   "<span><b style='color:#f0605d'>&#9608;</b> "+T("peor caída","max drawdown")+"</span>"+
+   "<span><b style='color:var(--cy)'>&#9473;</b> "+T("precio","price")+"</span>"+
+   "<span><b style='color:var(--am)'>&#9473;</b> "+T("media 50","50-day avg")+"</span>"+
+   "<span><b style='color:var(--vi)'>&#9473;</b> "+T("media 200","200-day avg")+"</span>"+
+   "<span><b style='color:var(--vi)'>&#9476;</b> Fibonacci</span>"+
+   "<span><b style='color:var(--rd)'>&#9608;</b> "+T("peor caída","max drawdown")+"</span>"+
   "</div>"+
   "<svg viewBox='0 0 "+W+" "+H+"' style='width:100%;height:calc(100% - 14px)' preserveAspectRatio='none'>"+
    "<defs><linearGradient id='gpx' x1='0' y1='0' x2='0' y2='1'>"+
-    "<stop offset='0%' stop-color='#5aa8c7' stop-opacity='.34'/>"+
-    "<stop offset='100%' stop-color='#5aa8c7' stop-opacity='0'/></linearGradient></defs>"+
+    "<stop offset='0%' stop-color='var(--cy)' stop-opacity='.34'/>"+
+    "<stop offset='100%' stop-color='var(--cy)' stop-opacity='0'/></linearGradient></defs>"+
    g+"<g class='cruz'></g></svg>";
 
  // --- cruceta: lee el precio del punto que senala el raton ---
@@ -4054,11 +4238,11 @@ function precioChart(el,c,op){
   if(i<0||i>=c.length){cruz.innerHTML="";return}
   var x=X(i),y=Y(c[i]),izq=x>W*0.6;
   cruz.innerHTML="<line x1='"+x.toFixed(1)+"' y1='"+mt+"' x2='"+x.toFixed(1)+"' y2='"+(mt+ih)+
-   "' stroke='#e6edf3' stroke-width='.7' opacity='.45'/>"+
-   "<circle cx='"+x.toFixed(1)+"' cy='"+y.toFixed(1)+"' r='3.5' fill='#e6edf3'/>"+
-   "<text x='"+(izq?x-8:x+8).toFixed(1)+"' y='"+(y-9).toFixed(1)+"' fill='#e6edf3' font-size='11' font-weight='700' text-anchor='"+
+   "' stroke='var(--txt)' stroke-width='.7' opacity='.45'/>"+
+   "<circle cx='"+x.toFixed(1)+"' cy='"+y.toFixed(1)+"' r='3.5' fill='var(--txt)'/>"+
+   "<text x='"+(izq?x-8:x+8).toFixed(1)+"' y='"+(y-9).toFixed(1)+"' fill='var(--txt)' font-size='11' font-weight='700' text-anchor='"+
    (izq?"end":"start")+"'>"+f(c[i])+"</text>"+
-   "<text x='"+(izq?x-8:x+8).toFixed(1)+"' y='"+(y+4).toFixed(1)+"' fill='#8b949e' font-size='9' text-anchor='"+
+   "<text x='"+(izq?x-8:x+8).toFixed(1)+"' y='"+(y+4).toFixed(1)+"' fill='var(--dim)' font-size='9' text-anchor='"+
    (izq?"end":"start")+"'>"+(c.length-1-i)+T(" sesiones atrás"," sessions ago")+"</text>";
  });
  svg.addEventListener("mouseleave",function(){cruz.innerHTML=""});
@@ -4074,7 +4258,7 @@ function areaChart(el,pts,col,fmtY){
  var line=xy.map(function(a){return a[0].toFixed(1)+","+a[1].toFixed(1)}).join(" ");
  var grid="",gy=[0,.25,.5,.75,1];
  gy.forEach(function(g){var y=mt+ih-g*ih;
-  grid+="<line x1='"+ml+"' y1='"+y.toFixed(1)+"' x2='"+(W-mr)+"' y2='"+y.toFixed(1)+"' stroke='#141c28'/>"+
+  grid+="<line x1='"+ml+"' y1='"+y.toFixed(1)+"' x2='"+(W-mr)+"' y2='"+y.toFixed(1)+"' stroke='var(--line2)'/>"+
   "<text x='"+(ml-6)+"' y='"+(y+3).toFixed(1)+"' text-anchor='end'>"+fmtY(mx*g)+"</text>"});
  var bars=xy.map(function(a,i){return "<rect x='"+(a[0]-Math.max(1,step*.3)).toFixed(1)+"' y='"+a[1].toFixed(1)+"' width='"+Math.max(2,step*.6).toFixed(1)+"' height='"+(mt+ih-a[1]).toFixed(1)+"' fill='"+col+"' opacity='.20'><title>"+pts[i].k+" · "+fmtY(pts[i].v)+"</title></rect>"}).join("");
  var lab="";pts.forEach(function(p,i){if(i%Math.ceil(pts.length/7)===0)
@@ -4096,8 +4280,8 @@ function donut(el,parts){
   ang=a2});
  var lg2=parts.map(function(p){return "<span><i style='background:"+p.c+"'></i>"+p.k+" "+Math.round(100*p.v/tot)+"% · "+f$(p.v)+"</span>"}).join("");
  el.innerHTML="<div style='display:flex;align-items:center;gap:6px;padding:6px'><svg viewBox='0 0 180 180' style='width:150px;height:150px;flex:0 0 auto'>"+seg+
- "<text x='90' y='84' text-anchor='middle' style='font-size:10px;fill:#5a636d;letter-spacing:.8px'>TOTAL</text>"+
- "<text x='90' y='104' text-anchor='middle' style='font-size:17px;fill:#e6edf3;font-weight:500'>"+f$(tot)+"</text></svg>"+
+ "<text x='90' y='84' text-anchor='middle' style='font-size:10px;fill:var(--dim2);letter-spacing:.8px'>TOTAL</text>"+
+ "<text x='90' y='104' text-anchor='middle' style='font-size:17px;fill:var(--txt);font-weight:500'>"+f$(tot)+"</text></svg>"+
  "<div class='lg' style='flex-direction:column;gap:7px'>"+lg2+"</div></div>"}
 
 function hist(el,vals){
@@ -4106,7 +4290,7 @@ function hist(el,vals){
  vals.forEach(function(v){var i=Math.min(9,Math.floor(v*10));b[i]++});
  var mx=Math.max.apply(null,b)||1,W=740,H=190,ml=34,mb=24,mt=10,iw=W-ml-8,ih=H-mt-mb,bw=iw/10;
  var bars="";
- b.forEach(function(c,i){var h=(c/mx)*ih,col=i<3?"#ff4d5e":i>6?"#00e08a":"#3d5570";
+ b.forEach(function(c,i){var h=(c/mx)*ih,col=i<3?"var(--rd)":i>6?"var(--gr)":"#3d5570";
   bars+="<rect x='"+(ml+i*bw+3).toFixed(1)+"' y='"+(mt+ih-h).toFixed(1)+"' width='"+(bw-6).toFixed(1)+"' height='"+h.toFixed(1)+"' fill='"+col+"' opacity='.75'><title>"+(i*10)+"-"+(i*10+10)+"% · "+c+" mercados</title></rect>"+
   "<text x='"+(ml+i*bw+bw/2).toFixed(1)+"' y='"+(H-8)+"' text-anchor='middle'>"+(i*10)+"</text>"+
   (c?"<text x='"+(ml+i*bw+bw/2).toFixed(1)+"' y='"+(mt+ih-h-4).toFixed(1)+"' text-anchor='middle' style='fill:#8ca0b8'>"+c+"</text>":"")});
@@ -4123,15 +4307,15 @@ function scatter(el,ms){
  var pts=ms.map(function(m){
   var x=ml+(m.price)*iw, lv=(Math.log10(1+m.vol24)-lmin)/lrg;
   var y=mt+ih-lv*ih, r=Math.max(2.2,Math.min(9,Math.sqrt(m.vol24/mv)*13));
-  var c=m.chg>=0?"#00e08a":"#ff4d5e";
+  var c=m.chg>=0?"var(--gr)":"var(--rd)";
   return "<circle cx='"+x.toFixed(1)+"' cy='"+y.toFixed(1)+"' r='"+r.toFixed(1)+"' fill='"+c+"' opacity='.45' stroke='"+c+"' stroke-width='.7'><title>"+esc(m.q.slice(0,70))+"\\n"+(m.price*100).toFixed(1)+"% · vol "+f$(m.vol24)+" · Δ"+(m.chg*100).toFixed(1)+"</title></circle>"}).join("");
  var gr="";[0,.25,.5,.75,1].forEach(function(g){var x=ml+g*iw;
-  gr+="<line x1='"+x.toFixed(1)+"' y1='"+mt+"' x2='"+x.toFixed(1)+"' y2='"+(mt+ih)+"' stroke='#141c28'/>"+
+  gr+="<line x1='"+x.toFixed(1)+"' y1='"+mt+"' x2='"+x.toFixed(1)+"' y2='"+(mt+ih)+"' stroke='var(--line2)'/>"+
   "<text x='"+x.toFixed(1)+"' y='"+(H-6)+"' text-anchor='middle'>"+(g*100)+"%</text>"});
  el.innerHTML="<svg viewBox='0 0 "+W+" "+H+"' style='width:100%;height:100%' preserveAspectRatio='none'>"+gr+pts+
  "<text x='"+(ml-6)+"' y='"+(mt+8)+"' text-anchor='end'>vol↑</text>"+
  "<text x='"+(ml-6)+"' y='"+(mt+ih)+"' text-anchor='end'>bajo</text></svg>"+
- "<div class='lg'><span><i style='background:#00e08a'></i>subiendo 24h</span><span><i style='background:#ff4d5e'></i>bajando 24h</span><span>tamaño = volumen</span></div>"}
+ "<div class='lg'><span><i style='background:var(--gr)'></i>subiendo 24h</span><span><i style='background:var(--rd)'></i>bajando 24h</span><span>tamaño = volumen</span></div>"}
 
 /* ---------- FETCH ---------- */
 function loadCon(){
@@ -4223,8 +4407,8 @@ function render(){
  $("k3s").textContent=PM.length?PM.length+" mercados activos":"—";
  $("k4").textContent=MATCH.length;
  $("k4s").textContent=MATCH.length?"verifícalos a mano":"contrato ↔ small cap";
- if(CON.length){spark($("k1sp"),CON.slice(0,26).map(function(c){return c.amount}).reverse(),"#e3a44a");
-  spark($("k2sp"),rad.slice(0,26).map(function(c){return c.amount}).reverse(),"#00e08a")}
+ if(CON.length){spark($("k1sp"),CON.slice(0,26).map(function(c){return c.amount}).reverse(),"var(--am)");
+  spark($("k2sp"),rad.slice(0,26).map(function(c){return c.amount}).reverse(),"var(--gr)")}
  if(PM.length){spark($("k3sp"),PM.slice(0,26).map(function(m){return m.vol24}).reverse(),"#22d3ee");
   spark($("k4sp"),PM.slice(0,26).map(function(m){return Math.abs(m.chg)*100}),"#a78bfa")}
  $("meta").textContent=(CON.length?CON.length+" CONTRATOS":"")+(PM.length?"  ·  "+PM.length+" MERCADOS":"")+"  ·  "+SC.length+" SMALL CAPS";
@@ -4234,10 +4418,10 @@ function render(){
   var by={};CON.forEach(function(c){if(c.date)by[c.date]=(by[c.date]||0)+c.amount});
   var ks=Object.keys(by).sort(),pts=ks.map(function(k){return{k:k,v:by[k]}});
   $("h-flow").textContent=pts.length+T(" días con actividad"," days with activity");
-  areaChart($("d-flow"),pts,"#e3a44a",f$);
+  areaChart($("d-flow"),pts,"var(--am)",f$);
   var cum=0,cp=pts.map(function(p){cum+=p.v;return{k:p.k,v:cum}});
-  areaChart($("c-cum"),cp,"#00e08a",f$);
-  donut($("d-donut"),[{k:T("Gigantes","Primes"),v:tot-rtot,c:"#232c38"},{k:T("Resto (tu terreno)","Rest (your ground)"),v:rtot,c:"#e3a44a"}]);
+  areaChart($("c-cum"),cp,"var(--gr)",f$);
+  donut($("d-donut"),[{k:T("Gigantes","Primes"),v:tot-rtot,c:"var(--line)"},{k:T("Resto (tu terreno)","Rest (your ground)"),v:rtot,c:"var(--am)"}]);
  }else{var m0=ERR.con?emp("⚠","USAspending no responde.<br>Pulsa ⟳ REFRESH."):sk(5);
   $("d-flow").innerHTML=m0;$("c-cum").innerHTML=m0;$("d-donut").innerHTML=m0}
 
@@ -4364,7 +4548,7 @@ function render(){
  if(VIEW==="ini"){renderIni()}
  if(VIEW==="news"){
   $("n-chips").innerHTML=Object.keys(NQ).map(function(r){return "<button data-n='"+r+"' class='"+(r===NR?"on":"")+"'>"+r+"</button>"}).join("")+
-   "<button data-nf='1' style='border-color:#4a3410;color:var(--am)'>⟳ reintentar</button>";
+   "<button data-nf='1' style='border-color:var(--am);color:var(--am)'>⟳ reintentar</button>";
   var arr=NEWS[NR];
   if(arr===undefined){$("n-st").textContent="Cargando "+NR+"…";$("n-rows").innerHTML=sk(6)}
   else{var it=arr.filter(function(n){return !Q||n.t.toLowerCase().indexOf(Q)>=0});
@@ -4467,7 +4651,7 @@ function renderQuant(){
  if(xs.length&&ys.length){
   var xm=Math.max.apply(null,xs)||1,y0=Math.min.apply(null,ys),y1=Math.max.apply(null,ys),yr=(y1-y0)||1;
   var pts=QUANT.filter(function(q){return isFinite(q.vol)&&q.r6!==null&&isFinite(q.r6)}).map(function(q){
-   var x=ml+(q.vol/xm)*iw,y=mt+ih-((q.r6-y0)/yr)*ih,c=q.r6>=0?"#00e08a":"#ff4d5e";
+   var x=ml+(q.vol/xm)*iw,y=mt+ih-((q.r6-y0)/yr)*ih,c=q.r6>=0?"var(--gr)":"var(--rd)";
    return "<circle cx='"+x.toFixed(1)+"' cy='"+y.toFixed(1)+"' r='5' fill='"+c+"' opacity='.5' stroke='"+c+"'><title>"+esc(q.s.name)+"\\nvol "+(q.vol*100).toFixed(0)+"% · 6M "+pct(q.r6)+"</title></circle>"}).join("");
   var zeroY=mt+ih-((0-y0)/yr)*ih;
   $("q-rr").innerHTML="<svg viewBox='0 0 "+W2+" "+H2+"' style='width:100%;height:100%' preserveAspectRatio='none'>"+
@@ -5296,6 +5480,7 @@ FE=e;$("fe").classList.add("on");if(typeof rutaEscribe=="function")setTimeout(ru
  /* Al cambiar de empresa se vuelve al grafico propio: si no, se quedaria a la
     vista el de TradingView de la empresa ANTERIOR, que es justo el tipo de dato
     equivocado que hay que evitar. */
+ try{ pintarRastro() }catch(er){}
  try{ TV_ACTUAL=null; $("fe-tv").innerHTML=""; $("fe-tv").style.display="none";
       $("fe-px").style.display=""; $("fe-tab-p").classList.add("on");
       $("fe-tab-tv").classList.remove("on"); }catch(er){}
@@ -5503,14 +5688,14 @@ function conRellenar(nombre){
  $("fe-tab-p").onclick=function(){mostrar("p")};
  $("fe-tab-tv").onclick=function(){mostrar("tv")};
 })();
-function feCerrar(){$("fe").classList.remove("on");FE=null;if(typeof rutaEscribe=="function")rutaEscribe()}
+function feCerrar(){$("fe").classList.remove("on");FE=null;if(typeof rutaEscribe=="function")rutaEscribe();try{pintarRastro()}catch(e){}}
 
 function dtOpen(id,sinApilar){
  if(!sinApilar)apilar();
  var m=null;
  if(BQ)for(var i=0;i<BQ.markets.length;i++)if(String(BQ.markets[i].id)===String(id)){m=BQ.markets[i];break}
  if(!m)return;
- DT=m;$("dt").classList.add("on");if(typeof rutaEscribe=="function")setTimeout(rutaEscribe,0);
+ DT=m;$("dt").classList.add("on");if(typeof rutaEscribe=="function")setTimeout(rutaEscribe,0);try{pintarRastro()}catch(e){}
  $("dt-q").textContent=m.q;
  $("dt-sub").innerHTML=(m.ev?esc(m.ev)+" · ":"")+
    "<a href='"+esc(m.url)+"' target='_blank' rel='noopener'>abrir en Polymarket ↗</a>"+
@@ -5558,7 +5743,7 @@ function dtOpen(id,sinApilar){
    .catch(function(){$("dt-del").innerHTML=emp("⚠️","Flujo no disponible.")})}
  else $("dt-del").innerHTML=emp("—","Sin identificador de mercado.")}
 
-function dtClose(){$("dt").classList.remove("on");DT=null;if(typeof rutaEscribe=="function")rutaEscribe()}
+function dtClose(){$("dt").classList.remove("on");DT=null;if(typeof rutaEscribe=="function")rutaEscribe();try{pintarRastro()}catch(e){}}
 
 function dtMetrics(m){
  var k=function(l,v,c){return "<div><div class='l'>"+l+"</div><div class='v "+(c||"")+"'>"+v+"</div></div>"};
@@ -6467,7 +6652,11 @@ function dibujarTopo(){
  var cv=$("topo");if(!cv)return;
  var W=cv.width=innerWidth,H=cv.height=innerHeight;
  var g=cv.getContext("2d");
- g.fillStyle="#000";g.fillRect(0,0,W,H);
+ /* El lienzo no entiende de variables de CSS: el tema se lee aqui. Aplicarle un
+    filtro de inversion tambien invertiria el color de las curvas y quedaria
+    turbio, asi que se pintan los colores correctos de cada tema. */
+ var claro=document.body.classList.contains("claro");
+ g.fillStyle=claro?"#f4f6f8":"#000";g.fillRect(0,0,W,H);
 
  // --- ruido de valor: rejilla aleatoria + interpolacion suave ---
  var sem=20260901;
@@ -6507,7 +6696,9 @@ function dibujarTopo(){
   // una de cada cuatro curvas resaltada: es lo que da el aspecto del mapa
   var fuerte=(n2%5===2);
   // Textura, no papel pintado: el fondo no puede competir con los datos.
-  g.strokeStyle=fuerte?"rgba(227,164,74,.13)":"rgba(140,160,190,.045)";
+  g.strokeStyle = claro
+   ? (fuerte?"rgba(168,106,18,.16)":"rgba(90,110,140,.075)")
+   : (fuerte?"rgba(227,164,74,.13)":"rgba(140,160,190,.045)");
   g.lineWidth=fuerte?1.3:0.8;
   g.beginPath();
   for(var jj=0;jj<ny-1;jj++)for(var ii=0;ii<nx-1;ii++){
@@ -7139,11 +7330,16 @@ function apilar(){
  $("volver").style.display="";}
 
 function go(v,sinApilar){
+ var anterior=VIEW;
  if(!sinApilar&&v!==VIEW)apilar();
  VIEW=v;
  ["ini","dash","con","sc","pm","news","quant","ver","brain","sim","cart","inv","lib"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
  [].forEach.call($("nav").querySelectorAll("button[data-v]"),function(b){b.classList.toggle("on",b.dataset.v===v)});
  if(typeof rutaEscribe==="function")setTimeout(rutaEscribe,0);
+ /* Se guarda de dónde se viene para que el botón de volver sepa a dónde ir.
+    Solo se apunta si de verdad se ha cambiado de sitio. */
+ try{ if(!sinApilar&&anterior&&anterior!==v){ HIST.push({v:anterior}); if(HIST.length>12)HIST.shift() } }catch(e){}
+ try{ pintarRastro() }catch(e){}
  if(typeof GACT!=="undefined"&&grupoDe(v)!==GACT){GACT=grupoDe(v);pintarNav()}
  if(v==="news")loadNews(NR);
  if(v==="con"&&!EDG&&!EDGL)loadEdgar();
@@ -7368,6 +7564,35 @@ function wass1(a,b){
  return t/N;
 }
 
+
+
+/* ---------- versión clara u oscura ----------
+   Se guarda en el navegador y se aplica antes de pintar nada para que no haya
+   un destello del tema anterior. Los gráficos ya usan variables, así que
+   cambian solos; solo hay que redibujar el fondo topográfico, que es un lienzo
+   y no entiende de CSS. */
+var TEMA = "oscuro";
+function aplicarTema(t){
+ TEMA = (t === "claro") ? "claro" : "oscuro";
+ document.body.classList.toggle("claro", TEMA === "claro");
+ var b = $("tema");
+ if (b) b.textContent = (TEMA === "claro") ? "\\u263E OSCURO" : "\\u2600 CLARO";
+ try{ localStorage.setItem("mor_tema", TEMA) }catch(e){}
+ // El fondo se dibuja una vez con colores calculados: hay que rehacerlo.
+ try{ if(typeof dibujarTopo === "function") dibujarTopo() }catch(e){}
+ // Los gráficos en SVG usan var(), pero los que se pintan en lienzo no.
+ try{ render() }catch(e){}
+}
+(function(){
+ var g = null; try{ g = localStorage.getItem("mor_tema") }catch(e){}
+ if (g === "claro") document.body.classList.add("claro");
+ var b = $("tema");
+ if (b){
+  b.textContent = (g === "claro") ? "\\u263E OSCURO" : "\\u2600 CLARO";
+  TEMA = (g === "claro") ? "claro" : "oscuro";
+  b.onclick = function(){ aplicarTema(TEMA === "claro" ? "oscuro" : "claro") };
+ }
+})();
 
 /* ===================== MODO EN VIVO ===================== */
 var VIVO=false, VIVO_INT=null, VIVO_TS=null, VIVO_REL=null, PM_ANT={};
@@ -8193,6 +8418,50 @@ function fxChart(x){
  };
 })();
 
+
+/* ---------- rastro: grupo, vista y por dónde has venido ---------- */
+var HIST=[];
+function pintarRastro(){
+ var r=$("rastro"); if(!r)return;
+ var g=null;
+ for(var i=0;i<GRUPOS.length;i++) if(GRUPOS[i].v.indexOf(VIEW)>=0){ g=GRUPOS[i]; break }
+ var nombre=null;
+ for(var j=0;j<PAL_VISTAS.length;j++) if(PAL_VISTAS[j][0]===VIEW){ nombre=PAL_VISTAS[j][1]; break }
+ var h="";
+ /* El botón de volver solo aparece si hay a dónde volver: un botón que no hace
+    nada es peor que ninguno. */
+ if(HIST.length) h+="<button class='atras' id='r-atras' title='"+T("Volver a la pantalla anterior","Back to the previous screen")+"'>\\u2190 "+T("Atrás","Back")+"</button>";
+ h+="<a data-ir='ini'>"+T("Inicio","Home")+"</a>";
+ if(g&&g.t!==T("Inicio","Home")&&VIEW!=="ini"){
+  h+="<span class='sep'>\\u203A</span><a data-grupo='"+g.id+"'>"+esc(g.t)+"</a>";
+ }
+ if(VIEW!=="ini"&&nombre) h+="<span class='sep'>\\u203A</span><span class='aqui'>"+esc(nombre)+"</span>";
+ /* Si hay una ficha abierta, es el último escalón: así se ve que estás dentro. */
+ try{
+  if($("fe").classList.contains("on")) h+="<span class='sep'>\\u203A</span><span class='aqui'>"+esc(($("fe-n").textContent||"").slice(0,34))+"</span>";
+  else if($("dt").classList.contains("on")) h+="<span class='sep'>\\u203A</span><span class='aqui'>"+esc(($("dt-q").textContent||"").slice(0,42))+"</span>";
+ }catch(e){}
+ h+="<span class='pista'><kbd>Ctrl K</kbd>"+T("buscar","search")+" <kbd>F1-F12</kbd>"+T("vistas","views")+" <kbd>Esc</kbd>"+T("cerrar","close")+"</span>";
+ r.innerHTML=h;
+}
+(function(){
+ var r=$("rastro"); if(!r)return;
+ r.onclick=function(ev){
+  var t=ev.target;
+  if(t.id==="r-atras"||t.parentElement&&t.parentElement.id==="r-atras"){
+   var a=HIST.pop();
+   if(a){ if(a.ficha) feAbrir(a.ficha,true); else if(a.mer) dtOpen(a.mer,true); else go(a.v,true) }
+   return;
+  }
+  if(t.dataset&&t.dataset.ir){ go(t.dataset.ir); return }
+  if(t.dataset&&t.dataset.grupo){
+   /* Al pulsar el grupo se va a su primera vista, que es lo que espera
+      cualquiera al pulsar el escalón de arriba. */
+   for(var i=0;i<GRUPOS.length;i++) if(GRUPOS[i].id===t.dataset.grupo){ go(GRUPOS[i].v[0]); return }
+  }
+ };
+})();
+
 /* ============ BUSCADOR GLOBAL, DIRECCIONES Y BOTON ATRAS ============ */
 
 var PAL_VISTAS=[
@@ -8452,7 +8721,7 @@ function tvPintar(cont,tk){
    new TradingView.widget({
     container_id:"tvbox", symbol:sim, interval:"D", timezone:"Europe/Madrid",
     theme:"dark", style:"1", locale:(IDIOMA==="en"?"en":"es"),
-    toolbar_bg:"#0d1117", enable_publishing:false, hide_side_toolbar:false,
+    toolbar_bg:"var(--pane)", enable_publishing:false, hide_side_toolbar:false,
     allow_symbol_change:false, save_image:false, autosize:true,
     studies:["MASimple@tv-basicstudies"]
    });
