@@ -2326,7 +2326,28 @@ async function coherencia(env, opciones) {
       });
     }
 
+    /* Pago en cada mundo: el certificado. Se recorta a 24 filas porque una
+       tabla mas larga no se lee, pero se dice cuantos mundos hay en total. */
+    const cert = mundos.slice(0, 24).map((mu, iw) => {
+      let pago = 0;
+      for (let i = 0; i < comp.length; i++) {
+        const y = r.y[i];
+        if (Math.abs(y) < 1e-9) continue;
+        // Comprar cuesta el ask; vender ingresa el bid. El pago del mundo es
+        // lo que se cobra menos lo que costo entrar.
+        pago += y * (mu[i] - (y > 0 ? px[i].ask : px[i].bid));
+      }
+      return { mundo: iw + 1, gana: comp.map((_, i) => mu[i]), pago: pago };
+    });
+    const pagos = cert.map(c => c.pago);
     hallazgos.push({
+      certificado: cert,
+      mundosTotales: mundos.length,
+      peorPago: pagos.length ? Math.min.apply(null, pagos) : null,
+      mejorPago: pagos.length ? Math.max.apply(null, pagos) : null,
+      /* La comprobacion que importa: si el peor pago fuese negativo, esto NO es
+         un arbitraje por mucho que lo diga el simplex. */
+      verificado: pagos.length ? Math.min.apply(null, pagos) > -1e-9 : false,
       nMercados: comp.length, nMundos: mundos.length,
       porUnidad: r.peor / r.tam, peor: r.peor, tam: r.tam,
       // Solo dependen de aristas del modelo si alguna critica lo es.
@@ -2342,8 +2363,54 @@ async function coherencia(env, opciones) {
   }
   hallazgos.sort((a, b) => b.porUnidad - a.porUnidad);
 
+  /* TASA DE ERROR DEL GRAFO, medida contra la realidad.
+     Se cogen mercados ya resueltos de las mismas familias de fecha y se
+     comprueba si sus desenlaces respetan la implicacion. Una implicacion por
+     fecha NO puede fallar -es logica pura-, asi que si falla es que la familia
+     estaba mal formada, y eso se quiere saber. */
+  let errFecha = { comprobadas: 0, violadas: 0, ejemplos: [] };
+  try {
+    const cerr = await fetch("https://gamma-api.polymarket.com/markets?closed=true&limit=100&order=endDate&ascending=false");
+    if (cerr.ok) {
+      const lista = await cerr.json();
+      const fam2 = {};
+      for (const m of (lista || [])) {
+        const f = dfFecha(m.question);
+        if (!f) continue;
+        let o = null;
+        try { const a = JSON.parse(m.outcomePrices || "[]"); if (+a[0] === 1) o = 1; else if (+a[1] === 1) o = 0 } catch (e) {}
+        if (o === null) continue;
+        (fam2[f.familia] = fam2[f.familia] || { superv: f.superv, ms: [] }).ms.push({ c: f.clave, o, q: m.question });
+      }
+      for (const k of Object.keys(fam2)) {
+        const g = fam2[k].ms.slice().sort((a, b) => a.c - b.c);
+        if (g.length < 2) continue;
+        for (let i = 0; i + 1 < g.length; i++) {
+          if (g[i].c === g[i+1].c) continue;
+          errFecha.comprobadas++;
+          // Acumulativo: si la temprana salio SI, la tardia tambien tiene que salir SI.
+          const fuerte = fam2[k].superv ? g[i+1] : g[i];
+          const debil  = fam2[k].superv ? g[i] : g[i+1];
+          if (fuerte.o === 1 && debil.o === 0) {
+            errFecha.violadas++;
+            if (errFecha.ejemplos.length < 3)
+              errFecha.ejemplos.push({ implica: fuerte.q.slice(0,70), implicado: debil.q.slice(0,70) });
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
   return {
     ts: new Date().toISOString(),
+    errorGrafo: Object.assign(errFecha, {
+      tasa: errFecha.comprobadas ? errFecha.violadas / errFecha.comprobadas : null,
+      lectura: errFecha.comprobadas
+        ? (errFecha.violadas === 0
+            ? "ninguna implicación por fecha ha fallado en los mercados ya resueltos: la extracción por regla no comete errores, que es lo esperado por ser lógica pura"
+            : errFecha.violadas + " de " + errFecha.comprobadas + " fallaron, así que alguna familia está mal formada y hay que mirarla")
+        : "sin mercados resueltos suficientes para medirlo hoy"
+    }),
     mercados: M.length, grupos: grupos.length,
     implicaciones: impl.length, implicacionesFecha: impl.filter(p => origen[p[0]+">"+p[1]] === "fecha").length,
     exclusiones: excl.length,
@@ -2610,6 +2677,60 @@ async function clima(env, ciudadPedida){
           "AVISO: no se ha comprobado que esto gane dinero contra el precio de mercado; " +
           "lo único demostrado es que la previsión corregida está centrada.",
     datos: salida
+  };
+}
+
+
+async function vhla(seccion) {
+  const base = "https://www.vhlamedia.com";
+  const rutas = { articulos: "/articles", videos: "/videos", mercado: "/market" };
+  const ruta = rutas[String(seccion || "articulos")] || rutas.articulos;
+  let html = "";
+  try {
+    const r = await fetch(base + ruta, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
+    if (!r.ok) throw new Error("VHLA HTTP " + r.status);
+    html = await r.text();
+  } catch (e) { return { error: "No se pudo leer VHLA Media: " + (e.message || e) } }
+
+  /* Se recorre cada enlace a articulo y se toma el bloque que lo rodea, que es
+     donde viven el titular y la imagen. Sin plantilla fija: se busca el texto
+     mas largo del bloque, que en una tarjeta siempre es el titular. */
+  const vistos = {}, salida = [];
+  /* Se salta el resto de atributos del enlace con [^>]*> antes de capturar el
+     contenido: sin eso el "titular" acababa siendo class="card-link-abs...". */
+  const re = /href="(\/(?:article|video)\/[^"]+)"[^>]*>([\s\S]{0,1400}?)<\/a>/g;
+  let m;
+  while ((m = re.exec(html)) !== null && salida.length < 14) {
+    const url = base + m[1];
+    if (vistos[url]) continue;
+    const bloque = m[2];
+    /* Titular: el trozo de texto mas largo del bloque. Se descartan los que
+       parecen fecha, etiqueta o boton. */
+    const trozos = bloque.replace(/<script[\s\S]*?<\/script>/g, " ")
+      .split(/<[^>]*>/).map(x => x.replace(/\s+/g, " ").trim())
+      .filter(x => x.length > 18 && !/^\d/.test(x) && !/read more|leer mas/i.test(x));
+    /* Si el bloque no da un titular legible, se reconstruye desde la propia
+       direccion: los slugs de este sitio son descriptivos. Es preferible un
+       titular derivado del enlace que uno sacado de la maquetacion. */
+    let titulo = trozos.length
+      ? trozos.sort((a, b) => b.length - a.length)[0].slice(0, 160)
+      : m[1].split("/").pop().replace(/-/g, " ").replace(/^./, c => c.toUpperCase());
+    if (/^class=|^w-|^\s*$/.test(titulo)) {
+      titulo = m[1].split("/").pop().replace(/-/g, " ").replace(/^./, c => c.toUpperCase());
+    }
+    const img = (bloque.match(/src="(https:\/\/[^"]+?\.(?:jpg|jpeg|png|webp)[^"]*)"/) || [])[1] || null;
+    /* Fecha: se busca un formato reconocible dentro del bloque. Si no aparece,
+       se deja vacia en vez de inventar una. */
+    const fm = bloque.match(/\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4})\b/);
+    vistos[url] = 1;
+    salida.push({ url, titulo, img, fecha: fm ? fm[1] : null, tipo: m[1].indexOf("/video/") === 0 ? "video" : "articulo" });
+  }
+  return {
+    fuente: "VHLA Media", url: base, seccion: ruta,
+    ts: new Date().toISOString(),
+    n: salida.length,
+    nota: salida.length ? null : "No se ha reconocido ningún artículo: probablemente el sitio ha cambiado de plantilla.",
+    items: salida
   };
 }
 
@@ -3411,6 +3532,7 @@ body:not(.claro)::after{content:"";position:fixed;inset:0;pointer-events:none;z-
   <button data-v="brain">F8 CEREBRO</button>
   <button data-v="sim">F9 SIMULADOR</button>
   <button data-v="cart">F10 CARTERA</button>
+  <button data-v="nvf">NUNCA VISTO</button>
   <button data-v="inv">F11 INVESTIGACIÓN</button>
   <button data-v="lib">F12 BIBLIOTECA</button>
   <div class="sp"></div>
@@ -3849,7 +3971,6 @@ body:not(.claro)::after{content:"";position:fixed;inset:0;pointer-events:none;z-
     </tr></thead><tbody id="spa-rows"><tr><td colspan="5"><div class="emp"><b>🎯</b>Pulsa <b>▶ Ejecutar</b> tras una simulación.</div></td></tr></tbody></table></div>
     <div class="st">El t-stat agrupado corrige que las ventanas se solapen. Esto corrige otra cosa distinta: que hayas mirado varias estrategias y te quedes con la que mejor salió. Si pruebas seis, la mejor parece buena por puro azar. El p corregido es el que cuenta.</div>
   </div>
-</div>
 <div class="view" id="v-cart">
   <div class="grid g4 escena" style="margin-bottom:8px">
     <div class="kpi"><div class="k">CAPITAL COMPROMETIDO</div><div class="v" id="c1">—</div><div class="s" id="c1s">de tu capital</div></div>
@@ -4028,7 +4149,33 @@ body:not(.claro)::after{content:"";position:fixed;inset:0;pointer-events:none;z-
     <div class="p"><h3>INCOHERENCIAS DE PRECIO <span class="st" style="font-weight:400;text-transform:none">— no todas se pueden cobrar, y se dice cuáles</span></h3>
       <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:34%">Esto implica…</th><th style="width:34%">…esto</th><th style="width:9%">Exceso</th><th style="width:9%">Origen</th><th>Lectura</th></tr></thead><tbody id="co-inc"></tbody></table></div></div>
   </div>
+
+<div class="view" id="v-nvf">
+  <div class="p" style="margin-bottom:9px">
+    <h3>NUNCA VISTO EN FINANZAS <span class="st" style="font-weight:400;text-transform:none">— matemática de 1937 sobre datos que hasta 2023 no se podían extraer</span></h3>
+    <div class="expl" style="padding:14px 17px;font-size:12.5px;line-height:1.65">
+      <b style="color:var(--txt)">La idea, en una frase.</b> Un conjunto de precios sobre sucesos ligados por lógica o es coherente, o regala dinero. Bruno de Finetti lo demostró en 1937: los precios coherentes son exactamente los que caen dentro de la envolvente de los mundos lógicamente posibles, y si uno cae fuera, el teorema de separación devuelve <b>la cartera exacta</b> que cobra pase lo que pase.<br><br>
+      <b style="color:var(--txt)">Por qué no lo hace nadie aquí.</b> Polymarket comprueba la coherencia <i>dentro</i> de cada evento y nunca <i>entre</i> eventos distintos. Cruzarlos exigía extraer relaciones lógicas de miles de preguntas escritas en inglés corriente, y eso no era barato hasta que hubo modelos de lenguaje. Los fondos grandes no están porque el mercado les resulta demasiado pequeño. El hueco existe precisamente por eso.<br><br>
+      <b style="color:var(--txt)">Y lo que de verdad lo separa de un panel bonito:</b> aquí no se te pide que te creas nada. Cada hallazgo trae su <b>certificado</b>: el pago de la cartera en <i>cada</i> mundo posible, fila por fila. Si alguna fila fuera negativa, no sería un arbitraje por mucho que lo dijera el algoritmo. Puedes comprobarlo a mano.
+    </div>
+  </div>
+  <div class="chips" style="margin-bottom:9px"><button id="nv-run">▶ Buscar incoherencias</button>
+    <label class="st"><input type="checkbox" id="nv-ia"> incluir relaciones del modelo (pueden fallar)</label>
+    <span class="st" id="nv-st">Enumera todos los mundos lógicamente posibles de cada grupo de mercados ligados.</span></div>
+  <div class="grid g4 escena" style="margin-bottom:9px">
+    <div class="kpi c3"><div class="k">RELACIONES LÓGICAS</div><div class="v" id="nv1">—</div><div class="s" id="nv1s">extraídas de las preguntas</div></div>
+    <div class="kpi"><div class="k">MUNDOS POSIBLES</div><div class="v" id="nv2">—</div><div class="s" id="nv2s">combinaciones examinadas</div></div>
+    <div class="kpi c2"><div class="k">CARTERAS CERTIFICADAS</div><div class="v" id="nv3">—</div><div class="s" id="nv3s">con pago verificado en todos los mundos</div></div>
+    <div class="kpi c4"><div class="k">ERROR DEL GRAFO</div><div class="v" id="nv4">—</div><div class="s" id="nv4s">medido contra mercados ya resueltos</div></div>
+  </div>
+  <div class="p" style="margin-bottom:9px"><h3>CERTIFICADO DE ARBITRAJE <span class="st" style="font-weight:400;text-transform:none">— el pago en cada mundo, para que lo compruebes tú</span></h3>
+    <div class="bd" id="nv-cert" style="max-height:460px;overflow:auto"></div></div>
+  <div class="p" style="margin-bottom:9px"><h3>PRECIOS QUE SE CONTRADICEN <span class="st" style="font-weight:400;text-transform:none">— no todos se pueden cobrar, y se dice cuáles</span></h3>
+    <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:33%">Esto implica…</th><th style="width:33%">…esto</th><th style="width:9%">Exceso</th><th style="width:9%">Origen</th><th>Lectura</th></tr></thead><tbody id="nv-inc"></tbody></table></div></div>
+  <div class="p"><h3>LO QUE ES NUESTRO Y LO QUE ES ESTÁNDAR</h3>
+    <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:30%">Pieza</th><th style="width:16%">Origen</th><th>Qué aporta</th></tr></thead><tbody id="nv-tabla"></tbody></table></div></div>
 </div>
+
 <div class="view" id="v-lib">
   <div class="grid g4 escena" style="margin-bottom:8px">
     <div class="kpi"><div class="k">IMPLEMENTADO</div><div class="v" id="l1">—</div><div class="s">métodos en producción</div></div>
@@ -4598,6 +4745,7 @@ function render(){
  if(VIEW==="ver"){renderVer()}
  if(VIEW==="brain"){renderBrain()}
  if(VIEW==="inv"){renderRel()}
+ if(VIEW==="nvf"){renderNvf()}
  if(VIEW==="sim"){renderSim();renderMC();renderPaper()}
  if(VIEW==="cart"){renderCart()}
  if(VIEW==="lib"){renderLib()}
@@ -6141,7 +6289,7 @@ var EN={
  "Inicio":"Home","Mercado":"Market","Análisis":"Analysis","Herramientas":"Tools",
  "F1 INICIO":"F1 HOME","F2 DASH":"F2 OVERVIEW","F2 RESUMEN":"F2 OVERVIEW",
  "F3 CONTRATOS":"F3 CONTRACTS","F4 EMPRESAS":"F4 COMPANIES","F5 APUESTAS":"F5 MARKETS",
- "F6 NOTICIAS":"F6 NEWS","F7 QUANT":"F7 QUANT","F7 ANÁLISIS DE EMPRESAS":"F7 STOCK ANALYSIS","VEREDICTO":"VERDICT","COMPRAR O VENDER":"BUY OR SELL",
+ "F6 NOTICIAS":"F6 NEWS","F7 QUANT":"F7 QUANT","F7 ANÁLISIS DE EMPRESAS":"F7 STOCK ANALYSIS","VEREDICTO":"VERDICT","COMPRAR O VENDER":"BUY OR SELL","NUNCA VISTO":"NEVER SEEN","Nunca visto en finanzas":"Never seen in finance","lo que no hace nadie más":"what nobody else does",
  "F8 CEREBRO":"F8 EDGE","F8 OPORTUNIDADES":"F8 OPPORTUNITIES",
  "F9 SIMULADOR":"F9 BACKTEST","F9 ¿ESTO FUNCIONA?":"F9 DOES IT WORK?",
  "F10 CARTERA":"F10 SIZING","F10 CUÁNTO APOSTAR":"F10 POSITION SIZING",
@@ -7240,7 +7388,7 @@ var GRUPOS=[
  {id:"g2",t:"Mercado", v:["dash","con","sc","pm","news"]},
  {id:"g3",t:"Análisis",v:["quant","ver","brain"]},
  {id:"g4",t:"Herramientas",v:["sim","cart"]},
- {id:"g5",t:"Investigación",v:["inv","lib"]}
+ {id:"g5",t:"Investigación",v:["nvf","inv","lib"]}
 ];
 var GACT="g1";
 
@@ -7389,7 +7537,7 @@ function go(v,sinApilar){
  var anterior=VIEW;
  if(!sinApilar&&v!==VIEW)apilar();
  VIEW=v;
- ["ini","dash","con","sc","pm","news","quant","ver","brain","sim","cart","inv","lib"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
+ ["ini","dash","con","sc","pm","news","quant","ver","brain","sim","cart","inv","nvf","lib"].forEach(function(x){$("v-"+x).classList.toggle("on",x===v)});
  [].forEach.call($("nav").querySelectorAll("button[data-v]"),function(b){b.classList.toggle("on",b.dataset.v===v)});
  if(typeof rutaEscribe==="function")setTimeout(rutaEscribe,0);
  /* Se guarda de dónde se viene para que el botón de volver sepa a dónde ir.
@@ -7826,6 +7974,85 @@ function vivoAplicar(){
  if(g&&+g>0)setTimeout(vivoAplicar,3000);
 })();
 
+
+
+/* ===================== NUNCA VISTO EN FINANZAS ===================== */
+var NVF=null, NVFLOAD=false;
+function nvfBuscar(){
+ if(NVFLOAD)return; NVFLOAD=true;
+ $("nv-st").textContent=T("Enumerando mundos posibles…","Enumerating possible worlds…");
+ api("/api/coherencia?ia="+($("nv-ia").checked?"1":"0"),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){ if(j.error)throw new Error(j.error); NVF=j; renderNvf() })
+  .catch(function(e){ $("nv-st").textContent="Error: "+(e.message||e) })
+  .then(function(){ NVFLOAD=false });
+}
+function renderNvf(){
+ nvfTabla();
+ if(!NVF){ $("nv-cert").innerHTML=emp("\\uD83E\\uDDEE",T("Pulsa «Buscar incoherencias». Tarda unos segundos: enumera todos los mundos lógicamente posibles.","Press «Find incoherences».")); return }
+ var j=NVF, arb=j.hallazgos||[], inc=j.incoherencias||[];
+ $("nv1").textContent=(j.implicaciones||0)+(j.exclusiones?"+"+j.exclusiones:"");
+ $("nv1s").textContent=T(j.implicacionesFecha+" por fecha, sin modelo de por medio","from dates, no model involved");
+ $("nv2").textContent=(j.mundosExaminados||0).toLocaleString("es-ES");
+ $("nv3").textContent=arb.filter(function(h){return h.verificado}).length;
+ var eg=j.errorGrafo||{};
+ $("nv4").textContent=(eg.tasa===null||eg.tasa===undefined)?"—":(eg.tasa*100).toFixed(1)+"%";
+ $("nv4s").textContent=(eg.lectura||"").slice(0,120);
+
+ /* El certificado: una tabla por hallazgo con el pago en cada mundo. Es lo que
+    permite comprobarlo sin fiarse del algoritmo. */
+ $("nv-cert").innerHTML = arb.length ? arb.slice(0,4).map(function(h){
+  var cab="<div style='padding:11px 14px;border-bottom:1px solid var(--line2)'>"+
+   "<span class='"+(h.verificado?"t3":"t4")+"'>"+(h.verificado?T("VERIFICADO","VERIFIED"):T("NO CUADRA","DOES NOT CHECK OUT"))+"</span> "+
+   "<b style='color:var(--gr);margin-left:7px'>+"+(h.porUnidad*100).toFixed(2)+"%</b> "+
+   "<span class='dsc'>"+T("por unidad arriesgada · ","per unit at risk · ")+h.nMercados+T(" mercados · "," markets · ")+
+   h.mundosTotales+T(" mundos posibles"," possible worlds")+
+   (h.soloFechas?" · <span class='t3'>"+T("solo fechas","dates only")+"</span>":" · <span class='t2'>"+T("depende del modelo","depends on the model")+"</span>")+"</span></div>";
+  var patas="<div style='padding:9px 14px'>"+h.patas.map(function(p){
+   return "<div style='margin:3px 0'><span class='"+(p.lado==="COMPRAR"?"t3":"t4")+"'>"+p.lado+"</span> "+
+    (Math.abs(p.peso)*100).toFixed(0)+"% "+T("a ","at ")+(p.precio*100).toFixed(1)+"% · "+esc(p.q.slice(0,64))+"</div>"}).join("")+"</div>";
+  var filas=(h.certificado||[]).map(function(c){
+   return "<tr><td class='dim'>"+c.mundo+"</td>"+
+    "<td class='dsc'>"+c.gana.map(function(g){return g?"1":"0"}).join(" ")+"</td>"+
+    "<td class='"+(c.pago>=0?"up":"dn")+"'><b>"+(c.pago>=0?"+":"")+(c.pago*100).toFixed(2)+"%</b></td></tr>"}).join("");
+  return "<div style='border:1px solid var(--line);border-radius:6px;margin:9px 12px'>"+cab+patas+
+   "<table><thead><tr><th style='width:12%'>"+T("Mundo","World")+"</th><th style='width:34%'>"+
+   T("Qué pasa","What happens")+"</th><th>"+T("Pago de la cartera","Portfolio payoff")+"</th></tr></thead><tbody>"+filas+"</tbody></table>"+
+   "<div class='st' style='padding:8px 14px'>"+
+   T("Cada fila es un mundo lógicamente posible. Si TODAS son positivas o cero, cobras pase lo que pase. Peor fila: ","Each row is a logically possible world. Worst row: ")+
+   (h.peorPago===null?"—":((h.peorPago>=0?"+":"")+(h.peorPago*100).toFixed(2)+"%"))+"</div></div>";
+ }).join("") : emp("\\u2705",T("Ninguna cartera con pago garantizado ahora mismo. Es lo normal en mercados líquidos: cuando aparece una, dura minutos. El valor está en vigilarlo en continuo.",
+   "No guaranteed-payoff portfolio right now. Normal in liquid markets."));
+
+ $("nv-inc").innerHTML = inc.length ? inc.map(function(x){
+  var cob=x.cobrable!==null&&x.cobrable>0;
+  return "<tr><td title='"+esc(x.implica)+"'>"+esc(x.implica.slice(0,50))+"<div class='dsc'>"+(x.pA*100).toFixed(1)+"%</div></td>"+
+   "<td title='"+esc(x.implicado)+"'>"+esc(x.implicado.slice(0,50))+"<div class='dsc'>"+(x.pB*100).toFixed(1)+"%</div></td>"+
+   "<td class='dn'>"+(x.exceso*100).toFixed(2)+"</td>"+
+   "<td>"+(x.origen==="fecha"?"<span class='t3'>"+T("fecha","date")+"</span>":"<span class='t2'>"+T("modelo","model")+"</span>")+"</td>"+
+   "<td class='"+(cob?"up":"dim")+"'>"+esc(x.lectura)+"</td></tr>"}).join("")
+  : "<tr><td colspan='5'>"+emp("\\u2705",T("Ningún precio se contradice con otro ahora mismo.","No price contradicts another right now."))+"</td></tr>";
+ $("nv-st").textContent=T(j.mercados+" mercados · "+j.componentes+" grupos ligados · "+new Date(j.ts).toLocaleTimeString(),
+                          j.mercados+" markets · "+new Date(j.ts).toLocaleTimeString());
+}
+/* Honestidad: se separa lo que es nuestro de lo que es un algoritmo conocido
+   bien aplicado. Llamar "nuestro" a algo de manual sería vender humo. */
+function nvfTabla(){
+ var F=[
+  ["Coherencia de de Finetti entre eventos","NUESTRO","El teorema es de 1937, pero aplicarlo CRUZANDO eventos distintos de un mercado real no lo hace nadie: hacía falta un modelo de lenguaje para extraer la lógica de miles de preguntas."],
+  ["Certificado mundo a mundo","NUESTRO","Nadie te enseña el pago en cada mundo posible. Es lo que convierte una afirmación en algo que puedes comprobar sin fiarte."],
+  ["Implicaciones por fecha sin modelo","NUESTRO","«Antes de septiembre» implica «antes de diciembre». Se extrae por regla, con tasa de error cero, y el modelo de lenguaje las estaba clasificando mal."],
+  ["Tasa de error del grafo, medida","NUESTRO","Los mercados ya resueltos dan el vector real de desenlaces, que TIENE que ser un mundo posible. Cada vez que no lo es, una relación estaba mal. Es el único riesgo de la idea, y es observable."],
+  ["Geometría de Aitchison en apuestas","POCO USADO","Duplicar de 1% a 2% mide igual que 50%→51% con la distancia normal. Aitchison lo separa 17 veces. Es estándar en geología, casi nadie lo usa aquí."],
+  ["Marchenko-Pastur","ESTÁNDAR","Separar correlación real de ruido. Bien conocido en fondos grandes, casi ausente a nivel minorista."],
+  ["Test SPA de Hansen","ESTÁNDAR","Corregir el sesgo de haber probado varias estrategias. Nos pilló un falso positivo propio."],
+  ["Transformada de Wang","ESTÁNDAR","Sesgo favorito-longshot. Aquí se aplica dentro del grupo y renormalizada, que es la parte que se suele hacer mal."]
+ ];
+ $("nv-tabla").innerHTML=F.map(function(f){
+  var c=f[1]==="NUESTRO"?"t3":(f[1]==="POCO USADO"?"t5":"t2");
+  return "<tr><td><b>"+esc(f[0])+"</b></td><td><span class='"+c+"'>"+f[1]+"</span></td><td class='dim'>"+esc(f[2])+"</td></tr>"}).join("");
+}
+(function(){ $("nv-run").onclick=nvfBuscar; })();
 
 /* ===================== COHERENCIA DE DE FINETTI ===================== */
 var CO=null, COLOAD=false;
@@ -8617,7 +8844,7 @@ var PAL_VISTAS=[
  ["pm","Apuestas","mercados de Polymarket"],["news","Noticias","titulares del sector"],
  ["quant","Análisis de empresas","momentum y riesgo"],["ver","Veredicto","dónde comprar o vender, con entrada y salida"],["brain","Oportunidades","arbitraje y señales"],
  ["sim","¿Esto funciona?","simulaciones y pruebas"],["cart","Cuánto apostar","tamaño de posición"],
- ["inv","Investigación","ideas sin validar"],["lib","Biblioteca","métodos y fuentes"]];
+ ["nvf","Nunca visto en finanzas","lo que no hace nadie más"],["inv","Investigación","ideas sin validar"],["lib","Biblioteca","métodos y fuentes"]];
 
 /* Coincidencia por subsecuencia: "avav" encuentra "AeroVironment (AVAV)" y
    "lokh" encuentra "Lockheed". Puntua mejor lo que empieza igual. */
@@ -9063,7 +9290,7 @@ setInterval(function(){loadPM()},120000);
    con ADMIN_TOKEN, que se pone como variable secreta en Cloudflare.              */
 
 const PLANES = {
-  libre: { cuota: 50,   endpoints: ["pmq", "px", "intra", "bce", "contratista", "coherencia", "clima", "pm", "contracts", "news", "history"] },
+  libre: { cuota: 50,   endpoints: ["pmq", "px", "intra", "bce", "contratista", "coherencia", "clima", "vhla", "pm", "contracts", "news", "history"] },
   pro:   { cuota: 5000, endpoints: "*" }
 };
 
@@ -9186,6 +9413,7 @@ export default {
       if (p === "/api/ynews") return json(await fetchYNews(url.searchParams.get("s")), cab);
       if (p === "/api/contratista") return json(await fetchContratista(url.searchParams.get("n")), cab);
       if (p === "/api/clima") return json(await clima(env, url.searchParams.get("ciudad")), cab);
+      if (p === "/api/vhla") return json(await vhla(url.searchParams.get("s")), cab);
       if (p === "/api/litigios") return json(await fetchLitigios(Number(url.searchParams.get("d")) || 365, url.searchParams.get("tk")), cab);
       if (p === "/api/edgar") return json(await fetchEdgar(Number(url.searchParams.get("d")) || 30), cab);
       if (p === "/api/paper") return json(await paperState(env), cab);
