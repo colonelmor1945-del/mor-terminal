@@ -2131,6 +2131,117 @@ async function paperState(env) {
 
 /* Noticias por ticker. Yahoo NO permite CORS en este endpoint (el navegador da
    "Failed to fetch"), asi que tiene que pasar por aqui.                          */
+/* Todo lo que se puede saber de una empresa a partir de su NOMBRE. Las cuatro
+   consultas van en paralelo y cada una con su tope: si una fuente falla, la
+   ficha se rellena con las demas en vez de quedarse en blanco. */
+async function fetchContratista(nombre) {
+  const nom = String(nombre || "").trim().slice(0, 120);
+  if (!nom) throw new Error("nombre vacío");
+
+  /* Del nombre legal a algo buscable: fuera las formas societarias y lo que
+     venga tras una coma, que en USAspending suele ser la razon social larga. */
+  /* Se construyen con RegExp desde texto a proposito: al generar este fichero
+     las barras invertidas de un literal /.../ se perdieron una vez, dejando
+     [^ws&-], que borraba todo menos esas cuatro letras: "AT&T ENTERPRISES,
+     LLC" acababa siendo "&". */
+  const RE_FORMA = new RegExp("\\b(inc|llc|l\\.l\\.c|corp|corporation|company|co|ltd|" +
+    "limited|plc|holdings?|group|technologies|technology|systems|services|solutions|" +
+    "industries|international|enterprises|the)\\b\\.?", "gi");
+  const limpio = nom.replace(/,.*$/, "")
+    .replace(RE_FORMA, " ")
+    .replace(new RegExp("[^\\w\\s&-]", "g"), " ")
+    .replace(new RegExp("\\s+", "g"), " ").trim();
+  const busca = limpio || nom;
+  /* Guarda: con un resto demasiado corto la busqueda trae cualquier cosa, y
+     rellenar la ficha con datos de OTRA empresa es peor que dejarla vacia. */
+  if (busca.replace(new RegExp("[^A-Za-z0-9]", "g"), "").length < 4) {
+    return { nombre: nom, buscado: busca, simbolo: null, precio: null,
+      noticias: [], litigios: [],
+      nota: "El nombre no deja bastante texto distintivo para buscar sin " +
+            "arriesgarse a traer datos de otra empresa." };
+  }
+
+  const tope = (p, seg, siFalla) => Promise.race([
+    Promise.resolve(p).catch(() => siFalla),
+    new Promise(r => setTimeout(() => r(siFalla), seg * 1000))
+  ]);
+
+  /* Yahoo: en una sola llamada da el simbolo mas probable y las noticias. */
+  const yahoo = (async () => {
+    const u = "https://query2.finance.yahoo.com/v1/finance/search?q=" +
+      encodeURIComponent(busca) + "&newsCount=8&quotesCount=5";
+    const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
+    if (!r.ok) throw new Error("Yahoo HTTP " + r.status);
+    return await r.json();
+  })();
+
+  const [y, lit] = await Promise.all([
+    tope(yahoo, 8, null),
+    tope((async () => {
+      const desde = new Date(Date.now() - 730 * 864e5).toISOString().slice(0, 10);
+      const parte = busca.split(new RegExp("\\s+")).slice(0, 2).join(" ");
+      /* Con menos de cinco caracteres utiles CourtListener devuelve homonimos
+         de todo tipo, personas fisicas incluidas. */
+      if (parte.replace(new RegExp("[^A-Za-z0-9]", "g"), "").length < 5) return [];
+      const j = await clBuscar(parte, desde);
+      return (j.results || []).filter(x => clEsEmpresa(x.party, parte)).slice(0, 8).map(x => {
+        const nat = clNat(x.suitNature);
+        return {
+          caso: x.caseName || "—", fecha: x.dateFiled || "",
+          tribunal: x.court_citation_string || x.court || "",
+          natTxt: nat.txt,
+          contraEstado: /United States|Department of|Secretary of|Army|Navy|Air Force/i.test(x.caseName || ""),
+          url: "https://www.courtlistener.com" + (x.docket_absolute_url || "")
+        };
+      });
+    })(), 10, null)
+  ]);
+
+  /* Simbolo: solo se acepta una accion de un mercado reconocible, y se exige que
+     el nombre se parezca de verdad. Un simbolo equivocado es peor que ninguno:
+     pintaria el precio de OTRA empresa. */
+  let sim = null, nomYahoo = null, bolsa = null;
+  if (y && Array.isArray(y.quotes)) {
+    const pal = busca.toLowerCase().split(/s+/).filter(x => x.length > 2);
+    for (const q of y.quotes) {
+      if (!q.symbol || (q.quoteType && q.quoteType !== "EQUITY")) continue;
+      const nq = String(q.longname || q.shortname || "").toLowerCase();
+      if (!nq) continue;
+      const casan = pal.filter(p => nq.indexOf(p) >= 0).length;
+      if (pal.length && casan / pal.length >= 0.5) {
+        sim = q.symbol; nomYahoo = q.longname || q.shortname; bolsa = q.exchDisp || q.exchange || "";
+        break;
+      }
+    }
+  }
+
+  let px = null;
+  if (sim) { try { px = await tope(fetchPx(sim), 8, null) } catch (e) {} }
+
+  return {
+    nombre: nom, buscado: busca,
+    simbolo: sim, nombreBolsa: nomYahoo, bolsa: bolsa,
+    precio: px ? { c: px.c, d: px.d, cur: px.cur, spread: px.spread } : null,
+    noticias: (function () {
+      const brutas = (y && y.news ? y.news : []).map(x => ({
+        t: x.title || "", url: x.link || "", medio: x.publisher || "",
+        ts: x.providerPublishTime || null }));
+      /* Palabras distintivas del nombre: las de mas de tres letras. */
+      const pal = busca.toLowerCase().split(/\s+/).filter(x => x.length > 3);
+      if (!pal.length) return [];
+      const casan = brutas.filter(x => {
+        const t = (x.t + " " + x.medio).toLowerCase();
+        return pal.some(p => t.indexOf(p) >= 0);
+      });
+      /* Si ninguna menciona la empresa, Yahoo ha devuelto ruido: mejor nada. */
+      return casan;
+    })(),
+    litigios: lit,
+    nota: sim ? null : "No se ha encontrado un símbolo de bolsa que case con el nombre. " +
+                       "Puede ser una filial, una empresa no cotizada o un nombre distinto en bolsa."
+  };
+}
+
 async function fetchYNews(sym) {
   const s = String(sym || "").trim().toUpperCase().replace(/[^A-Z0-9.\-=^]/g, "");
   if (!s) throw new Error("simbolo vacio");
@@ -2707,8 +2818,9 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   <div class="p" style="margin-bottom:8px"><h3>APUESTAS <span id="ver-pm-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— clic para el mercado</span></h3>
     <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:34%">Mercado</th><th style="width:9%">Posición</th><th style="width:9%">Entrada</th><th style="width:9%">Salir si</th><th style="width:9%">Objetivo</th><th style="width:8%">Cuánto</th><th style="width:13%">Hasta cuándo</th><th>Por qué</th></tr></thead><tbody id="ver-pm"></tbody></table></div></div>
   <div class="grid g2" style="margin-bottom:8px">
-    <div class="p"><h3>DIVISAS <span id="ver-fx-cnt"></span></h3>
-      <div class="bd" style="overflow:auto"><table><thead><tr><th>Par</th><th>Posición</th><th>Entrada</th><th>Stop</th><th>Objetivo</th><th>Cuánto</th><th>Hasta cuándo</th></tr></thead><tbody id="ver-fx"></tbody></table></div></div>
+    <div class="p"><h3>DIVISAS · RIESGO <span id="ver-fx-cnt"></span>
+        <span class="st" style="font-weight:400;text-transform:none">— aquí no hay señal de compra, y está explicado</span></h3>
+      <div class="bd" style="overflow:auto"><table><thead><tr><th>Par</th><th>Aleatorio</th><th>Volatilidad</th><th>Peor día de 100</th><th>Factor común</th></tr></thead><tbody id="ver-fx"></tbody></table></div></div>
     <div class="p"><h3>ARBITRAJES <span id="ver-arb-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— aritmética, no predicción</span></h3>
       <div class="bd" style="overflow:auto"><table><thead><tr><th>Grupo</th><th>Qué hacer</th><th>Neto</th></tr></thead><tbody id="ver-arb"></tbody></table></div></div>
   </div>
@@ -4682,6 +4794,9 @@ function conAbrir(nombre){
   k("MAYOR",cs.length?f$(Math.max.apply(null,cs.map(function(c){return c.amount}))):"—")+
   k("TIPO",cs.length&&cs[0].prime?"gigante":"fuera de gigantes",cs.length&&cs[0].prime?"":"up")+
   k("EN TU LISTA","no");
+ /* Antes esta ficha se quedaba con cuatro paneles vacios. Ahora se busca todo
+    por el nombre: simbolo y noticias en Yahoo, pleitos en CourtListener. */
+ conRellenar(nombre);
  $("fe-px").innerHTML=emp("—",MODO==="simple"?
   "Esta empresa no está en tu lista de 33, así que no tenemos su precio.":"Fuera del universo SC: sin serie de precios.");
  $("fe-8k").innerHTML=emp("🔎",MODO==="simple"?
@@ -4693,6 +4808,54 @@ function conAbrir(nombre){
    "<div class='m'>"+esc((c.desc||"").slice(0,150))+"</div></div>"}).join("")||
   emp("—","Sin detalle.");}
 
+/* Rellena precio, avisos, pleitos y noticias de un adjudicatario cualquiera a
+   partir de su nombre. Se lanza sin esperar: cada panel se pinta al llegar. */
+function conRellenar(nombre){
+ var mio=nombre;
+ $("fe-px").innerHTML=emp("&#9203;",T("Buscando la empresa en bolsa…","Looking up the listing…"));
+ $("fe-news").innerHTML=emp("&#9203;",T("Buscando noticias…","Searching news…"));
+ $("fe-lit").innerHTML=emp("&#9203;",T("Buscando pleitos…","Searching court cases…"));
+ $("fe-8k").innerHTML=emp("&#9203;",T("Comprobando si cotiza…","Checking if it is listed…"));
+ api("/api/contratista?n="+encodeURIComponent(nombre),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){
+   if(FE||$("fe-n").textContent!==mio)return;      // se ha abierto otra ficha
+   if(j.error)throw new Error(j.error);
+   // --- precio ---
+   if(j.precio&&j.precio.c&&j.precio.c.length>5){
+    precioChart($("fe-px"),j.precio.c);
+    $("fe-h2").textContent=T("Precio · ","Price · ")+j.simbolo+(j.bolsa?" · "+j.bolsa:"");
+   } else $("fe-px").innerHTML=emp("&#8212;",esc(j.nota||T("Sin serie de precios.","No price series.")));
+   // --- cotiza o no ---
+   $("fe-8k").innerHTML = j.simbolo
+    ? "<div class='mt-row' data-emp='' style='cursor:default'><b>"+esc(j.nombreBolsa||j.nombre)+"</b>"+
+      "<div class='dsc'>"+T("cotiza como ","listed as ")+esc(j.simbolo)+(j.bolsa?" en "+esc(j.bolsa):"")+" · "+
+      "<a target='_blank' rel='noopener' href='https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&company="+
+      encodeURIComponent(j.buscado)+"&type=8-K'>"+T("ver sus 8-K en EDGAR","see its 8-K filings")+" \\u2197</a></div></div>"
+    : emp("&#8212;",T("No cotiza con este nombre, así que no hay avisos a la SEC que buscar.",
+                      "Not listed under this name, so there are no SEC filings to find."));
+   // --- pleitos ---
+   var L=j.litigios||[];
+   $("fe-lit").innerHTML=L.length?L.map(function(x){
+    return "<div class='ni'><a target='_blank' rel='noopener' href='"+esc(x.url)+"'>"+esc(x.caso)+"</a>"+
+     "<div class='mt'>"+esc(x.fecha)+" · "+esc(x.tribunal)+" · "+esc(x.natTxt)+
+     (x.contraEstado?" · <span class='t1'>"+T("contra el Estado","against the government")+"</span>":"")+"</div></div>"}).join("")
+    :emp("\\u2014",T("Ningún pleito en los últimos dos años a nombre de esta empresa.",
+                     "No court cases in the last two years under this name."));
+   // --- noticias ---
+   var N=j.noticias||[];
+   $("fe-news").innerHTML=N.length?N.map(function(x){
+    return "<div class='ni'><a target='_blank' rel='noopener' href='"+esc(x.url)+"'>"+esc(x.t)+"</a>"+
+     "<div class='mt'>"+esc(x.medio||"")+(x.ts?" · "+new Date(x.ts*1000).toLocaleDateString():"")+"</div></div>"}).join("")
+    :emp("\\uD83D\\uDCF0",T("Sin noticias recientes con este nombre.","No recent news under this name."));
+  })
+  .catch(function(e){
+   if(FE||$("fe-n").textContent!==mio)return;
+   var msg=emp("\\u26A0",T("No se pudo completar la búsqueda: ","Lookup failed: ")+esc(e.message||e));
+   ["fe-px","fe-news","fe-lit","fe-8k"].forEach(function(k){
+    if(/9203/.test($(k).innerHTML)||/Buscando|Comprobando/.test($(k).textContent))$(k).innerHTML=msg});
+  });
+}
 function feCerrar(){$("fe").classList.remove("on");FE=null;if(typeof rutaEscribe=="function")rutaEscribe()}
 
 function dtOpen(id,sinApilar){
@@ -5626,10 +5789,14 @@ function iaBarrer(){
   else nada.push(T("apuestas","markets"));
 
   // --- divisas ---
-  var fx=FXQ.filter(function(x){return x.sig!=="—"}).sort(function(a,b){return Math.abs(b.z)-Math.abs(a.z)});
-  if(fx.length)out.push(T("DIVISAS: ","CURRENCIES: ")+fx.slice(0,3).map(function(x){
-   return x.n+" "+(x.sig==="COMPRA"?T("alcista","long"):T("bajista","short"))+" (z "+x.z.toFixed(2)+")"}).join("; "));
-  else nada.push(T("divisas","currencies"));
+  /* En divisas no se da direccion: ninguna señal replica en datos oficiales.
+     Se informa de riesgo, que es lo que si aguanta. */
+  var arr=FXQ.map(function(x){var r=(typeof fxRiesgo==="function")?fxRiesgo(x.c,0.99):null;
+    return r?{n:x.n,peor:Math.min(r.varHist,r.varCF)}:null}).filter(Boolean)
+   .sort(function(a,b){return a.peor-b.peor});
+  if(arr.length)out.push(T("DIVISAS (sin señal direccional: ninguna replica en datos del BCE). Las de mayor riesgo real: ",
+    "CURRENCIES (no directional signal replicates). Highest real risk: ")+
+   arr.slice(0,3).map(function(x){return x.n+" "+(x.peor*100).toFixed(2)+"%"}).join("; "));
 
   var txt=out.length?out.join(String.fromCharCode(10)+String.fromCharCode(10)):
    T("No hay nada que destaque ahora mismo en ninguna de las cuatro fuentes.","Nothing stands out right now in any of the four sources.");
@@ -6135,6 +6302,59 @@ function spaEjecutar(){
 }
 (function(){ $("ap-load").onclick=apCargar; $("spa-run").onclick=spaEjecutar; })();
 
+
+/* ---------- Radio de robustez de Wasserstein ----------
+   epsilon* = cuanto tiene que desplazarse la distribucion de resultados, en
+   media y en las unidades del propio resultado, para que la ventaja llegue a
+   cero. Compararlo con una escala conocida -el coste de operar- dice si el
+   hielo es grueso o fino, y no depende del tamano de muestra como un valor p. */
+function wassRadio(datos, escala){
+ if(!datos||datos.length<8)return null;
+ var mu=mean(datos), s=sd(datos), n=datos.length;
+ /* Objetivo lineal (la media): la constante de Lipschitz vale 1, asi que el
+    radio critico es directamente la media. Se acompana del error tipico para
+    poder decir tambien cuanto de ese radio es simple incertidumbre muestral. */
+ var eps=mu;
+ var err=n>1?s/Math.sqrt(n):0;
+ return {
+  eps:eps, media:mu, err:err, n:n,
+  /* Radio en unidades de la escala de referencia: cuantas veces el coste de
+     operar tendria que equivocarse el mundo para tumbar esto. */
+  veces: (escala&&escala>0)?eps/escala:null,
+  /* Radio descontando la incertidumbre muestral: el suelo honesto. */
+  epsSeguro: eps-1.645*err
+ };
+}
+function wassTxt(r, escala, nombreEscala){
+ if(!r)return T("sin datos suficientes","not enough data");
+ if(r.eps<=0)return T("no hay ventaja que proteger: la media ya es negativa","no edge to protect: the mean is already negative");
+ var v=r.veces;
+ if(v===null)return T("aguanta un desplazamiento de "+(r.eps*100).toFixed(2)+" puntos",
+                      "withstands a shift of "+(r.eps*100).toFixed(2)+" points");
+ var lect = v<1 ? T("hielo finísimo: menos de un "+(nombreEscala||"coste")+" de margen","razor thin")
+          : v<3 ? T("hielo fino: "+v.toFixed(1)+" veces el "+(nombreEscala||"coste"),"thin")
+          : v<10 ? T("aguanta: "+v.toFixed(1)+" veces el "+(nombreEscala||"coste"),"holds")
+          : T("muy sólido: "+v.toFixed(0)+" veces el "+(nombreEscala||"coste"),"very solid");
+ return lect;
+}
+
+/* Distancia de Wasserstein-1 entre dos muestras en una dimension: la media de
+   la diferencia absoluta entre los valores ordenados. Ocho lineas, y sirve para
+   comparar la distribucion de probabilidades anunciadas con la realizada, que
+   es un complemento distribucional al Brier. */
+function wass1(a,b){
+ if(!a.length||!b.length)return null;
+ var x=a.slice().sort(function(p,q){return p-q});
+ var y=b.slice().sort(function(p,q){return p-q});
+ var N=Math.max(x.length,y.length), t=0;
+ for(var i=0;i<N;i++){
+  var u=(i+0.5)/N;
+  t+=Math.abs(x[Math.min(x.length-1,Math.floor(u*x.length))] -
+              y[Math.min(y.length-1,Math.floor(u*y.length))]);
+ }
+ return t/N;
+}
+
 /* ===================== VEREDICTO ===================== */
 /* Movimiento tipico de una sesion: media del cambio absoluto de cierre a cierre
    en 14 sesiones. Es el ATR sin maximos ni minimos, que la API no da. */
@@ -6249,19 +6469,29 @@ function renderVer(){
  $("ver-pm-cnt").textContent=ap.length?"("+ap.length+")":"";
  avisoLambda();
 
- // --- divisas ---
+ /* --- divisas: riesgo, no direccion ---
+    No se proponen posiciones porque las tres señales direccionales de divisas
+    -momentum, reversion y cointegracion- se auditaron y ninguna replica en
+    datos oficiales del BCE. Lo que se muestra es lo que si aguanta: si el par
+    es un paseo aleatorio, cuanto riesgo tiene de verdad, y cuanto de ese riesgo
+    es el factor comun. */
  var fx=[];
  FXQ.forEach(function(x){
-  var dir=x.sig==="COMPRA"?1:(x.sig==="VENTA"?-1:0); if(!dir)return;
-  var nvf=nivelesDe(x.c,dir);
-  fx.push({n:x.n,dir:dir,nv:nvf,k:dir*x.kelly,z:x.z,
-   dObj:sesionesHasta(x.c,Math.abs(nvf.obj-nvf.ent)/nvf.ent)});
+  var vr=(typeof fxVarianceRatio==="function")?fxVarianceRatio(x.c,10):null;
+  var rg=(typeof fxRiesgo==="function")?fxRiesgo(x.c,0.99):null;
+  var co=(typeof fxCono==="function")?fxCono(x.c,[21]):[];
+  fx.push({n:x.n,vr:vr,rg:rg,co:co.length?co[0]:null,carga:x.cargaFactor});
  });
- fx.sort(function(a,b){return Math.abs(b.z)-Math.abs(a.z)});
+ fx.sort(function(a,b){return (b.rg?Math.abs(b.rg.varCF):0)-(a.rg?Math.abs(a.rg.varCF):0)});
  $("ver-fx").innerHTML=fx.length?fx.map(function(x){
-  return "<tr data-fx='"+esc(x.n)+"' style='cursor:pointer'><td><b>"+esc(x.n)+"</b></td><td>"+posTag(x.dir)+"</td>"+
-   "<td>"+fP(x.nv.ent,x.nv.ent)+"</td><td class='dn'>"+fP(x.nv.stop,x.nv.ent)+"</td><td class='up'>"+fP(x.nv.obj,x.nv.ent)+"</td><td>"+(cuanto(x.k)*100).toFixed(0)+"%</td><td>"+plazoTxt(x.dObj)+"</td></tr>"}).join("")
-  :"<tr><td colspan='7'>"+(FXQ.length?emp("🤷",T("Ningún par con momentum y tendencia de acuerdo.","No pair with momentum and trend agreeing.")):emp("⏳",T("Cargando divisas…","Loading currencies…")))+"</td></tr>";
+  var al=x.vr?(Math.abs(x.vr.z)<1.96?[T("sí","yes"),"dim"]:(x.vr.VR>1?[T("no, sigue","no, trends"),"t3"]:[T("no, vuelve","no, reverts"),"t5"])):["—","dim"];
+  var peor=x.rg?Math.min(x.rg.varHist,x.rg.varCF):null;
+  return "<tr data-fx='"+esc(x.n)+"' style='cursor:pointer'><td><b>"+esc(x.n)+"</b></td>"+
+   "<td><span class='"+al[1]+"'>"+al[0]+"</span></td>"+
+   "<td>"+(x.co?(x.co.hoy*100).toFixed(1)+"% <span class='dsc'>pct "+(x.co.pct*100).toFixed(0)+"</span>":"—")+"</td>"+
+   "<td class='dn'>"+(peor===null?"—":(peor*100).toFixed(2)+"%")+"</td>"+
+   "<td>"+(typeof x.carga==="number"?(x.carga*x.carga*100).toFixed(0)+"%":"—")+"</td></tr>"}).join("")
+  :"<tr><td colspan='5'>"+emp("⏳",T("Cargando divisas…","Loading currencies…"))+"</td></tr>";
  $("ver-fx-cnt").textContent=fx.length?"("+fx.length+")":"";
 
  // --- arbitrajes ---
@@ -7049,7 +7279,7 @@ setInterval(function(){loadPM()},120000);
    con ADMIN_TOKEN, que se pone como variable secreta en Cloudflare.              */
 
 const PLANES = {
-  libre: { cuota: 50,   endpoints: ["pmq", "px", "intra", "bce", "pm", "contracts", "news", "history"] },
+  libre: { cuota: 50,   endpoints: ["pmq", "px", "intra", "bce", "contratista", "pm", "contracts", "news", "history"] },
   pro:   { cuota: 5000, endpoints: "*" }
 };
 
@@ -7170,6 +7400,7 @@ export default {
       if (p === "/api/pago") return json(await verificarPago(env, url.searchParams.get("sig")), cab);
       if (p === "/api/chat") return json(await chatResponder(env, url.searchParams.get("q"), url.searchParams.get("estado"), url.searchParams.get("hist")), cab);
       if (p === "/api/ynews") return json(await fetchYNews(url.searchParams.get("s")), cab);
+      if (p === "/api/contratista") return json(await fetchContratista(url.searchParams.get("n")), cab);
       if (p === "/api/litigios") return json(await fetchLitigios(Number(url.searchParams.get("d")) || 365, url.searchParams.get("tk")), cab);
       if (p === "/api/edgar") return json(await fetchEdgar(Number(url.searchParams.get("d")) || 30), cab);
       if (p === "/api/paper") return json(await paperState(env), cab);

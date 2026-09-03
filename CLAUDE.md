@@ -434,3 +434,42 @@ respuesta conocida antes de fiarse de ellas:
 Si alguien vuelve a proponer una señal direccional de divisas, las dos pruebas
 que hay que pasar son el **desfase temporal común** (respeta la correlación entre
 pares) y la **réplica en `/api/bce`**. Las otras comprobaciones se pasan solas.
+
+## Fibonacci y caos, medidos (3 de septiembre de 2026)
+
+**Fibonacci no aporta nada.** Se marcaron los retrocesos 23,6 / 38,2 / 50 / 61,8
+/ 78,6% sobre 8 divisas, tramo de 60 sesiones, y se midió si el precio rebota al
+cruzarlos. **945 cruces: rebota el 45,0%.** Niveles elegidos al azar en el mismo
+rango, 400 repeticiones: **44,0%** (rango 41,1–47,4%). **p = 0,20.** Fibonacci no
+se distingue de marcar una raya cualquiera. Nota adicional: al ser menor del 50%,
+lo típico es que el precio siga, no que rebote.
+
+**Caos: hay estructura no lineal en 2 de 6 pares**, medida con el contraste BDS
+de Brock, Dechert y Scheinkman tras quitar la parte lineal AR(1). EUR/USD z=2,31
+y USD/JPY z=2,14 a m=3. Es real, pero es volatilidad agrupada: dice cuánto se
+moverá, **no hacia dónde**. Lyapunov y dimensión de correlación necesitan miles
+de puntos; con 400 dan un número que siempre sale y siempre miente.
+
+## Ficha de contratista: se rellena por nombre
+
+Al pulsar un adjudicatario que no está en la lista de 33 se abría con cuatro
+paneles vacíos. Nuevo `/api/contratista?n=NOMBRE`: resuelve el símbolo por Yahoo,
+trae precio, noticias y pleitos de CourtListener.
+
+**Tres trampas encontradas y cerradas, todas del mismo tipo — datos de OTRA
+empresa son peor que ningún dato:**
+
+1. Las barras invertidas de los literales `/.../` **se perdieron al generar el
+   fichero**, dejando `[^ws&-]`, que borra todo menos esas cuatro letras: "AT&T
+   ENTERPRISES, LLC" quedaba en `"&"`. Ahora los patrones se construyen con
+   `new RegExp("...")` desde texto. **Si algo parece un fallo de expresión
+   regular en `worker.js`, comprobar primero si hay caracteres de control
+   reales en el fichero.**
+2. Yahoo devuelve titulares cualesquiera cuando no encuentra la empresa: para
+   AECOM traía noticias de Offerpad y Opendoor. Ahora se exige que el titular o
+   el medio mencionen una palabra distintiva del nombre.
+3. CourtListener con una palabra corta trae homónimos, personas físicas
+   incluidas. Mínimo cinco caracteres útiles o no se consulta.
+
+Verificado: Lockheed → LMT con precio, noticias suyas y pleitos suyos. AT&T
+Enterprises → sin símbolo y **cero** noticias, en vez de ocho ajenas.
