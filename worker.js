@@ -2901,6 +2901,68 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
  border-radius:6px;padding:5px 10px;cursor:pointer;color:var(--dim);font-size:11px;margin-left:10px}
 #buscar:hover{border-color:var(--am);color:var(--txt)}
 #buscar kbd{background:var(--bg);border:1px solid var(--line);border-radius:3px;padding:1px 4px;font-size:9px}
+
+/* ===================== MÓVIL Y TABLETA ===================== */
+@media(max-width:900px){
+ /* Cabecera: se permite que baje de linea en vez de salirse. */
+ .top{flex-wrap:wrap;height:auto;padding:6px 8px;gap:6px}
+ .top .lt{font-size:10px}
+ .brand{font-size:14px;letter-spacing:.14em}
+ #buscar span:not(.pt){display:none}
+ #buscar kbd{display:none}
+ #buscar::after{content:"⌕";font-size:15px}
+ #vivo{margin-left:4px;padding:4px 7px}
+ /* Las dos filas de navegacion se desplazan, con aviso de que hay mas. */
+ .nav2,.nav{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
+  scrollbar-width:none;position:relative}
+ .nav2::-webkit-scrollbar,.nav::-webkit-scrollbar{display:none}
+ .nav2 button,.nav button{white-space:nowrap;flex:0 0 auto;min-height:40px}
+ .nav .sp,.nav .meta{display:none}
+ /* Degradado en el borde derecho: dice que la fila sigue. */
+ .navwrap{position:relative}
+ .navwrap::after{content:"";position:absolute;right:0;top:0;bottom:0;width:26px;
+  background:linear-gradient(90deg,transparent,var(--bg));pointer-events:none}
+ main{padding:6px}
+ .grid{gap:8px}
+ .g4,.g3,.g2,.g23,.g32{grid-template-columns:1fr}
+ /* Dos por fila para las cifras: cuatro no caben y una sola desperdicia. */
+ .g4{grid-template-columns:repeat(2,1fr)}
+ .kpi{padding:10px 11px}
+ .kpi .v{font-size:20px}
+ .kpi .k{font-size:9px}
+ .p{min-height:0}
+ .p>h3{padding:9px 11px;font-size:10px;flex-wrap:wrap;gap:4px}
+ /* La primera columna se queda fija: sin esto no sabes de que fila lees. */
+ table{min-width:640px}
+ td:first-child,th:first-child{position:sticky;left:0;z-index:2;
+  background:var(--pane);box-shadow:1px 0 0 var(--line2)}
+ tr:hover td:first-child{background:var(--pane2)}
+ th{font-size:9px;padding:7px 8px}
+ td{padding:9px 8px;font-size:12px}
+ /* Nombres de mercado y de empresa: mas sitio, y hasta dos lineas. */
+ td:first-child{max-width:190px;white-space:normal;line-height:1.3}
+ .chips{gap:5px}
+ .chips button,.chips label{min-height:38px;display:inline-flex;align-items:center;gap:5px}
+ .chips input[type=text],.chips input[type=number]{min-height:38px;font-size:16px}
+ /* 16px evita que el navegador haga zoom solo al enfocar un campo. */
+ select,input{font-size:16px;min-height:38px}
+ #iabtn{right:10px;bottom:10px;padding:11px 14px;font-size:12px}
+ #iap{left:6px;right:6px;width:auto;max-height:70vh}
+ .ov .box,#fe .box,#dt .box{width:96vw;max-width:96vw;max-height:92vh}
+ .dp{height:auto !important;min-height:210px}
+ .tape{height:22px}
+}
+@media(max-width:560px){
+ .g4{grid-template-columns:1fr}
+ .brand span{display:none}
+ .top .lt span{display:none}
+ .nav2 button{padding:11px 12px;font-size:11px}
+ .nav button{padding:9px 10px;font-size:10px}
+ td:first-child{max-width:150px}
+ .kpi .v{font-size:18px}
+ /* En pantallas asi de estrechas, la jerga sobra aunque estes en modo completo. */
+ .mates{display:none !important}
+}
 </style>
 </head>
 <body>
@@ -2950,8 +3012,8 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 </div>
 <div id="pal"><div id="palc"><input id="palq" autocomplete="off" spellcheck="false" placeholder="Ir a una vista, empresa, mercado o contrato…"><div id="palr"></div><div id="palf"><span><kbd>↑↓</kbd> moverse</span><span><kbd>↵</kbd> abrir</span><span><kbd>Esc</kbd> cerrar</span></div></div></div>
 <div class="tape"><div class="run" id="tape"></div></div>
-<div class="nav2" id="nav2"></div>
-<div class="nav" id="nav">
+<div class="navwrap"><div class="nav2" id="nav2"></div></div>
+<div class="navwrap"><div class="nav" id="nav">
   <button data-v="ini" class="on">F1 INICIO</button>
   <button data-v="dash">F2 DASH</button>
   <button data-v="con">F3 CONTRATOS</button>
@@ -2967,7 +3029,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   <button data-v="lib">F12 BIBLIOTECA</button>
   <div class="sp"></div>
   <div class="meta" id="meta"></div>
-</div>
+</div></div>
 <main>
 
 <div class="view on" id="v-dash">
@@ -4084,7 +4146,7 @@ function render(){
    $("p-cnt").textContent = "(" + r3.length + ")";
    $("p-st").textContent = r3.length ? ("vol 24h " + f$(r3.reduce(function(a,m){ return a + (m.vol24||0) }, 0))) : "";
    r3 = r3.slice().sort(function(a,b){ return (b.vol24||0) - (a.vol24||0) });
-   var LUZ = { verde:"fiable", ambar:"reservas", rojo:"cuidado" };
+   var LUZ = { verde:T("fiable","reliable"), ambar:T("reservas","caution"), rojo:T("cuidado","risky") };
    $("p-rows").innerHTML = r3.length ? r3.slice(0,200).map(function(m){
     var sm = m.sem || { luz:"ambar", avisos:[], texto:"" };
     var es = m.est || { est:m.p, confianza:"baja" };
@@ -4475,7 +4537,7 @@ function renderBrain(){
  $("b-rows").innerHTML=rows.slice(0,150).map(function(m){
   var sm=m.sem||{luz:"ambar",avisos:[],texto:""};
   var es=m.est||{est:m.p,dif:0,confianza:"baja",como:""};
-  var LUZ={verde:"fiable",ambar:"con reservas",rojo:"cuidado"};
+  var LUZ={verde:T("fiable","reliable"),ambar:T("con reservas","with caution"),rojo:T("cuidado","risky")};
   return "<tr data-mid='"+m.id+"' style='cursor:pointer'>"+
    "<td><span class='sem "+sm.luz+"' title='"+esc(sm.texto+(sm.avisos.length?" — "+sm.avisos.join(" · "):""))+"'>"+
      "<i></i>"+LUZ[sm.luz]+"</span></td>"+
@@ -5971,6 +6033,22 @@ var EN2={
 
 "Europa Este":"Eastern Europe","Europa Oeste":"Western Europe",
  "Cuánto se mueve":"How much it moves","Oriente Medio":"Middle East","Global":"Global",
+"Fiabilidad":"Reliability","Estimado":"Estimate","Liquidez":"Liquidity",
+ "Prob.":"Prob.","Vol 24h":"Vol 24h","Spread rel.":"Rel. spread","Días":"Days",
+ "Sesgo":"Bias","Urgencia":"Urgency","Señal":"Signal","Tendencia":"Trend",
+ "Precio":"Price","Cuota":"Odds","Volumen":"Volume","Importe":"Amount",
+ "Fecha":"Date","Adjudicatario":"Recipient","Nicho":"Niche","País":"Country",
+ "Región":"Region","Nombre":"Name","Total":"Total",
+ "Todas":"All","Otros":"Other","Clima":"Climate","Deporte":"Sports","Cripto":"Crypto",
+ "FIABILIDAD":"RELIABILITY","PROB.":"PROB.","ESTIMADO":"ESTIMATE","VOL 24H":"VOL 24H",
+ "fiable":"reliable","reservas":"caution","cuidado":"risky",
+ "alta":"high","media":"medium","baja":"low",
+ "Buscar dentro de estos mercados…":"Search within these markets…",
+ "Buscar empresa, contrato o mercado…":"Search company, contract or market…",
+ "Buscar…":"Search…","Buscar":"Search",
+ "MERCADO":"MARKET","EMPRESA":"COMPANY","EVENTO":"EVENT","SEÑAL":"SIGNAL",
+ "REPARTO DEL GASTO":"SPEND BREAKDOWN","Gigantes":"Primes","Resto (tu terreno)":"Rest (your ground)",
+ "cargando…":"loading…","Cargando…":"Loading…","sin cargar":"not loaded",
  // --- parrafos de la portada ---
  "Este terminal vigila tres cosas a la vez y busca dónde se cruzan: los contratos que reparte el Pentágono, unas 33 empresas de defensa pequeñas y poco seguidas por todo el mundo, y los mercados donde se apuesta sobre acontecimientos reales.La idea es sencilla: a los grandes no les compensa cubrir una empresa coreana o polaca de 200 millones. Ahí no hay competencia porque el premio les parece pequeño. Para ti sí es suficiente.":
   "This terminal watches three things at once and looks for where they <b>cross</b>: the contracts the Pentagon hands out, some 33 small defence companies that almost nobody follows, and the markets where people bet on real events.<br><br>The idea is simple: covering a Korean or Polish company worth 200 million is not worth the big players' time. There is no competition there because the prize looks small to them. <b>For you it is enough.</b>",
@@ -6139,14 +6217,37 @@ function traducir(){
      /* Umbral 7: las etiquetas de filtro llevan el contador pegado
         ("Politica 75", "Europa Este 4") y con 12 no entraban. La guarda del
         separador sigue impidiendo los mutantes. */
-     if(k2.length<7||out.indexOf(k2)!==0)continue;
+     if(k2.length<5||out.indexOf(k2)!==0)continue;
      var sig=out.charAt(k2.length);
+     /* Con claves de 5 o 6 letras solo se acepta si lo que sigue es un contador
+        o una etiqueta, nunca texto: asi "Todas 400" o "Cripto <span>73</span>"
+        entran, pero una clave corta no puede morder una frase larga. */
+     if(k2.length<7&&!(sig===""||sig==="<"||(sig===" "&&/^[0-9<(]/.test(out.slice(k2.length+1)))))continue;
      if(sig===""||sig===" "||sig==="<"||sig==="·"||sig==="—"||sig==="("){
       out=EN2[k2]+out.slice(k2.length); break }
     }
    }
   }
   el.innerHTML=out});
+ /* Los atributos no son texto visible, asi que el bucle de arriba no los toca:
+    los marcadores de posicion de los campos y los rotulos emergentes seguian en
+    castellano en la version inglesa. Se traducen aparte y por frase completa. */
+ [].forEach.call(document.querySelectorAll("[placeholder],[title]"),function(el){
+  ["placeholder","title"].forEach(function(at){
+   var v0=el.getAttribute(at);
+   if(!v0)return;
+   var g="_o"+at;
+   if(el.dataset[g]===undefined)el.dataset[g]=v0;
+   var orig=el.dataset[g];
+   if(!simple&&!en){el.setAttribute(at,orig);return}
+   var r=orig;
+   if(simple&&TRAD[orig]!==undefined)r=TRAD[orig];
+   if(en&&EN2[r]!==undefined)r=EN2[r];
+   else if(en&&EN2[orig]!==undefined)r=EN2[orig];
+   el.setAttribute(at,r);
+  });
+ });
+
  // ayuda por vista
  for(var v in AYUDA){
   var cont=$("v-"+v);if(!cont)continue;

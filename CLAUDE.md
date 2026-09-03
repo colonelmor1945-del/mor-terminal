@@ -544,3 +544,38 @@ Resultado medido: **de 273 cadenas en castellano a 10**, cero errores de
 JavaScript, controles intactos y el castellano vuelve intacto al cambiar de
 idioma. Lo que queda son dos párrafos largos y algunas etiquetas con contador.
 **Los nombres de mercados de Polymarket NO se traducen** y no deben: son datos.
+
+## Móvil (3 de septiembre de 2026)
+
+Antes había **una sola** media query en toda la app, a 1250 px, y solo cambiaba
+columnas. En un teléfono real la cabecera se salía, la fila de vistas se cortaba
+sin indicar que había más, los títulos de mercado quedaban en "Will S…" y las
+tablas se cortaban por el borde.
+
+Decisiones y su motivo:
+
+- **No se ocultan columnas.** La primera columna queda **fija** al desplazar en
+  horizontal, que es lo que permite leer una tabla ancha sin perder de vista de
+  qué fila se trata. Ocultar columnas sería esconder información sin avisar.
+- Las dos filas de navegación se desplazan con un **degradado en el borde**, que
+  es la señal de que hay más a la derecha.
+- Objetivos táctiles a **40 px**; campos a **16 px** para que el navegador no
+  haga zoom solo al enfocarlos.
+- Por debajo de 560 px se ocultan las columnas `.mates` aunque estés en modo
+  completo: en esa anchura la jerga sobra.
+
+Trampa: `display:inline-flex` en las etiquetas de filtro **colapsa el espacio**
+entre el texto y su contador, y salía "Todas400". Se arregla con `gap`.
+
+## Traducción: dos gaps más
+
+- **Los atributos no son texto visible.** Los `placeholder` y los `title` nunca
+  pasaban por `traducir()`. Ahora se traducen aparte, por frase completa, con su
+  propio `data-o*` para poder revertirlos.
+- **Las etiquetas del semáforo las compone el JavaScript** (`fiable`,
+  `reservas`, `cuidado`), así que el diccionario del DOM no las alcanzaba. Van
+  con `T(es,en)` al construirlas.
+- El umbral de prefijo baja a 5 caracteres **solo si lo que sigue es un contador
+  o una etiqueta** (`"Todas 400"`, `"Cripto <span>73</span>"`). Con esa guarda
+  una clave corta no puede morder una frase larga, que es lo que producía
+  "Market Will Sarah Huckabee…".
