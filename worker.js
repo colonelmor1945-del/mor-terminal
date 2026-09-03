@@ -2027,6 +2027,335 @@ async function aprendizaje(env) {
   };
 }
 
+
+/* ---------- Simplex denso de dos fases (validado aparte) ----------
+   maximizar c^T x sujeto a Ax <= b, x >= 0, con b >= 0. */
+function dfSimplex(c, A, b, iterMax) {
+  const m = A.length, nv = c.length;
+  if (!m) return null;
+  const total = nv + m, T = [];
+  for (let i = 0; i < m; i++) {
+    const fila = new Float64Array(total + 1);
+    for (let j = 0; j < nv; j++) fila[j] = A[i][j];
+    fila[nv + i] = 1; fila[total] = b[i];
+    T.push(fila);
+  }
+  const z = new Float64Array(total + 1);
+  for (let j = 0; j < nv; j++) z[j] = -c[j];
+  T.push(z);
+  const base = [];
+  for (let i = 0; i < m; i++) base.push(nv + i);
+  const EPS = 1e-9;
+  for (let it = 0; it < (iterMax || 3000); it++) {
+    let col = -1, mejor = -EPS;
+    for (let j = 0; j < total; j++) if (T[m][j] < mejor) { mejor = T[m][j]; col = j }
+    if (col < 0) break;
+    let fila = -1, raz = Infinity;
+    for (let i = 0; i < m; i++) if (T[i][col] > EPS) {
+      const r = T[i][total] / T[i][col];
+      if (r < raz - 1e-12) { raz = r; fila = i }
+    }
+    if (fila < 0) return { ilimitado: true };
+    const pv = T[fila][col];
+    for (let j = 0; j <= total; j++) T[fila][j] /= pv;
+    for (let i = 0; i <= m; i++) {
+      if (i === fila) continue;
+      const f = T[i][col];
+      if (Math.abs(f) < 1e-14) continue;
+      for (let j = 0; j <= total; j++) T[i][j] -= f * T[fila][j];
+    }
+    base[fila] = col;
+  }
+  const x = new Float64Array(nv);
+  for (let i = 0; i < m; i++) if (base[i] < nv) x[base[i]] = T[i][total];
+  return { x: Array.from(x), valor: T[m][total] };
+}
+
+/* ---------- Cartera de arbitraje sobre un conjunto de mundos ----------
+   W[i][w] = pago del mercado i en el mundo w (0 o 1).
+   Comprar cuesta el ask; vender ingresa el bid. Se maximiza el PEOR beneficio
+   con el tamano total acotado a 1, y se desplaza c = t-1 porque el simplex
+   exige variables no negativas y el peor beneficio puede ser negativo. */
+function dfArbitraje(px, W, nMundos) {
+  const m = px.length;
+  if (!m || !nMundos) return null;
+  const nv = 2 * m + 1, A = [], b = [];
+  for (let w = 0; w < nMundos; w++) {
+    const fila = new Array(nv).fill(0);
+    for (let i = 0; i < m; i++) {
+      fila[i]     = -(W[i][w] - px[i].ask);
+      fila[m + i] =  (W[i][w] - px[i].bid);
+    }
+    fila[2 * m] = 1;
+    A.push(fila); b.push(1);
+  }
+  const cap = new Array(nv).fill(0);
+  for (let i = 0; i < 2 * m; i++) cap[i] = 1;
+  A.push(cap); b.push(1);
+  const c = new Array(nv).fill(0); c[2 * m] = 1;
+  const s = dfSimplex(c, A, b);
+  if (!s || s.ilimitado) return null;
+  const y = [];
+  for (let i = 0; i < m; i++) y.push(s.x[i] - s.x[m + i]);
+  const tam = y.reduce((a, v) => a + Math.abs(v), 0);
+  return { peor: s.valor - 1, y, tam };
+}
+
+/* ---------- Implicaciones por fecha, sin modelo y sin error ----------
+   Si dos preguntas son identicas salvo el plazo, la temprana implica la tardia:
+   lo que pasa antes de septiembre pasa antes de diciembre. Ojo con el sentido:
+   "ocurre ANTES DE" es acumulativo, pero "CONTINUA HASTA" es supervivencia y va
+   al reves. Sin esa distincion cada familia de supervivencia produce
+   arbitrajes fantasma. */
+const DF_MESES = { january:1,february:2,march:3,april:4,may:5,june:6,july:7,
+                   august:8,september:9,october:10,november:11,december:12 };
+const DF_RE = new RegExp("\\b(by|before|until|through|on or before|prior to)\\s+" +
+  "(january|february|march|april|may|june|july|august|september|october|november|december)" +
+  "\\s*(\\d{1,2})?(?:st|nd|rd|th)?(?:,)?\\s*(\\d{4})?", "i");
+
+function dfFecha(q) {
+  const t = String(q || ""), m = t.match(DF_RE);
+  if (!m) return null;
+  const prep = m[1].toLowerCase();
+  return {
+    clave: (m[4] ? Number(m[4]) : 2026) * 10000 + DF_MESES[m[2].toLowerCase()] * 100 +
+           (m[3] ? Number(m[3]) : 28),
+    familia: t.replace(DF_RE, " @F@ ").replace(new RegExp("\\s+", "g"), " ")
+              .trim().toLowerCase().replace(new RegExp("[?.]+$"), ""),
+    superv: prep === "through" || prep === "until"
+  };
+}
+
+/* ---------- Enumeracion de mundos posibles ----------
+   Un mundo asigna 0 o 1 a cada mercado de la componente. Se enumera POR GRUPOS
+   -exactamente una pata viva por grupo excluyente- en vez de bit a bit, que es
+   lo que convierte 2^n en el producto de los tamanos de grupo. Despues se
+   filtran los que violan alguna implicacion o exclusion. */
+function dfMundos(ids, grupos, sueltos, impl, excl, tope) {
+  const idx = {}; ids.forEach((x, i) => idx[x] = i);
+  let mundos = [new Array(ids.length).fill(0)];
+  // Grupos: exactamente uno verdadero.
+  for (const g of grupos) {
+    const nuevos = [];
+    for (const base of mundos) {
+      for (const gid of g) {
+        const m2 = base.slice();
+        for (const otro of g) m2[idx[otro]] = (otro === gid) ? 1 : 0;
+        nuevos.push(m2);
+      }
+      if (nuevos.length > tope) break;
+    }
+    mundos = nuevos;
+    if (mundos.length > tope) return null;
+  }
+  // Mercados sueltos: dos estados cada uno.
+  for (const sid of sueltos) {
+    const nuevos = [];
+    for (const base of mundos) {
+      const a = base.slice(); a[idx[sid]] = 0; nuevos.push(a);
+      const b2 = base.slice(); b2[idx[sid]] = 1; nuevos.push(b2);
+      if (nuevos.length > tope) break;
+    }
+    mundos = nuevos;
+    if (mundos.length > tope) return null;
+  }
+  // Filtro logico: implicaciones y exclusiones.
+  const ok = mundos.filter(mu => {
+    for (const [a, b2] of impl) if (mu[idx[a]] === 1 && mu[idx[b2]] === 0) return false;
+    for (const [a, b2] of excl) if (mu[idx[a]] === 1 && mu[idx[b2]] === 1) return false;
+    return true;
+  });
+  return ok;
+}
+
+/* ---------- Coherencia sobre los mercados vivos ---------- */
+async function coherencia(env, opciones) {
+  const op = opciones || {};
+  const q = await fetchPMQ(3);
+  const M = (q.markets || []).filter(m => m.live !== false && m.p > 0 && m.p < 1);
+  const porId = {}; M.forEach(m => porId[m.id] = m);
+
+  /* 1. Grupos excluyentes completos: exactamente una pata gana. */
+  const grupos = [];
+  for (const g of (q.groups || [])) {
+    if (!g.completo) continue;
+    const ids = M.filter(m => m.evSlug === g.slug).map(m => m.id);
+    /* GUARDA IMPRESCINDIBLE. El filtro de M descarta patas por precio o por
+       liquidez, asi que un grupo de ocho salidas puede llegar aqui con dos. Si
+       entonces se afirma "exactamente una de estas dos gana" se esta mintiendo,
+       y el simplex encuentra un arbitraje que no existe: paso de verdad con el
+       voto del SPD, donde propuso comprar los tramos 5-7% y 7-9% como si fuesen
+       las unicas salidas posibles. Solo se acepta el grupo si estan TODAS. */
+    if (ids.length !== g.n || !g.completo) continue;
+    /* Segunda comprobacion, barata y con datos: si estan todas las salidas, sus
+       precios tienen que sumar cerca de 1. Un grupo completo que suma 0,93 o
+       1,4 es que no esta completo, diga lo que diga la bandera. */
+    const suma = ids.reduce((t, id) => t + porId[id].p, 0);
+    if (suma < 0.90 || suma > 1.12) continue;
+    if (ids.length >= 2 && ids.length <= 12) grupos.push(ids);
+  }
+
+  /* 2. Implicaciones por fecha. Deterministas: no dependen de ningun modelo. */
+  const fam = {};
+  for (const m of M) {
+    const f = dfFecha(m.q);
+    if (!f) continue;
+    (fam[f.familia] = fam[f.familia] || { superv: f.superv, ms: [] }).ms.push({ id: m.id, c: f.clave });
+  }
+  const impl = [], origen = {};
+  for (const k of Object.keys(fam)) {
+    const g = fam[k].ms.slice().sort((a, b) => a.c - b.c);
+    if (g.length < 2) continue;
+    for (let i = 0; i + 1 < g.length; i++) {
+      if (g[i].c === g[i+1].c) continue;
+      // acumulativo: temprana implica tardia. supervivencia: al reves.
+      const par = fam[k].superv ? [g[i+1].id, g[i].id] : [g[i].id, g[i+1].id];
+      impl.push(par);
+      origen[par[0] + ">" + par[1]] = "fecha";
+    }
+  }
+
+  /* 3. Implicaciones y exclusiones del grafo del modelo de lenguaje, si las hay
+        guardadas. Estas SI pueden estar mal, y se marcan como tales. */
+  const excl = [];
+  if (env && env.RADAR && op.usarIA !== false) {
+    try {
+      const l = await env.RADAR.list({ prefix: "rel:v2:", limit: 400 });
+      for (const k of l.keys.slice(0, 200)) {
+        const r = await env.RADAR.get(k.name, "json");
+        if (!r || !r.rel || r.rel === "NINGUNA") continue;
+        if (!porId[r.idA] || !porId[r.idB]) continue;
+        if (r.rel === "IMPLICA") { impl.push([r.idA, r.idB]); origen[r.idA + ">" + r.idB] = "modelo" }
+        else if (r.rel === "EXCLUYE") { excl.push([r.idA, r.idB]); origen[r.idA + ">" + r.idB] = "modelo" }
+      }
+    } catch (e) {}
+  }
+
+  /* 4. Componentes conexas. */
+  const vecinos = {};
+  const une = (a, b) => { (vecinos[a] = vecinos[a] || new Set()).add(b); (vecinos[b] = vecinos[b] || new Set()).add(a) };
+  grupos.forEach(g => { for (let i = 0; i < g.length; i++) for (let j = i+1; j < g.length; j++) une(g[i], g[j]) });
+  impl.forEach(([a, b]) => une(a, b));
+  excl.forEach(([a, b]) => une(a, b));
+
+  const visto = new Set(), comps = [];
+  for (const id of Object.keys(vecinos)) {
+    if (visto.has(id)) continue;
+    const cola = [id], comp = [];
+    visto.add(id);
+    while (cola.length) {
+      const x = cola.pop(); comp.push(x);
+      for (const v of (vecinos[x] || [])) if (!visto.has(v)) { visto.add(v); cola.push(v) }
+    }
+    if (comp.length >= 2 && comp.length <= (op.maxNodos || 14)) comps.push(comp);
+  }
+
+  /* 5. Por cada componente: enumerar mundos y buscar la cartera. */
+  /* Incoherencias en precio medio: se listan aparte porque no todas son
+     cobrables. Solo miran pares con implicacion, que es donde la comprobacion
+     es de una linea. */
+  const incoherencias = [];
+  for (const [a, b2] of impl) {
+    const A = porId[a], B = porId[b2];
+    if (!A || !B) continue;
+    // A implica B, luego p(A) <= p(B). Si no, hay incoherencia.
+    const d = A.p - B.p;
+    if (d <= 0.001) continue;
+    const bidA = (typeof A.bid === "number") ? A.bid : null;
+    const askB = (typeof B.ask === "number") ? B.ask : null;
+    const cobrable = (bidA !== null && askB !== null) ? (bidA - askB) : null;
+    incoherencias.push({
+      implica: (A.q || "").slice(0, 88), implicado: (B.q || "").slice(0, 88),
+      pA: A.p, pB: B.p, exceso: d,
+      cobrable: cobrable,
+      origen: origen[a + ">" + b2] || "modelo",
+      lectura: (cobrable !== null && cobrable > 0)
+        ? "se puede cobrar vendiendo el primero y comprando el segundo"
+        : "la horquilla se lo come: es información, no dinero"
+    });
+  }
+  incoherencias.sort((x, y) => y.exceso - x.exceso);
+
+  const hallazgos = [];
+  let compsMirados = 0, mundosTotal = 0;
+  for (const comp of comps) {
+    const dentro = new Set(comp);
+    const gr = grupos.filter(g => g.every(x => dentro.has(x))).map(g => g.filter(x => dentro.has(x)));
+    const enGrupo = new Set(); gr.forEach(g => g.forEach(x => enGrupo.add(x)));
+    const sueltos = comp.filter(x => !enGrupo.has(x));
+    if (sueltos.length > 12) continue;
+    const im = impl.filter(([a, b]) => dentro.has(a) && dentro.has(b));
+    const ex = excl.filter(([a, b]) => dentro.has(a) && dentro.has(b));
+
+    const mundos = dfMundos(comp, gr, sueltos, im, ex, op.topeMundos || 6000);
+    if (!mundos || mundos.length < 2) continue;
+    compsMirados++; mundosTotal += mundos.length;
+
+    /* Precios ejecutables. Sin bid/ask no se puede afirmar nada: se descarta la
+       componente entera en vez de usar el punto medio, que fabrica arbitrajes
+       que no existen. */
+    const px = [];
+    let completo = true;
+    for (const id of comp) {
+      const m = porId[id];
+      const bid = (typeof m.bid === "number" && m.bid > 0 && m.bid < 1) ? m.bid : null;
+      const ask = (typeof m.ask === "number" && m.ask > 0 && m.ask < 1) ? m.ask : null;
+      if (bid === null || ask === null || ask < bid) { completo = false; break }
+      px.push({ bid, ask });
+    }
+    if (!completo) continue;
+
+    const W = comp.map((_, i) => mundos.map(mu => mu[i]));
+    const r = dfArbitraje(px, W, mundos.length);
+    if (!r || !(r.peor > 0.002) || !(r.tam > 0.01)) continue;
+
+    /* De que aristas depende: si se quita una y el arbitraje desaparece, esa
+       arista es imprescindible. Las de fecha son seguras; las del modelo hay
+       que mirarlas a ojo antes de operar. */
+    const criticas = [];
+    for (const par of im.concat(ex)) {
+      const im2 = im.filter(p => p !== par), ex2 = ex.filter(p => p !== par);
+      const mu2 = dfMundos(comp, gr, sueltos, im2, ex2, op.topeMundos || 6000);
+      if (!mu2 || mu2.length < 2) continue;
+      const W2 = comp.map((_, i) => mu2.map(x => x[i]));
+      const r2 = dfArbitraje(px, W2, mu2.length);
+      if (!r2 || r2.peor <= 0.002) criticas.push({
+        a: (porId[par[0]].q || "").slice(0, 70),
+        b: (porId[par[1]].q || "").slice(0, 70),
+        origen: origen[par[0] + ">" + par[1]] || "modelo"
+      });
+    }
+
+    hallazgos.push({
+      nMercados: comp.length, nMundos: mundos.length,
+      porUnidad: r.peor / r.tam, peor: r.peor, tam: r.tam,
+      // Solo dependen de aristas del modelo si alguna critica lo es.
+      soloFechas: criticas.every(c => c.origen === "fecha"),
+      criticas,
+      patas: comp.map((id, i) => ({
+        q: (porId[id].q || "").slice(0, 90),
+        ev: (porId[id].ev || "").slice(0, 60),
+        peso: r.y[i], lado: r.y[i] > 0 ? "COMPRAR" : "VENDER",
+        precio: r.y[i] > 0 ? px[i].ask : px[i].bid
+      })).filter(x => Math.abs(x.peso) > 0.005)
+    });
+  }
+  hallazgos.sort((a, b) => b.porUnidad - a.porUnidad);
+
+  return {
+    ts: new Date().toISOString(),
+    mercados: M.length, grupos: grupos.length,
+    implicaciones: impl.length, implicacionesFecha: impl.filter(p => origen[p[0]+">"+p[1]] === "fecha").length,
+    exclusiones: excl.length,
+    componentes: comps.length, componentesAnalizadas: compsMirados, mundosExaminados: mundosTotal,
+    incoherencias: incoherencias.slice(0, 20),
+    hallazgos: hallazgos.slice(0, 20),
+    nota: "El pago se comprueba mundo a mundo, así que la aritmética lleva certificado. " +
+          "Lo que puede fallar es la semántica: que una relación del grafo esté mal clasificada. " +
+          "Las implicaciones por fecha no dependen de ningún modelo."
+  };
+}
+
 async function paperSnap(env, q) {
   if (!env.RADAR) return { error: "KV no configurado" };
   const datos = q || await fetchPMQ(3);
@@ -3201,6 +3530,30 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 
 </div>
 
+
+  <div class="p" style="margin-top:8px">
+    <h3>COHERENCIA DE DE FINETTI <span id="co-cnt"></span>
+      <span class="st" style="font-weight:400;text-transform:none">— matemática de 1937 sobre un grafo que hasta 2023 no se podía construir</span></h3>
+    <div class="expl" style="border:1px solid var(--line);border-left:3px solid var(--cy);border-radius:6px;padding:9px 12px;margin:8px 0;font-size:12px;color:var(--dim)">
+      <b style="color:var(--txt)">Qué hace.</b> Un conjunto de precios sobre eventos ligados por lógica o es coherente, o regala dinero. De Finetti demostró en 1937 que los precios coherentes son exactamente los que caen dentro de la envolvente de los mundos lógicamente posibles; si un precio cae fuera, el teorema de separación devuelve <b>la cartera exacta</b> que cobra pase lo que pase.<br><br>
+      <b style="color:var(--txt)">Por qué no lo hace nadie aquí.</b> Polymarket comprueba la coherencia dentro de cada evento, nunca entre eventos distintos. Cruzarlos exigía extraer relaciones lógicas de miles de preguntas escritas en inglés corriente, que no era barato hasta que hubo modelos de lenguaje. Y los fondos grandes no están: el mercado es demasiado pequeño para ellos.<br><br>
+      <b style="color:var(--txt)">Qué puede fallar.</b> La aritmética no: el pago se comprueba mundo a mundo. Lo que puede fallar es que una relación esté mal clasificada. Por eso las <b>implicaciones por fecha</b> —si pasa antes de septiembre, pasa antes de diciembre— se extraen por regla y no dependen de ningún modelo, y cada hallazgo dice de qué relaciones depende.
+    </div>
+    <div class="chips"><button id="co-run">▶ Buscar incoherencias</button>
+      <label class="st"><input type="checkbox" id="co-ia"> incluir relaciones del modelo (pueden fallar)</label>
+      <span class="st" id="co-st">Tarda unos segundos: enumera todos los mundos posibles de cada grupo de mercados ligados.</span></div>
+    <div class="grid g4" style="margin:8px 0">
+      <div class="kpi c3"><div class="k">RELACIONES</div><div class="v" id="co1">—</div><div class="s" id="co1s">restricciones lógicas encontradas</div></div>
+      <div class="kpi"><div class="k">MUNDOS EXAMINADOS</div><div class="v" id="co2">—</div><div class="s" id="co2s">combinaciones lógicamente posibles</div></div>
+      <div class="kpi c2"><div class="k">INCOHERENCIAS</div><div class="v" id="co3">—</div><div class="s" id="co3s">precios que se contradicen</div></div>
+      <div class="kpi c4"><div class="k">COBRABLES</div><div class="v" id="co4">—</div><div class="s" id="co4s">tras pagar la horquilla</div></div>
+    </div>
+    <div class="p" style="margin-bottom:8px"><h3>CARTERAS CON PAGO GARANTIZADO</h3>
+      <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:11%">Por unidad</th><th style="width:11%">Mundos</th><th style="width:13%">Depende de</th><th>Qué hacer</th></tr></thead><tbody id="co-arb"></tbody></table></div></div>
+    <div class="p"><h3>INCOHERENCIAS DE PRECIO <span class="st" style="font-weight:400;text-transform:none">— no todas se pueden cobrar, y se dice cuáles</span></h3>
+      <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:34%">Esto implica…</th><th style="width:34%">…esto</th><th style="width:9%">Exceso</th><th style="width:9%">Origen</th><th>Lectura</th></tr></thead><tbody id="co-inc"></tbody></table></div></div>
+  </div>
+</div>
 <div class="view" id="v-lib">
   <div class="grid g4" style="margin-bottom:8px">
     <div class="kpi"><div class="k">IMPLEMENTADO</div><div class="v" id="l1">—</div><div class="s">métodos en producción</div></div>
@@ -6463,6 +6816,59 @@ function vivoAplicar(){
  if(g&&+g>0)setTimeout(vivoAplicar,3000);
 })();
 
+
+/* ===================== COHERENCIA DE DE FINETTI ===================== */
+var CO=null, COLOAD=false;
+function coBuscar(){
+ if(COLOAD)return; COLOAD=true;
+ $("co-st").textContent=T("Enumerando mundos posibles…","Enumerating possible worlds…");
+ api("/api/coherencia?ia="+($("co-ia").checked?"1":"0"),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){ if(j.error)throw new Error(j.error); CO=j; coPintar() })
+  .catch(function(e){ $("co-st").textContent="Error: "+(e.message||e) })
+  .then(function(){ COLOAD=false });
+}
+function coPintar(){
+ if(!CO)return;
+ var j=CO, inc=j.incoherencias||[], arb=j.hallazgos||[];
+ var cobrables=inc.filter(function(x){return x.cobrable!==null&&x.cobrable>0}).length;
+ $("co1").textContent=(j.implicaciones||0)+(j.exclusiones?"+"+j.exclusiones:"");
+ $("co1s").textContent=T(j.implicacionesFecha+" por fecha (seguras) · "+(j.implicaciones-j.implicacionesFecha)+" del modelo",
+                         j.implicacionesFecha+" from dates (safe)");
+ $("co2").textContent=(j.mundosExaminados||0).toLocaleString("es-ES");
+ $("co2s").textContent=T(j.componentesAnalizadas+" grupos de mercados ligados entre sí","linked market groups");
+ $("co3").textContent=inc.length;
+ $("co4").textContent=arb.length+(cobrables?"+"+cobrables:"");
+
+ $("co-arb").innerHTML=arb.length?arb.map(function(h){
+  return "<tr><td class='up'><b>+"+(h.porUnidad*100).toFixed(2)+"%</b></td>"+
+   "<td>"+h.nMundos+"<div class='dsc'>"+h.nMercados+" mercados</div></td>"+
+   "<td>"+(h.soloFechas?"<span class='t3'>"+T("solo fechas","dates only")+"</span>"
+                       :"<span class='t2'>"+T("el modelo","the model")+"</span>")+"</td>"+
+   "<td>"+h.patas.map(function(p){
+    return "<div><span class='"+(p.lado==="COMPRAR"?"t3":"t4")+"'>"+p.lado+"</span> "+
+     (Math.abs(p.peso)*100).toFixed(0)+"% "+T("a ","at ")+(p.precio*100).toFixed(1)+"% · "+esc(p.q.slice(0,58))+"</div>"}).join("")+
+   "</td></tr>"}).join("")
+  :"<tr><td colspan='4'>"+emp("\\u2705",T("Ninguna cartera con pago garantizado ahora mismo. Es lo normal en mercados líquidos: cuando aparece una, dura minutos.",
+    "No guaranteed-payoff portfolio right now. Normal in liquid markets: when one appears it lasts minutes."))+"</td></tr>";
+
+ $("co-inc").innerHTML=inc.length?inc.map(function(x){
+  var cob=x.cobrable!==null&&x.cobrable>0;
+  return "<tr><td title='"+esc(x.implica)+"'>"+esc(x.implica.slice(0,52))+
+    "<div class='dsc'>"+(x.pA*100).toFixed(1)+"%</div></td>"+
+   "<td title='"+esc(x.implicado)+"'>"+esc(x.implicado.slice(0,52))+
+    "<div class='dsc'>"+(x.pB*100).toFixed(1)+"%</div></td>"+
+   "<td class='dn'>"+(x.exceso*100).toFixed(2)+"</td>"+
+   "<td>"+(x.origen==="fecha"?"<span class='t3'>"+T("fecha","date")+"</span>":"<span class='t2'>"+T("modelo","model")+"</span>")+"</td>"+
+   "<td class='"+(cob?"up":"dim")+"'>"+esc(x.lectura)+"</td></tr>"}).join("")
+  :"<tr><td colspan='5'>"+emp("\\u2705",T("Ningún precio se contradice con otro ahora mismo.","No price contradicts another right now."))+"</td></tr>";
+
+ $("co-cnt").textContent="("+inc.length+" / "+arb.length+")";
+ $("co-st").textContent=T(j.mercados+" mercados · "+j.componentes+" grupos ligados · "+new Date(j.ts).toLocaleTimeString(),
+                          j.mercados+" markets · "+new Date(j.ts).toLocaleTimeString());
+}
+(function(){ $("co-run").onclick=coBuscar; })();
+
 /* ===================== VEREDICTO ===================== */
 /* Movimiento tipico de una sesion: media del cambio absoluto de cierre a cierre
    en 14 sesiones. Es el ATR sin maximos ni minimos, que la API no da. */
@@ -7387,7 +7793,7 @@ setInterval(function(){loadPM()},120000);
    con ADMIN_TOKEN, que se pone como variable secreta en Cloudflare.              */
 
 const PLANES = {
-  libre: { cuota: 50,   endpoints: ["pmq", "px", "intra", "bce", "contratista", "pm", "contracts", "news", "history"] },
+  libre: { cuota: 50,   endpoints: ["pmq", "px", "intra", "bce", "contratista", "coherencia", "pm", "contracts", "news", "history"] },
   pro:   { cuota: 5000, endpoints: "*" }
 };
 
@@ -7513,6 +7919,10 @@ export default {
       if (p === "/api/edgar") return json(await fetchEdgar(Number(url.searchParams.get("d")) || 30), cab);
       if (p === "/api/paper") return json(await paperState(env), cab);
       if (p === "/api/aprendizaje") return json(await aprendizaje(env), cab);
+      if (p === "/api/coherencia") return json(await coherencia(env, {
+        usarIA: url.searchParams.get("ia") !== "0",
+        maxNodos: Number(url.searchParams.get("nodos")) || 14
+      }), cab);
       if (p === "/api/paper/snap") return json(await paperSnap(env));
       if (p === "/api/paper/settle") return json(await paperSettle(env, Number(url.searchParams.get("n")) || 60));
       if (p === "/api/history") return json(await getHistory(env), cab);

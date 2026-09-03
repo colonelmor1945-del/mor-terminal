@@ -473,3 +473,38 @@ empresa son peor que ningún dato:**
 
 Verificado: Lockheed → LMT con precio, noticias suyas y pleitos suyos. AT&T
 Enterprises → sin símbolo y **cero** noticias, en vez de ocho ajenas.
+
+## Coherencia de de Finetti (3 de septiembre de 2026)
+
+`/api/coherencia`, panel en INVESTIGACIÓN. De Finetti (1937): un vector de
+precios sobre eventos ligados por lógica es coherente si y solo si cae dentro de
+la envolvente convexa de los mundos posibles. Si cae fuera, el teorema de
+separación devuelve la cartera exacta con pago no negativo en todos los mundos.
+
+**Validado antes de conectarlo a nada** (`definetti-core.mjs`): símplex contra
+cuatro problemas de solución conocida, y el motor de arbitraje contra cinco
+casos hechos a mano. Lo decisivo: en los casos SIN arbitraje devuelve
+**exactamente 0**. Un símplex mal hecho no falla, inventa arbitrajes.
+
+**Dos trampas encontradas al conectarlo a datos reales:**
+
+1. **Grupo incompleto tratado como completo.** El filtro de mercados descarta
+   patas por precio o liquidez, así que un grupo de 8 salidas llegaba con 2, y
+   afirmar "exactamente una de estas dos gana" es falso. Propuso comprar los
+   tramos SPD 5-7% y 7-9% como si fueran las únicas salidas: **+3,50% de
+   arbitraje inexistente**. Guarda: se exige `ids.length === g.n && g.completo`
+   y que los precios sumen entre 0,90 y 1,12.
+2. **Sentido de la implicación por fecha.** "Ocurre ANTES DE" es acumulativo
+   (más plazo, más probable) pero "CONTINÚA HASTA" es supervivencia (al revés).
+   Sin distinguirlo, cada familia de supervivencia produce arbitrajes fantasma.
+
+**Incoherencia y arbitraje no son lo mismo**, y se listan por separado. Ejemplo
+real: GPT-6 antes del 30 de noviembre cotiza 95,9% y antes del 31 de diciembre
+95,7%. Diciembre no puede valer menos. Pero el bid de noviembre es 95,2 y el ask
+de diciembre 96,3: **la horquilla se lo come**. Es información sobre dónde el
+mercado está descuidado, no dinero.
+
+**Las implicaciones por fecha se extraen por regla, sin modelo y con error cero.**
+El agente de relaciones había clasificado "Hormuz normal antes del 31 de
+diciembre" y "antes del 30 de septiembre" como SIN RELACIÓN, que es un error
+claro. Hoy la regla extrae 22 implicaciones, 21 coherentes y 1 violada.

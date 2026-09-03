@@ -930,6 +930,30 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 
 </div>
 
+
+  <div class="p" style="margin-top:8px">
+    <h3>COHERENCIA DE DE FINETTI <span id="co-cnt"></span>
+      <span class="st" style="font-weight:400;text-transform:none">— matemática de 1937 sobre un grafo que hasta 2023 no se podía construir</span></h3>
+    <div class="expl" style="border:1px solid var(--line);border-left:3px solid var(--cy);border-radius:6px;padding:9px 12px;margin:8px 0;font-size:12px;color:var(--dim)">
+      <b style="color:var(--txt)">Qué hace.</b> Un conjunto de precios sobre eventos ligados por lógica o es coherente, o regala dinero. De Finetti demostró en 1937 que los precios coherentes son exactamente los que caen dentro de la envolvente de los mundos lógicamente posibles; si un precio cae fuera, el teorema de separación devuelve <b>la cartera exacta</b> que cobra pase lo que pase.<br><br>
+      <b style="color:var(--txt)">Por qué no lo hace nadie aquí.</b> Polymarket comprueba la coherencia dentro de cada evento, nunca entre eventos distintos. Cruzarlos exigía extraer relaciones lógicas de miles de preguntas escritas en inglés corriente, que no era barato hasta que hubo modelos de lenguaje. Y los fondos grandes no están: el mercado es demasiado pequeño para ellos.<br><br>
+      <b style="color:var(--txt)">Qué puede fallar.</b> La aritmética no: el pago se comprueba mundo a mundo. Lo que puede fallar es que una relación esté mal clasificada. Por eso las <b>implicaciones por fecha</b> —si pasa antes de septiembre, pasa antes de diciembre— se extraen por regla y no dependen de ningún modelo, y cada hallazgo dice de qué relaciones depende.
+    </div>
+    <div class="chips"><button id="co-run">▶ Buscar incoherencias</button>
+      <label class="st"><input type="checkbox" id="co-ia"> incluir relaciones del modelo (pueden fallar)</label>
+      <span class="st" id="co-st">Tarda unos segundos: enumera todos los mundos posibles de cada grupo de mercados ligados.</span></div>
+    <div class="grid g4" style="margin:8px 0">
+      <div class="kpi c3"><div class="k">RELACIONES</div><div class="v" id="co1">—</div><div class="s" id="co1s">restricciones lógicas encontradas</div></div>
+      <div class="kpi"><div class="k">MUNDOS EXAMINADOS</div><div class="v" id="co2">—</div><div class="s" id="co2s">combinaciones lógicamente posibles</div></div>
+      <div class="kpi c2"><div class="k">INCOHERENCIAS</div><div class="v" id="co3">—</div><div class="s" id="co3s">precios que se contradicen</div></div>
+      <div class="kpi c4"><div class="k">COBRABLES</div><div class="v" id="co4">—</div><div class="s" id="co4s">tras pagar la horquilla</div></div>
+    </div>
+    <div class="p" style="margin-bottom:8px"><h3>CARTERAS CON PAGO GARANTIZADO</h3>
+      <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:11%">Por unidad</th><th style="width:11%">Mundos</th><th style="width:13%">Depende de</th><th>Qué hacer</th></tr></thead><tbody id="co-arb"></tbody></table></div></div>
+    <div class="p"><h3>INCOHERENCIAS DE PRECIO <span class="st" style="font-weight:400;text-transform:none">— no todas se pueden cobrar, y se dice cuáles</span></h3>
+      <div class="bd" style="overflow:auto"><table><thead><tr><th style="width:34%">Esto implica…</th><th style="width:34%">…esto</th><th style="width:9%">Exceso</th><th style="width:9%">Origen</th><th>Lectura</th></tr></thead><tbody id="co-inc"></tbody></table></div></div>
+  </div>
+</div>
 <div class="view" id="v-lib">
   <div class="grid g4" style="margin-bottom:8px">
     <div class="kpi"><div class="k">IMPLEMENTADO</div><div class="v" id="l1">—</div><div class="s">métodos en producción</div></div>
@@ -4191,6 +4215,59 @@ function vivoAplicar(){
  });
  if(g&&+g>0)setTimeout(vivoAplicar,3000);
 })();
+
+
+/* ===================== COHERENCIA DE DE FINETTI ===================== */
+var CO=null, COLOAD=false;
+function coBuscar(){
+ if(COLOAD)return; COLOAD=true;
+ $("co-st").textContent=T("Enumerando mundos posibles…","Enumerating possible worlds…");
+ api("/api/coherencia?ia="+($("co-ia").checked?"1":"0"),{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){ if(j.error)throw new Error(j.error); CO=j; coPintar() })
+  .catch(function(e){ $("co-st").textContent="Error: "+(e.message||e) })
+  .then(function(){ COLOAD=false });
+}
+function coPintar(){
+ if(!CO)return;
+ var j=CO, inc=j.incoherencias||[], arb=j.hallazgos||[];
+ var cobrables=inc.filter(function(x){return x.cobrable!==null&&x.cobrable>0}).length;
+ $("co1").textContent=(j.implicaciones||0)+(j.exclusiones?"+"+j.exclusiones:"");
+ $("co1s").textContent=T(j.implicacionesFecha+" por fecha (seguras) · "+(j.implicaciones-j.implicacionesFecha)+" del modelo",
+                         j.implicacionesFecha+" from dates (safe)");
+ $("co2").textContent=(j.mundosExaminados||0).toLocaleString("es-ES");
+ $("co2s").textContent=T(j.componentesAnalizadas+" grupos de mercados ligados entre sí","linked market groups");
+ $("co3").textContent=inc.length;
+ $("co4").textContent=arb.length+(cobrables?"+"+cobrables:"");
+
+ $("co-arb").innerHTML=arb.length?arb.map(function(h){
+  return "<tr><td class='up'><b>+"+(h.porUnidad*100).toFixed(2)+"%</b></td>"+
+   "<td>"+h.nMundos+"<div class='dsc'>"+h.nMercados+" mercados</div></td>"+
+   "<td>"+(h.soloFechas?"<span class='t3'>"+T("solo fechas","dates only")+"</span>"
+                       :"<span class='t2'>"+T("el modelo","the model")+"</span>")+"</td>"+
+   "<td>"+h.patas.map(function(p){
+    return "<div><span class='"+(p.lado==="COMPRAR"?"t3":"t4")+"'>"+p.lado+"</span> "+
+     (Math.abs(p.peso)*100).toFixed(0)+"% "+T("a ","at ")+(p.precio*100).toFixed(1)+"% · "+esc(p.q.slice(0,58))+"</div>"}).join("")+
+   "</td></tr>"}).join("")
+  :"<tr><td colspan='4'>"+emp("\u2705",T("Ninguna cartera con pago garantizado ahora mismo. Es lo normal en mercados líquidos: cuando aparece una, dura minutos.",
+    "No guaranteed-payoff portfolio right now. Normal in liquid markets: when one appears it lasts minutes."))+"</td></tr>";
+
+ $("co-inc").innerHTML=inc.length?inc.map(function(x){
+  var cob=x.cobrable!==null&&x.cobrable>0;
+  return "<tr><td title='"+esc(x.implica)+"'>"+esc(x.implica.slice(0,52))+
+    "<div class='dsc'>"+(x.pA*100).toFixed(1)+"%</div></td>"+
+   "<td title='"+esc(x.implicado)+"'>"+esc(x.implicado.slice(0,52))+
+    "<div class='dsc'>"+(x.pB*100).toFixed(1)+"%</div></td>"+
+   "<td class='dn'>"+(x.exceso*100).toFixed(2)+"</td>"+
+   "<td>"+(x.origen==="fecha"?"<span class='t3'>"+T("fecha","date")+"</span>":"<span class='t2'>"+T("modelo","model")+"</span>")+"</td>"+
+   "<td class='"+(cob?"up":"dim")+"'>"+esc(x.lectura)+"</td></tr>"}).join("")
+  :"<tr><td colspan='5'>"+emp("\u2705",T("Ningún precio se contradice con otro ahora mismo.","No price contradicts another right now."))+"</td></tr>";
+
+ $("co-cnt").textContent="("+inc.length+" / "+arb.length+")";
+ $("co-st").textContent=T(j.mercados+" mercados · "+j.componentes+" grupos ligados · "+new Date(j.ts).toLocaleTimeString(),
+                          j.mercados+" markets · "+new Date(j.ts).toLocaleTimeString());
+}
+(function(){ $("co-run").onclick=coBuscar; })();
 
 /* ===================== VEREDICTO ===================== */
 /* Movimiento tipico de una sesion: media del cambio absoluto de cierre a cierre
