@@ -584,6 +584,30 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
       <div class="st">Con cierres diarios los desvíos de unos pocos puntos básicos son ruido de horario (cada par cierra en un instante distinto), no arbitraje. Es un control de calidad del dato; un desvío grande señala un precio malo.</div>
     </div>
 
+
+    <div class="p" style="margin-top:8px">
+      <h3>ESTRUCTURA REAL Y RIESGO CONJUNTO <span id="es-cnt"></span>
+        <span class="st" style="font-weight:400;text-transform:none">— cuántas apuestas distintas tienes de verdad</span></h3>
+      <div class="expl" style="border:1px solid var(--line);border-left:3px solid var(--cy);border-radius:6px;padding:9px 12px;margin:8px 0;font-size:12px;color:var(--dim)">
+        <b style="color:var(--txt)">Dos preguntas que la correlación no responde.</b> La primera: de todas las correlaciones que ves entre tus 33 empresas, ¿cuáles son reales y cuáles son ruido de tener pocos datos? Marchenko y Pastur demostraron en 1967 que los datos sin ninguna estructura producen autovalores dentro de una banda calculable; lo que sale por encima es real, y así hay un umbral en vez de un codo mirado a ojo.<br><br>
+        La segunda: la correlación mide el centro y <b>no dice nada del día malo</b>. Dos empresas pueden tener correlación 0,2 y caer juntas el 60% de las veces que una se hunde. Eso lo mide la dependencia de cola. Comprobado con datos fabricados: con un golpe común el 5% de los días, la dependencia de cola vale 0,49 mientras la correlación se queda en 0,45 y no lo ve.<br><br>
+        Se usan retornos <b>semanales</b> a propósito: Tel Aviv, Seúl, São Paulo y Nueva York no cierran a la vez, y con datos diarios las correlaciones entre husos salen falseadas.
+      </div>
+      <div class="chips"><button id="es-run">⟳ Calcular</button><span class="st" id="es-st">Necesita los precios cargados arriba.</span></div>
+      <div class="grid g4" style="margin:8px 0">
+        <div class="kpi c3"><div class="k">FACTORES REALES</div><div class="v" id="es1">—</div><div class="s" id="es1s">—</div></div>
+        <div class="kpi"><div class="k">EL MAYOR EXPLICA</div><div class="v" id="es2">—</div><div class="s" id="es2s">—</div></div>
+        <div class="kpi c2"><div class="k">APUESTAS REALES</div><div class="v" id="es3">—</div><div class="s" id="es3s">—</div></div>
+        <div class="kpi c4"><div class="k">CAEN JUNTAS</div><div class="v" id="es4">—</div><div class="s" id="es4s">—</div></div>
+      </div>
+      <div class="grid g2">
+        <div class="p"><h3>QUÉ ES REAL Y QUÉ ES RUIDO <span class="st" style="font-weight:400;text-transform:none">— Marchenko-Pastur</span></h3>
+          <div class="bd" style="max-height:300px;overflow:auto"><table><thead><tr><th>#</th><th>Autovalor</th><th style="width:38%">Peso</th><th>Veredicto</th></tr></thead><tbody id="es-ev"><tr><td colspan="4"><div class="emp"><b>⏳</b>Pulsa ⟳ Calcular.</div></td></tr></tbody></table></div></div>
+        <div class="p"><h3>LAS QUE SE HUNDEN JUNTAS <span class="st" style="font-weight:400;text-transform:none">— dependencia de cola</span></h3>
+          <div class="bd" style="max-height:300px;overflow:auto"><table><thead><tr><th>Empresa</th><th>Empresa</th><th>Juntas</th><th>Lectura</th></tr></thead><tbody id="es-cola"><tr><td colspan="4"><div class="emp"><b>⏳</b>Pulsa ⟳ Calcular.</div></td></tr></tbody></table></div></div>
+      </div>
+      <div class="st">El umbral de "caen juntas" no es cero: sale de barajar las fechas 60 veces y quedarse con el percentil 95. Con pocos días malos, la dependencia de cola de un par suelto es ruido, así que lo que importa es cuántos pares superan ese umbral, no el valor de ninguno.</div>
+    </div>
     <div class="p" style="margin-top:8px">
       <h3>DIVISAS · ESTRUCTURA Y RIESGO
         <span class="st" style="font-weight:400;text-transform:none">— ninguna de estas herramientas predice dirección, y es a propósito</span></h3>
@@ -1062,7 +1086,13 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
   </div>
   <div id="fec">
     <div class="dp full"><h4 id="fe-h1">Lo esencial</h4><div class="c"><div class="mg" id="fe-met"></div></div></div>
-    <div class="dp" style="height:270px"><h4 id="fe-h2">Precio · último año</h4><div class="c" style="flex:1" id="fe-px"></div></div>
+    <div class="dp" style="height:340px"><h4 id="fe-h2">Precio · último año
+      <span class="chips" style="margin-left:auto;padding:0">
+        <button id="fe-tab-p" class="on" style="padding:3px 9px;font-size:10px">Propio</button>
+        <button id="fe-tab-tv" style="padding:3px 9px;font-size:10px">TradingView</button>
+      </span></h4>
+      <div class="c" style="flex:1" id="fe-px"></div>
+      <div class="c" style="flex:1;display:none" id="fe-tv"></div></div>
     <div class="dp" style="height:270px"><h4 id="fe-h3">Avisos oficiales a la SEC (8-K)</h4><div class="c" style="flex:1;overflow:auto" id="fe-8k"></div></div>
     <div class="dp" style="height:230px"><h4 id="fe-h4">Pleitos en tribunales</h4><div class="c" style="flex:1;overflow:auto" id="fe-lit"></div></div>
     <div class="dp" style="height:230px"><h4 id="fe-h5">Noticias</h4><div class="c" style="flex:1;overflow:auto" id="fe-news"></div></div>
@@ -1453,15 +1483,15 @@ function render(){
  if(CON.length){
   var by={};CON.forEach(function(c){if(c.date)by[c.date]=(by[c.date]||0)+c.amount});
   var ks=Object.keys(by).sort(),pts=ks.map(function(k){return{k:k,v:by[k]}});
-  $("h-flow").textContent=pts.length+" días con actividad";
+  $("h-flow").textContent=pts.length+T(" días con actividad"," days with activity");
   areaChart($("d-flow"),pts,"#e3a44a",f$);
   var cum=0,cp=pts.map(function(p){cum+=p.v;return{k:p.k,v:cum}});
   areaChart($("c-cum"),cp,"#00e08a",f$);
-  donut($("d-donut"),[{k:"Gigantes",v:tot-rtot,c:"#232c38"},{k:"Resto (tu terreno)",v:rtot,c:"#e3a44a"}]);
+  donut($("d-donut"),[{k:T("Gigantes","Primes"),v:tot-rtot,c:"#232c38"},{k:T("Resto (tu terreno)","Rest (your ground)"),v:rtot,c:"#e3a44a"}]);
  }else{var m0=ERR.con?emp("⚠","USAspending no responde.<br>Pulsa ⟳ REFRESH."):sk(5);
   $("d-flow").innerHTML=m0;$("c-cum").innerHTML=m0;$("d-donut").innerHTML=m0}
 
- $("h-con").textContent=rad.length?rad.length+" no-gigantes":"";
+ $("h-con").textContent=rad.length?rad.length+T(" no-gigantes"," non-primes"):"";
  $("d-bars").innerHTML=CON.length?hbars(CON.slice(0,12),CON[0].amount):(ERR.con?emp("⚠","Sin datos"):sk(6));
 
  $("d-match").innerHTML=MATCH.length?MATCH.map(function(m){
@@ -1473,7 +1503,12 @@ function render(){
 
  var mv=PM.slice().sort(function(a,b){return Math.abs(b.chg)-Math.abs(a.chg)}).slice(0,12);
  $("d-mov").innerHTML=mv.length?"<table><tbody>"+mv.map(function(m){
-  return "<tr data-q='"+esc(m.q)+"' style='cursor:pointer' title='"+esc(m.q)+"'><td class='el'><a target='_blank' rel='noopener' href='"+m.url+"'>"+esc(m.q.slice(0,56))+"</a></td>"+
+  /* Sorpresa de Aitchison: pasar de 1% a 2% DOBLA la probabilidad y sale casi
+     invisible midiendo en puntos. Se anade la lectura correcta al lado. */
+  var srp=aitSorpresa(m.price-(m.chg||0), m.price);
+  return "<tr data-q='"+esc(m.q)+"' style='cursor:pointer' title='"+esc(m.q)+"'><td class='el'><a target='_blank' rel='noopener' href='"+m.url+"'>"+esc(m.q.slice(0,56))+"</a>"+
+   (srp!==null&&srp>0.35?"<div class='dsc'><span class='t1'>"+T("sorpresa","surprise")+" "+srp.toFixed(2)+"</span> "+
+     T("· en proporción es un movimiento grande","· proportionally a big move")+"</div>":"")+"</td>"+
   "<td class='n' style='width:50px'>"+(m.price*100).toFixed(1)+"%</td>"+
   "<td class='n "+(m.chg>=0?"up":"dn")+"' style='width:54px'>"+(m.chg>=0?"+":"")+(m.chg*100).toFixed(1)+"</td>"+
   "<td class='n dsc' style='width:58px'>"+f$(m.vol24)+"</td></tr>"}).join("")+"</tbody></table>":sk(5);
@@ -2507,7 +2542,13 @@ function feAbrir(tk,sinApilar){
  var e=null;
  for(var i=0;i<SC.length;i++)if(SC[i].tk===tk){e=SC[i];break}
  if(!e)return;
- FE=e;$("fe").classList.add("on");if(typeof rutaEscribe=="function")setTimeout(rutaEscribe,0);
+FE=e;$("fe").classList.add("on");if(typeof rutaEscribe=="function")setTimeout(rutaEscribe,0);
+ /* Al cambiar de empresa se vuelve al grafico propio: si no, se quedaria a la
+    vista el de TradingView de la empresa ANTERIOR, que es justo el tipo de dato
+    equivocado que hay que evitar. */
+ try{ TV_ACTUAL=null; $("fe-tv").innerHTML=""; $("fe-tv").style.display="none";
+      $("fe-px").style.display=""; $("fe-tab-p").classList.add("on");
+      $("fe-tab-tv").classList.remove("on"); }catch(er){}
  $("fe-n").textContent=e.name;
  var tkc=e.tk.split(":").pop();
  /* Enlaces al exterior. Robinhood solo lista valores de EE.UU., asi que solo se
@@ -2698,6 +2739,20 @@ function conRellenar(nombre){
     if(/9203/.test($(k).innerHTML)||/Buscando|Comprobando/.test($(k).textContent))$(k).innerHTML=msg});
   });
 }
+(function(){
+ /* Las dos pestanas del grafico. El de TradingView se pide la primera vez que
+    se abre, no antes: el guion pesa y la mayoria de las veces no se usa. */
+ var mostrar=function(cual){
+  var p=cual==="p";
+  $("fe-px").style.display=p?"":"none";
+  $("fe-tv").style.display=p?"none":"";
+  $("fe-tab-p").classList.toggle("on",p);
+  $("fe-tab-tv").classList.toggle("on",!p);
+  if(!p&&FE)tvPintar($("fe-tv"),FE.tk);
+ };
+ $("fe-tab-p").onclick=function(){mostrar("p")};
+ $("fe-tab-tv").onclick=function(){mostrar("tv")};
+})();
 function feCerrar(){$("fe").classList.remove("on");FE=null;if(typeof rutaEscribe=="function")rutaEscribe()}
 
 function dtOpen(id,sinApilar){
@@ -5072,6 +5127,174 @@ function fxQuantRender(){
                           "Computed over "+series[0].length+" sessions. None of this predicts direction, by design.");
 }
 
+
+/* ===================== GEOMETRÍA DEL SÍMPLEX (AITCHISON) =====================
+   El símplex de probabilidades no es euclídeo. Pasar de 1% a 2% es DOBLAR la
+   probabilidad; pasar de 50% a 51% no es casi nada. Medido: la distancia
+   euclídea da 0,0141 para los DOS casos, y la de Aitchison da 0,497 frente a
+   0,028, o sea 17,6 veces más para el que de verdad importa.
+
+   Consecuencia práctica: el ranking de "lo que más se ha movido hoy" estaba
+   ciego justo a los movimientos que anteceden a una resolución, que son los de
+   las patas baratas.
+   Aitchison (1982), JRSS-B 44:139-177.                                        */
+function aitCeros(p){
+ // Un cero rompe el logaritmo. Se sustituye por el tamano del tick y se
+ // renormaliza, que es el reemplazo multiplicativo habitual.
+ var t=0.001, q=p.map(function(x){return x>0?x:t});
+ var s=q.reduce(function(a,b){return a+b},0);
+ return q.map(function(x){return x/s});
+}
+function aitClr(p){
+ var q=aitCeros(p), l=q.map(Math.log), m=mean(l);
+ return l.map(function(x){return x-m});
+}
+/* Sorpresa de un movimiento binario: se trata como la composicion (p, 1-p) y se
+   mide la distancia de Aitchison entre el antes y el despues. */
+function aitSorpresa(pAntes, pDespues){
+ if(!(pAntes>0&&pAntes<1&&pDespues>0&&pDespues<1))return null;
+ var a=aitClr([pAntes,1-pAntes]), b=aitClr([pDespues,1-pDespues]);
+ var t=0; for(var i=0;i<a.length;i++)t+=(a[i]-b[i])*(a[i]-b[i]);
+ return Math.sqrt(t);
+}
+
+/* ===================== MATRICES ALEATORIAS =====================
+   Con N activos y T dias, los autovalores de la correlacion de datos SIN
+   estructura caen dentro de [(1-raiz(q))^2, (1+raiz(q))^2] con q=N/T. Lo que
+   sale por encima es estructura real; lo de dentro es ruido de muestreo. Da un
+   UMBRAL en vez de un codo mirado a ojo.
+   Marchenko y Pastur (1967); Laloux, Cizeau, Bouchaud y Potters (1999).       */
+function mpBanda(N,T){
+ var q=N/T;
+ return {q:q, lo:Math.pow(1-Math.sqrt(q),2), hi:Math.pow(1+Math.sqrt(q),2)};
+}
+/* Autovalores de una matriz simetrica por rotaciones de Jacobi: estable, sin
+   invertir nada y sin dependencias. */
+function jacobiVals(A0,iter){
+ var N=A0.length, A=A0.map(function(f){return f.slice()});
+ for(var it=0;it<(iter||400);it++){
+  var p=0,q=1,mx=0;
+  for(var i=0;i<N;i++)for(var j=i+1;j<N;j++)if(Math.abs(A[i][j])>mx){mx=Math.abs(A[i][j]);p=i;q=j}
+  if(mx<1e-10)break;
+  var th=0.5*Math.atan2(2*A[p][q],A[p][p]-A[q][q]), c=Math.cos(th), sn=Math.sin(th);
+  for(var k=0;k<N;k++){var akp=A[k][p],akq=A[k][q];A[k][p]=c*akp+sn*akq;A[k][q]=-sn*akp+c*akq}
+  for(var k=0;k<N;k++){var apk=A[p][k],aqk=A[q][k];A[p][k]=c*apk+sn*aqk;A[q][k]=-sn*apk+c*aqk}
+ }
+ var ev=[]; for(var i=0;i<N;i++)ev.push(A[i][i]);
+ return ev.sort(function(a,b){return b-a});
+}
+/* Retornos SEMANALES a proposito. Tel Aviv, Seul, Sao Paulo, Nueva York y
+   Estocolmo no cierran a la vez: con retornos diarios las correlaciones entre
+   husos horarios salen sesgadas a la baja y aparecen falsos plomo-retraso. Con
+   viernes a viernes, todos han cerrado. */
+function corrSemanal(series){
+ var N=series.length, L=Math.min.apply(null,series.map(function(x){return x.length}));
+ var R=series.map(function(c){
+  var r=[];
+  for(var i=c.length-L+5;i<c.length;i+=5)r.push(Math.log(c[i]/c[i-5]));
+  return r});
+ var mu=R.map(mean), sg=R.map(sd), C=[];
+ for(var i=0;i<N;i++){C.push([]);
+  for(var j=0;j<N;j++){
+   var t=0, nn=Math.min(R[i].length,R[j].length);
+   for(var k=0;k<nn;k++)t+=(R[i][k]-mu[i])*(R[j][k]-mu[j]);
+   C[i].push((sg[i]>0&&sg[j]>0)?t/((nn-1)*sg[i]*sg[j]):0);
+  }}
+ return {C:C, T:R[0].length, R:R};
+}
+
+/* ===================== DEPENDENCIA DE COLA =====================
+   La correlacion es una medida del CENTRO y no dice nada sobre el dia malo.
+   chi(u) = probabilidad de que el otro tambien reviente dado que este reventó.
+   Comprobado: con un shock comun al 5% de los dias, chi vale 0,49 mientras la
+   correlacion se queda en 0,45 y no lo ve.
+   Coles, Heffernan y Tawn (1999), Extremes 2:339-365.
+
+   Aviso metodologico: con pocos datos chi de UN par es puro ruido, asi que se
+   reporta la DISTRIBUCION sobre todos los pares y se compara con un nulo por
+   permutacion de fechas, no con el cero asintotico.                           */
+function rangosU(x){
+ var idx=x.map(function(v,i){return [v,i]}).sort(function(a,b){return a[0]-b[0]});
+ var r=new Array(x.length);
+ idx.forEach(function(p,k){ r[p[1]]=(k+1)/(x.length+1) });
+ return r;
+}
+function chiCola(U,V,u,inferior){
+ var nu=0, nb=0;
+ for(var i=0;i<U.length;i++){
+  var a=inferior?U[i]<1-u:U[i]>u, b=inferior?V[i]<1-u:V[i]>u;
+  if(a){nu++; if(b)nb++}
+ }
+ return nu>=5?nb/nu:null;
+}
+
+function estructuraRender(){
+ if(!QUANT.length){$("es-st").textContent=T("Necesita los precios cargados.","Needs prices loaded.");return}
+ var con=QUANT.filter(function(q){return q.c&&q.c.length>150});
+ if(con.length<8){$("es-st").textContent=T("Muy pocas series con histórico.","Too few series with history.");return}
+ var noms=con.map(function(q){return q.s.name}), series=con.map(function(q){return q.c});
+ var cs=corrSemanal(series), N=con.length, T2=cs.T;
+ var ev=jacobiVals(cs.C), b=mpBanda(N,T2);
+ var reales=ev.filter(function(v){return v>b.hi}).length;
+
+ $("es1").textContent=reales;
+ $("es1s").textContent=T("factores reales de "+N+" empresas · el resto es ruido de muestreo",
+                          reales+" real factors out of "+N);
+ $("es2").textContent=(ev[0]/N*100).toFixed(0)+"%";
+ $("es2s").textContent=T("lo explica el mayor factor · techo del ruido "+b.hi.toFixed(2),
+                          "explained by the largest factor");
+ /* Numero efectivo de apuestas: entropia de los autovalores normalizados. */
+ var suma=ev.reduce(function(a,x){return a+x},0);
+ var props=ev.map(function(v){return v/suma});
+ var H=0; props.forEach(function(p){ if(p>0)H-=p*Math.log(p) });
+ $("es3").textContent=Math.exp(H).toFixed(1);
+ $("es3s").textContent=T("apuestas independientes de verdad entre "+N,"truly independent bets among "+N);
+
+ /* Dependencia de cola sobre TODOS los pares, con nulo por permutacion. */
+ var U=cs.R.map(rangosU);
+ var chis=[];
+ for(var i=0;i<N;i++)for(var j=i+1;j<N;j++){
+  var c=chiCola(U[i],U[j],0.90,true);     // cola INFERIOR: los dias malos
+  if(c!==null)chis.push({c:c,a:noms[i],b:noms[j]});
+ }
+ // Nulo: se baraja el orden de una de las series y se repite.
+ var sem=777, rnd=function(){sem^=sem<<13;sem>>>=0;sem^=sem>>>17;sem^=sem<<5;sem>>>=0;return sem/4294967296};
+ var nulo=[];
+ for(var rep=0;rep<60;rep++){
+  var i2=Math.floor(rnd()*N), j2=Math.floor(rnd()*N);
+  if(i2===j2)continue;
+  var mez=U[j2].slice();
+  for(var k=mez.length-1;k>0;k--){var m2=Math.floor(rnd()*(k+1));var tt=mez[k];mez[k]=mez[m2];mez[m2]=tt}
+  var c2=chiCola(U[i2],mez,0.90,true);
+  if(c2!==null)nulo.push(c2);
+ }
+ nulo.sort(function(a,b2){return a-b2});
+ var corte=nulo.length?nulo[Math.floor(0.95*(nulo.length-1))]:1;
+ chis.sort(function(a,b2){return b2.c-a.c});
+ var porEncima=chis.filter(function(x){return x.c>corte}).length;
+ $("es4").textContent=porEncima;
+ $("es4s").textContent=T("pares que caen juntos más de lo que explicaría el azar (umbral "+corte.toFixed(2)+")",
+                          "pairs falling together beyond chance");
+
+ $("es-ev").innerHTML=ev.map(function(v,i){
+  var real=v>b.hi;
+  return "<tr><td>"+(i+1)+"</td><td class='"+(real?"up":"dim")+"'>"+v.toFixed(3)+"</td>"+
+   "<td><div class='tr' style='height:6px'><i style='width:"+Math.min(100,v/ev[0]*100).toFixed(0)+
+    "%;background:"+(real?"var(--gr)":"var(--dim2)")+"'></i></div></td>"+
+   "<td>"+(real?"<span class='t3'>"+T("estructura real","real structure")+"</span>"
+               :"<span class='dim'>"+T("ruido de muestreo","sampling noise")+"</span>")+"</td></tr>"}).join("");
+
+ $("es-cola").innerHTML=chis.slice(0,12).map(function(x){
+  var alto=x.c>corte;
+  return "<tr><td>"+esc(x.a.slice(0,30))+"</td><td>"+esc(x.b.slice(0,30))+"</td>"+
+   "<td class='"+(alto?"dn":"")+"'>"+(x.c*100).toFixed(0)+"%</td>"+
+   "<td class='dim'>"+(alto?T("caen juntas de verdad","really fall together"):T("dentro de lo normal","within normal"))+"</td></tr>"}).join("")
+  ||"<tr><td colspan='4'>"+emp("—",T("Sin pares con suficientes días malos.","No pairs with enough bad days."))+"</td></tr>";
+
+ $("es-st").textContent=T(N+" empresas · "+T2+" semanas · banda de ruido ["+b.lo.toFixed(2)+" · "+b.hi.toFixed(2)+"]",
+                          N+" companies · "+T2+" weeks");
+}
+
 /* ===================== DIVISAS · QUANT ===================== */
 var FXQ=[],FXQLOAD=false,FXSEL=null;
 var FXQP=[["EURUSD=X","EUR/USD"],["GBPUSD=X","GBP/USD"],["USDJPY=X","USD/JPY"],["AUDUSD=X","AUD/USD"],
@@ -5213,7 +5436,7 @@ function fxChart(x){
 }
 (function(){
  $("fxload").onclick=fxLoad;
- $("fq-run").onclick=fxQuantRender;
+ $("fq-run").onclick=fxQuantRender; $("es-run").onclick=estructuraRender;
  $("fx-rows").onclick=function(ev){
   var tr=ev.target.closest?ev.target.closest("tr[data-fx]"):null; if(!tr)return;
   for(var i=0;i<FXQ.length;i++)if(FXQ[i].n===tr.dataset.fx){fxChart(FXQ[i]);break}
@@ -5451,6 +5674,54 @@ function bandaHoras(el,sim,horas){
   })
   .catch(function(){el.innerHTML="<span class='dim'>"+T("sin datos por horas para este símbolo.","no hourly data for this symbol.")+"</span>"});
 }
+
+/* Mercados que TradingView identifica con el mismo prefijo que usamos. Los que
+   no estan aqui no se intentan: un widget que no carga es peor que un aviso. */
+var TV_OK={NASDAQ:1,NYSE:1,AMEX:1,LSE:1,EURONEXT:1,OMXSTO:1,GPW:1,BIST:1,TASE:1,
+           NSE:1,KRX:1,TSE:1,ASX:1,BMFBOVESPA:1};
+var TV_CARGADO=false, TV_ACTUAL=null;
+
+function tvSimbolo(tk){
+ var p=String(tk||"").split(":");
+ if(p.length!==2||!TV_OK[p[0]])return null;
+ return p[0]+":"+p[1];
+}
+function tvPintar(cont,tk){
+ var sim=tvSimbolo(tk);
+ if(!sim){
+  cont.innerHTML=emp("\u2014",T("TradingView no reconoce este mercado, así que no se puede incrustar el gráfico. El enlace de arriba sí funciona.",
+                                 "TradingView does not recognise this exchange, so the chart cannot be embedded. The link above still works."));
+  return;
+ }
+ if(TV_ACTUAL===sim&&cont.querySelector("iframe"))return;
+ TV_ACTUAL=sim;
+ cont.innerHTML="<div class='emp'><b>\u23F3</b>"+T("Cargando el gráfico de TradingView…","Loading the TradingView chart…")+"</div>";
+ var pintar=function(){
+  cont.innerHTML="<div id='tvbox' style='height:100%'></div>";
+  try{
+   new TradingView.widget({
+    container_id:"tvbox", symbol:sim, interval:"D", timezone:"Europe/Madrid",
+    theme:"dark", style:"1", locale:(IDIOMA==="en"?"en":"es"),
+    toolbar_bg:"#0d1117", enable_publishing:false, hide_side_toolbar:false,
+    allow_symbol_change:false, save_image:false, autosize:true,
+    studies:["MASimple@tv-basicstudies"]
+   });
+  }catch(e){
+   cont.innerHTML=emp("\u26A0",T("TradingView no ha podido cargar. Puede ser un bloqueador de anuncios.",
+                                  "TradingView failed to load. It may be an ad blocker."));
+  }
+ };
+ if(TV_CARGADO&&window.TradingView){pintar();return}
+ var sc=document.createElement("script");
+ sc.src="https://s3.tradingview.com/tv.js"; sc.async=true;
+ sc.onload=function(){TV_CARGADO=true;pintar()};
+ sc.onerror=function(){
+  cont.innerHTML=emp("\u26A0",T("No se ha podido descargar TradingView. Comprueba el bloqueador de anuncios; el resto del terminal no lo necesita.",
+                                 "Could not download TradingView. Check your ad blocker; the rest of the terminal does not need it."));
+ };
+ document.head.appendChild(sc);
+}
+
 function sugEmpresa(e,q){
  var txt,cl,por;
  if(!q){txt=T("sin precios cargados","no prices loaded");cl="dim";por=T("carga los precios para tener una lectura","load prices to get a read")}

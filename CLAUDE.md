@@ -579,3 +579,47 @@ entre el texto y su contador, y salía "Todas400". Se arregla con `gap`.
   o una etiqueta** (`"Todas 400"`, `"Cripto <span>73</span>"`). Con esa guarda
   una clave corta no puede morder una frase larga, que es lo que producía
   "Market Will Sarah Huckabee…".
+
+## Aitchison, matrices aleatorias y dependencia de cola (3 de septiembre de 2026)
+
+Los tres validados fuera del navegador antes de integrarlos (`mate3.mjs`).
+
+**1. Geometría del símplex (Aitchison, 1982).** El símplex de probabilidades no
+es euclídeo. Medido: la distancia euclídea da **0,0141 tanto para 1%→2% (que
+DUPLICA la probabilidad) como para 50%→51% (que no es nada)**. Aitchison da
+0,497 frente a 0,028: 17,6 veces más para el que importa. Verificada también la
+invariancia al reescalar. El ranking de movimientos del día estaba ciego justo a
+las patas baratas, que son las que se mueven antes de una resolución. Ahora la
+lista de mayores movimientos marca la sorpresa de Aitchison cuando supera 0,35.
+
+**2. Marchenko-Pastur (1967).** Con N activos y T periodos, los autovalores de
+datos sin estructura caen en [(1−√q)², (1+√q)²] con q=N/T. Validado: con series
+independientes (N=20, T=400, banda [0,603 · 1,497]) el mayor autovalor sale
+1,427 y **ninguno** supera el techo; con un factor común impuesto sale 10,58 y
+**exactamente uno** lo supera.
+
+Resultado real sobre las 33 empresas: **solo 2 factores son reales de 32**, el
+mayor explica el 16%, y el resto del espectro es ruido de muestreo.
+
+Se usan retornos **semanales**, no diarios: Tel Aviv, Seúl, São Paulo y Nueva
+York no cierran a la vez y con datos diarios las correlaciones entre husos salen
+sesgadas a la baja (efecto Epps).
+
+**3. Dependencia de cola (Coles, Heffernan y Tawn, 1999).** La correlación mide
+el centro y no dice nada del día malo. Validado con datos fabricados: con un
+golpe común el 5% de los días, **χ vale 0,49 mientras la correlación se queda en
+0,45 y no lo ve**.
+
+Resultado real: **21 pares caen juntos más de lo que explicaría el azar**. El
+peor, Data Patterns y MTAR Technologies (ambas indias), se hunden juntas el 71%
+de las veces. El umbral no es cero: sale de barajar las fechas 60 veces y tomar
+el percentil 95, porque con pocos días malos la χ de un par suelto es ruido.
+
+## TradingView incrustado
+
+La ficha de empresa tiene ahora dos pestañas: el gráfico propio y el de
+TradingView. El guion se pide **bajo demanda**, solo al abrir la pestaña. Solo
+se intenta con mercados que TradingView reconoce (lista `TV_OK`); con el resto
+se explica por qué no se puede en vez de dejar un recuadro vacío. Al cambiar de
+empresa se vuelve al gráfico propio, para que no quede a la vista el de la
+empresa anterior.
