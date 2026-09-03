@@ -2937,7 +2937,9 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <span class="pt"></span><span id="vivo-e">EN VIVO</span>
     <select id="vivo-n" onclick="event.stopPropagation()">
       <option value="0">apagado</option>
-      <option value="10">10 s</option>
+      <option value="2">2 s · lo más rápido posible</option>
+        <option value="5">5 s</option>
+        <option value="10">10 s</option>
       <option value="30" selected>30 s</option>
       <option value="60">60 s</option>
     </select><span id="vivo-t"></span>
@@ -3098,7 +3100,7 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <h3>DIVISAS · QUANT <span id="fx-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— clic en un par para su gráfico</span></h3>
     <div class="chips"><button id="fxload">⟳ Cargar divisas</button><span class="st" id="fx-st">18 pares: mayores, cruces y emergentes. Pasan por tu Worker (Yahoo Finance).</span></div>
     <div class="grid g4" style="margin:8px 0">
-      <div class="kpi"><div class="k">PARES CARGADOS</div><div class="v" id="fx1">—</div><div class="s" id="fx1s">series de 400 sesiones</div></div>
+      <div class="kpi"><div class="k">PARES CARGADOS</div><div class="v" id="fx1">…</div><div class="s" id="fx1s">cargando al entrar en esta pantalla</div></div>
       <div class="kpi c2"><div class="k">MEJOR MOMENTUM</div><div class="v" id="fx2">—</div><div class="s" id="fx2s">—</div></div>
       <div class="kpi c3"><div class="k">EN TENSIÓN</div><div class="v" id="fx3">—</div><div class="s" id="fx3s">volatilidad reciente por encima de la normal</div></div>
       <div class="kpi c4"><div class="k">PARES ESTIRADOS</div><div class="v" id="fx4">—</div><div class="s" id="fx4s">diferencias que suelen volver a su sitio</div></div>
@@ -3113,10 +3115,10 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="grid g2" style="margin-top:8px">
       <div class="p" style="height:300px"><h3 id="fx-ch-t">GRÁFICO</h3><div class="bd" id="fx-chart"><div class="emp"><b>📈</b>Elige un par en la tabla.</div></div></div>
       <div class="p" style="height:300px"><h3>PARES QUE SE MUEVEN JUNTOS <span class="st" style="font-weight:400;text-transform:none">— cointegración</span></h3>
-        <div class="bd" style="overflow:auto"><table><thead><tr><th>Par A</th><th>Par B</th><th class="mates">β</th><th>Diferencia (z)</th><th class="mates">Vida media</th><th>Lectura</th></tr></thead><tbody id="fx-coint"></tbody></table></div></div>
+        <div class="bd" style="overflow:auto"><table><thead><tr><th>Par A</th><th>Par B</th><th class="mates">β</th><th>Diferencia (z)</th><th class="mates">Vida media</th><th>Lectura</th></tr></thead><tbody id="fx-coint"><tr><td colspan="6"><div class="emp"><b>⏳</b>Esperando a que carguen las divisas.</div></td></tr></tbody></table></div></div>
     </div>
     <div class="p" style="margin-top:8px"><h3>COHERENCIA TRIANGULAR <span class="st" style="font-weight:400;text-transform:none">— EUR/USD × USD/JPY debería dar EUR/JPY</span></h3>
-      <div class="bd" style="overflow:auto"><table><thead><tr><th>Cruce</th><th>Cotizado</th><th>Implícito</th><th>Desvío</th><th>Lectura</th></tr></thead><tbody id="fx-tri"></tbody></table></div>
+      <div class="bd" style="overflow:auto"><table><thead><tr><th>Cruce</th><th>Cotizado</th><th>Implícito</th><th>Desvío</th><th>Lectura</th></tr></thead><tbody id="fx-tri"><tr><td colspan="5"><div class="emp"><b>⏳</b>Esperando a que carguen las divisas.</div></td></tr></tbody></table></div>
       <div class="st">Con cierres diarios los desvíos de unos pocos puntos básicos son ruido de horario (cada par cierra en un instante distinto), no arbitraje. Es un control de calidad del dato; un desvío grande señala un precio malo.</div>
     </div>
 
@@ -3135,15 +3137,15 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
       </div>
       <div class="grid g2">
         <div class="p"><h3>DE QUÉ DEPENDE CADA PAR <span class="st" style="font-weight:400;text-transform:none">— componente principal</span></h3>
-          <div class="bd" style="max-height:280px;overflow:auto"><table><thead><tr><th>Par</th><th>Carga</th><th style="width:34%">Peso</th><th>Lectura</th></tr></thead><tbody id="fq-pca"></tbody></table></div></div>
+          <div class="bd" style="max-height:280px;overflow:auto"><table><thead><tr><th>Par</th><th>Carga</th><th style="width:34%">Peso</th><th>Lectura</th></tr></thead><tbody id="fq-pca"><tr><td colspan="4"><div class="emp"><b>⏳</b>Esperando a que carguen las divisas.</div></td></tr></tbody></table></div></div>
         <div class="p"><h3>¿ES UN PASEO ALEATORIO? <span class="st" style="font-weight:400;text-transform:none">— razón de varianzas (Lo y MacKinlay)</span></h3>
-          <div class="bd" style="max-height:280px;overflow:auto"><table><thead><tr><th>Par</th><th>2 días</th><th>5 días</th><th>10 días</th><th>Lectura</th></tr></thead><tbody id="fq-vr"></tbody></table></div></div>
+          <div class="bd" style="max-height:280px;overflow:auto"><table><thead><tr><th>Par</th><th>2 días</th><th>5 días</th><th>10 días</th><th>Lectura</th></tr></thead><tbody id="fq-vr"><tr><td colspan="5"><div class="emp"><b>⏳</b>Esperando a que carguen las divisas.</div></td></tr></tbody></table></div></div>
       </div>
       <div class="p" style="margin-top:8px"><h3>RIESGO REAL DE CADA PAR</h3>
         <div class="bd" style="overflow:auto"><table><thead><tr>
           <th>Par</th><th>Volatilidad hoy</th><th>Su rango histórico</th><th>Percentil</th>
           <th>Peor día de 100</th><th>Ídem, con colas gruesas</th><th>Si pasa, cuánto</th><th class="mates">Asim. / Curt.</th>
-        </tr></thead><tbody id="fq-riesgo"></tbody></table></div>
+        </tr></thead><tbody id="fq-riesgo"><tr><td colspan="8"><div class="emp"><b>⏳</b>Esperando a que carguen las divisas.</div></td></tr></tbody></table></div>
         <div class="st">Volatilidad anualizada de 21 sesiones. <b>Peor día de 100</b> es el valor en riesgo al 99% (histórico), y la columna siguiente lo corrige por asimetría y colas gruesas (Cornish-Fisher), que en divisas se quedan cortas justo cuando importa. <b>Si pasa, cuánto</b> es la pérdida esperada en la cola. Informativo, no es recomendación.</div>
       </div>
     </div>
@@ -3233,10 +3235,10 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 
 <div class="view" id="v-sim">
   <div class="grid g4" style="margin-bottom:8px">
-    <div class="kpi"><div class="k">MERCADOS RESUELTOS</div><div class="v" id="s1">—</div><div class="s" id="s1s">muestra del backtest</div></div>
-    <div class="kpi c2"><div class="k">BRIER SCORE</div><div class="v" id="s2">—</div><div class="s" id="s2s">0 = perfecto · 0.25 = moneda</div></div>
-    <div class="kpi c3"><div class="k">λ EMPÍRICA</div><div class="v" id="s3">—</div><div class="s" id="s3s">sesgo medido, no teórico</div></div>
-    <div class="kpi c4"><div class="k">MEJOR ESTRATEGIA</div><div class="v" id="s4">—</div><div class="s" id="s4s">—</div></div>
+    <div class="kpi"><div class="k">MERCADOS RESUELTOS</div><div class="v" id="s1" style="font-size:15px">sin ejecutar</div><div class="s" id="s1s">pulsa ▶ abajo · tarda 1–3 min</div></div>
+    <div class="kpi c2"><div class="k">BRIER SCORE</div><div class="v" id="s2" style="font-size:15px">sin ejecutar</div><div class="s" id="s2s">0 = perfecto · 0,25 = moneda</div></div>
+    <div class="kpi c3"><div class="k">λ EMPÍRICA</div><div class="v" id="s3" style="font-size:15px">sin ejecutar</div><div class="s" id="s3s">sesgo medido, no teórico</div></div>
+    <div class="kpi c4"><div class="k">MEJOR ESTRATEGIA</div><div class="v" id="s4" style="font-size:15px">sin ejecutar</div><div class="s" id="s4s">descarga históricos reales del CLOB</div></div>
   </div>
 
   <div class="p" style="margin-bottom:8px">
@@ -4991,6 +4993,9 @@ function renderPaper(){
 
 function renderSim(){
  if(!BT){
+  /* Se explica por que hay que pulsar: descargar el historico real de cientos
+     de mercados resueltos tarda minutos y gasta cuota, asi que no se lanza sin
+     que alguien lo pida. */
   var msg=BTLOAD?emp("⏳","Simulando… descargando históricos reales.<br>Tarda 1–3 minutos."):
    emp("🧪","Pulsa <b>▶ Ejecutar simulación</b> aquí arriba.<br>"+
     "No se lanza sola porque descarga cientos de históricos y tarda 1–3 minutos.");
@@ -6514,7 +6519,11 @@ function go(v,sinApilar){
  if(v==="news")loadNews(NR);
  if(v==="con"&&!EDG&&!EDGL)loadEdgar();
  if(v==="ini"){if(!EDG&&!EDGL)loadEdgar(); if(!BQ&&!BLOAD)loadBrain();}
- if(v==="quant"&&!Object.keys(PX).length&&!QLOAD)loadPx();
+ if(v==="quant"){
+  if(!Object.keys(PX).length&&!QLOAD)loadPx();
+  // Las divisas tambien: si no, media pantalla se queda en blanco esperando.
+  if(!FXQ.length&&!FXQLOAD)fxLoad();
+ }
  if(v==="ver"){ if(!QUANT.length&&!QLOAD)loadPx(); if(!BQ&&!BLOAD)loadBrain(); if(!FXQ.length&&!FXQLOAD)fxLoad(); }
  if((v==="brain"||v==="cart")&&!BQ&&!BLOAD)loadBrain();
  if(v==="sim"&&!PAP)loadPaper();
