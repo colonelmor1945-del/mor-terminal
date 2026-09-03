@@ -122,21 +122,118 @@ function parseRSS(xml, max) {
   return items;
 }
 
+/* Canales que aceptan peticiones desde un centro de datos, comprobados uno a
+   uno con el numero de titulares que devuelve cada uno. Se ponen varios por
+   region para que la caida de uno no deje la pantalla vacia. */
+const CANALES = {
+  "Pentágono": [
+    ["Breaking Defense",  "https://breakingdefense.com/feed/"],
+    ["Defense One",       "https://www.defenseone.com/rss/all/"],
+    ["Military Times",    "https://www.militarytimes.com/arc/outboundfeeds/rss/?outputType=xml"],
+    ["Defense News",      "https://www.defensenews.com/arc/outboundfeeds/rss/?outputType=xml"]
+  ],
+  "Europa Este": [
+    ["Al Jazeera",        "https://www.aljazeera.com/xml/rss/all.xml"],
+    ["BBC Mundo",         "https://feeds.bbci.co.uk/news/world/rss.xml"],
+    ["Euro Security",     "https://euro-sd.com/feed/"]
+  ],
+  "Asia Este": [
+    ["Al Jazeera",        "https://www.aljazeera.com/xml/rss/all.xml"],
+    ["BBC Mundo",         "https://feeds.bbci.co.uk/news/world/rss.xml"],
+    ["Defense One",       "https://www.defenseone.com/rss/all/"]
+  ],
+  "Mercados": [
+    ["CNBC",              "https://www.cnbc.com/id/100003114/device/rss/rss.html"],
+    ["BBC Negocios",      "https://feeds.bbci.co.uk/news/business/rss.xml"],
+    ["Wall Street Journal","https://feeds.a.dj.com/rss/RSSMarketsMain.xml"],
+    ["Investing",         "https://www.investing.com/rss/news_25.rss"]
+  ],
+  "Rusia/Asia C.": [
+    ["Moscow Times",      "https://www.themoscowtimes.com/rss/news"],
+    ["Al Jazeera",        "https://www.aljazeera.com/xml/rss/all.xml"],
+    ["BBC Mundo",         "https://feeds.bbci.co.uk/news/world/rss.xml"]
+  ],
+  "Asia Sur": [
+    ["South China MP",    "https://www.scmp.com/rss/91/feed"],
+    ["Al Jazeera",        "https://www.aljazeera.com/xml/rss/all.xml"],
+    ["The Hindu",         "https://www.thehindu.com/news/national/feeder/default.rss"],
+    ["BBC Mundo",         "https://feeds.bbci.co.uk/news/world/rss.xml"]
+  ],
+  "Oceanía": [
+    ["ABC Australia",     "https://www.abc.net.au/news/feed/51120/rss.xml"],
+    ["BBC Mundo",         "https://feeds.bbci.co.uk/news/world/rss.xml"],
+    ["Al Jazeera",        "https://www.aljazeera.com/xml/rss/all.xml"]
+  ],
+  "África": [
+    ["AllAfrica",         "https://allafrica.com/tools/headlines/rdf/latest/headlines.rdf"],
+    ["Al Jazeera",        "https://www.aljazeera.com/xml/rss/all.xml"],
+    ["BBC Mundo",         "https://feeds.bbci.co.uk/news/world/rss.xml"]
+  ],
+  "Sudamérica": [
+    ["Buenos Aires Times","https://www.batimes.com.ar/feed"],
+    ["BBC Mundo",         "https://feeds.bbci.co.uk/news/world/rss.xml"],
+    ["Al Jazeera",        "https://www.aljazeera.com/xml/rss/all.xml"]
+  ],
+  "España": [
+    ["El País",           "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/portada"],
+    ["elDiario.es",       "https://www.eldiario.es/rss/"]
+  ]
+};
+const CANALES_POR_DEFECTO = [
+  ["Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml"],
+  ["BBC Mundo",  "https://feeds.bbci.co.uk/news/world/rss.xml"],
+  ["Defense One","https://www.defenseone.com/rss/all/"]
+];
+
 async function fetchNews(region) {
-  const f = NEWS_FEEDS[region] || NEWS_FEEDS["Pentágono"];
-  const rss = "https://news.google.com/rss/search?q=" + encodeURIComponent(f.q) + "&hl=" + f.hl + "&gl=" + f.gl + "&ceid=" + f.ceid;
-  try {
-    const res = await fetch(rss, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
-    if (res.ok) { const it = parseRSS(await res.text()); if (it.length) return it; }
-  } catch (e) {}
-  try {
-    const res = await fetch("https://api.rss2json.com/v1/api.json?count=25&rss_url=" + encodeURIComponent(rss));
-    if (res.ok) {
-      const j = await res.json();
-      if (j.items && j.items.length) return j.items.map(i => ({ title: i.title, link: i.link, date: (i.pubDate || "").slice(0, 16), src: i.author || "" }));
-    }
-  } catch (e) {}
-  throw new Error("Fuente de noticias no disponible");
+  const lista = CANALES[region] || CANALES_POR_DEFECTO;
+  const salida = [];
+  const fallos = [];
+  /* Se piden EN PARALELO con tope de tiempo: en serie, cuatro canales lentos
+     agotan la peticion antes de devolver nada. */
+  const tope = (p, seg) => Promise.race([
+    Promise.resolve(p).catch(() => null),
+    new Promise(r => setTimeout(() => r(null), seg * 1000))
+  ]);
+  const res = await Promise.all(lista.map(([nombre, url]) => tope((async () => {
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const it = parseRSS(await r.text());
+    return it.map(x => Object.assign({}, x, { src: x.src || nombre }));
+  })(), 7)));
+  /* Se anota de que puesto de la lista viene cada titular: el primero de cada
+     region es el medio LOCAL, y es el que debe encabezar. Ordenando solo por
+     fecha, la BBC copaba las nueve regiones con los mismos titulares. */
+  res.forEach((it, i) => {
+    if (it && it.length) salida.push.apply(salida, it.map(x => Object.assign({}, x, { _orden: i })));
+    else fallos.push(lista[i][0]);
+  });
+
+  if (!salida.length) {
+    /* Ultimo recurso: Google News. Bloquea centros de datos, asi que casi nunca
+       responde desde aqui, pero si algun dia deja de hacerlo esto lo aprovecha. */
+    try {
+      const f = NEWS_FEEDS[region] || NEWS_FEEDS["Pentágono"];
+      const rss = "https://news.google.com/rss/search?q=" + encodeURIComponent(f.q) +
+                  "&hl=" + f.hl + "&gl=" + f.gl + "&ceid=" + f.ceid;
+      const r = await fetch(rss, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
+      if (r.ok) { const it = parseRSS(await r.text()); if (it.length) return it }
+    } catch (e) {}
+    throw new Error("Ninguna fuente respondió (" + fallos.join(", ") + ")");
+  }
+  /* Se ordena por fecha y se quitan los repetidos por titular: varios canales
+     cubren la misma noticia. */
+  const vistos = {}, unicas = [];
+  /* Primero por cercania a la region, y dentro de cada fuente por fecha. */
+  salida.sort((a, b) => (a._orden - b._orden) || ((b.date || "") > (a.date || "") ? 1 : -1));
+  for (const x of salida) {
+    const k = String(x.title || "").toLowerCase().slice(0, 60);
+    if (!k || vistos[k]) continue;
+    vistos[k] = 1;
+    const y = Object.assign({}, x); delete y._orden;
+    unicas.push(y);
+  }
+  return unicas.slice(0, 40);
 }
 
 function findMatches(contracts) {
@@ -3514,6 +3611,41 @@ body:not(.claro) .art:hover{border-color:var(--nAm);box-shadow:0 0 16px -8px rgb
  border-radius:6px;padding:8px 12px;color:var(--dim);text-decoration:none;font-size:11.5px}
 .enlaces-red a:hover{border-color:var(--am);color:var(--txt)}
 @media(max-width:560px){.reels{grid-template-columns:repeat(2,1fr)}.arts{grid-template-columns:1fr}}
+
+/* ===================== ASISTENTE =====================
+   Se distingue por el LADO y por el color de borde, no por el tamaño: así se
+   lee de un vistazo quién habla sin que las burbujas griten. */
+#iap{border-radius:12px;overflow:hidden;box-shadow:0 24px 60px -24px rgba(0,0,0,.85)}
+body:not(.claro) #iap{border:1px solid var(--nVi);
+ box-shadow:0 24px 60px -24px rgba(0,0,0,.9), 0 0 30px -18px rgba(176,140,255,.6)}
+#iap>div:first-child{padding:11px 14px;border-bottom:1px solid var(--line2);
+ display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.08em;font-weight:700}
+#iam{padding:12px 13px;display:flex;flex-direction:column;gap:9px}
+.iab{max-width:88%;padding:10px 13px;border-radius:12px;font-size:12.5px;line-height:1.55;
+ word-break:break-word;animation:iaEntra .22s ease-out}
+@keyframes iaEntra{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+/* Tú: a la derecha, sólido. El asistente: a la izquierda, con filo de color. */
+.iab.tu{align-self:flex-end;background:var(--fondo2);border:1px solid var(--line);
+ border-bottom-right-radius:4px}
+.iab.ia{align-self:flex-start;background:var(--pane2);border:1px solid var(--line);
+ border-left:2px solid var(--vi);border-bottom-left-radius:4px}
+body:not(.claro) .iab.ia{box-shadow:0 0 14px -10px rgba(176,140,255,.7)}
+.iab.err{border-left-color:var(--rd);color:var(--rd)}
+.iab .dsc{margin-top:6px;font-size:10px;color:var(--dim2)}
+/* Zona de escritura: más aire y el botón con peso. */
+#iap .chips{padding:10px 12px;border-top:1px solid var(--line2);gap:7px}
+#iaq{flex:1;min-height:40px;border-radius:8px;padding:10px 12px;font-size:13px}
+#iag{min-height:40px;padding:0 16px;border-radius:8px;font-weight:600}
+body:not(.claro) #iag{border-color:var(--nVi);color:var(--nVi)}
+body:not(.claro) #iag:hover{background:rgba(176,140,255,.12);
+ box-shadow:0 0 14px -6px rgba(176,140,255,.7)}
+#iamic{min-height:40px;min-width:44px;border-radius:8px;font-size:16px}
+/* Cuando está pensando, que se note sin bloquear nada. */
+.iab.pensando{color:var(--dim);font-style:italic}
+.iab.pensando::after{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;
+ background:var(--vi);margin-left:7px;animation:iaLate 1s ease-in-out infinite}
+@keyframes iaLate{0%,100%{opacity:1}50%{opacity:.2}}
+@media(max-width:900px){.iab{max-width:94%}#iam{padding:10px}}
 </style>
 </head>
 <body>
@@ -3687,9 +3819,6 @@ body:not(.claro) .art:hover{border-color:var(--nAm);box-shadow:0 0 16px -8px rgb
     <div class="st" id="n-st"></div>
     <div class="bd" id="n-rows"></div>
   </div>
-</div>
-
-
   <div class="p" style="margin-top:9px">
     <h3>VHLA MEDIA <span id="vh-cnt"></span>
       <span class="st" style="font-weight:400;text-transform:none">— vhlamedia.com</span></h3>
@@ -3704,7 +3833,10 @@ body:not(.claro) .art:hover{border-color:var(--nAm);box-shadow:0 0 16px -8px rgb
     <div class="bd"><div class="reels" id="vh-reels"></div></div>
     <div class="st">Se incrusta la búsqueda de YouTube, que no necesita clave. X, TikTok, Instagram y LinkedIn exigen clave de API o bloquean el incrustado, así que van como búsquedas preparadas abajo: un recuadro vacío con su logo no sería integrarse con ellos.</div>
     <div class="enlaces-red" id="vh-redes"></div>
-  </div>
+</div>
+
+
+</div>
 <div class="view" id="v-quant">
   <div class="grid g4 escena" style="margin-bottom:8px">
     <div class="kpi"><div class="k">COBERTURA DE PRECIOS</div><div class="v" id="q1">—</div><div class="s" id="q1s">series descargadas</div></div>
@@ -7415,12 +7547,14 @@ function iaPreguntar(q){
   if(h0){var e0=iaMsg("▸ "+h0,"ia");e0.style.borderLeftColor="var(--cy)";e0.style.background="rgba(34,211,238,.07)"}
   IABUSY=false; return;
  }
- var esp=iaMsg("Consultando tus datos…","ia");
+ var esp=iaMsg(T("Consultando tus datos…","Checking your data…"),"ia");
+ esp.classList.add("pensando");
  api("/api/chat?q="+encodeURIComponent(q)+"&estado="+encodeURIComponent(iaEstado())+
      "&hist="+encodeURIComponent(IAHIST.map(function(x){return x[0]+"|"+x[1]}).join("||")),{cache:"no-store"})
   .then(function(r){return r.json()})
   .then(function(j){
    if(j.error){esp.className="iab err";esp.textContent=j.error;return}
+   esp.classList.remove("pensando");
    esp.textContent=j.respuesta;
    decir(j.respuesta);
    IAHIST.push(["tu",q],["ia",String(j.respuesta).slice(0,300)]);
@@ -8069,16 +8203,35 @@ function vhRedes(){
  $("vh-redes").innerHTML=R.map(function(r){
   return "<a href='"+r[1]+"' target='_blank' rel='noopener'>"+esc(r[0])+" \\u2197</a>"}).join("");
 }
+/* Canales reales. El incrustado por BUSQUEDA de YouTube esta retirado desde
+   2020 -devuelve 200 pero el reproductor dice "vídeo no disponible"-, así que
+   se usa la lista de SUBIDAS de cada canal, que sí funciona sin clave: su
+   identificador es el del canal cambiando UC por UU. */
+var VH_CANALES={
+ defensa:[["Breaking Defense","UCXn5Hbmm-rHOJmTRAPCFdSg"],["Defense News","UCbNIrvOKHQFbGO3aTb2vT0g"],
+          ["Task & Purpose","UCKAlHmPzGh6RvGhWkTUAOZQ"],["Sandboxx","UCcyDlRVfNZWDbPfLLGWKUMg"]],
+ pentagono:[["War Dept","UCJqIwzn1Y-2SBHQ5N-U1_LQ"],["Defense News","UCbNIrvOKHQFbGO3aTb2vT0g"],
+            ["Breaking Defense","UCXn5Hbmm-rHOJmTRAPCFdSg"],["CSIS","UCoQ0KrfjRXaZBd8LrJvyBHg"]],
+ prediccion:[["Bloomberg TV","UCIALMKvObZNtJ6AmdCLP7Lg"],["CNBC","UCvJJ_dzjViJCoLf5uKUTwoA"],
+             ["Yahoo Finance","UCEAZeUIeJs0IjQiqTCdVSIg"],["Reuters","UChqUTb7kYRX8-EiaN3XFrSQ"]],
+ macro:[["Bloomberg TV","UCIALMKvObZNtJ6AmdCLP7Lg"],["CNBC","UCvJJ_dzjViJCoLf5uKUTwoA"],
+        ["Yahoo Finance","UCEAZeUIeJs0IjQiqTCdVSIg"],["Financial Times","UCoUxsWakJucWg46KW5RsvPw"]],
+ cripto:[["Coin Bureau","UCqK_GSMbpiV8spgD3ZGloSw"],["Bloomberg TV","UCIALMKvObZNtJ6AmdCLP7Lg"],
+         ["CNBC","UCvJJ_dzjViJCoLf5uKUTwoA"],["Yahoo Finance","UCEAZeUIeJs0IjQiqTCdVSIg"]],
+ vhla:[["Bloomberg TV","UCIALMKvObZNtJ6AmdCLP7Lg"],["CNBC","UCvJJ_dzjViJCoLf5uKUTwoA"],
+       ["Reuters","UChqUTb7kYRX8-EiaN3XFrSQ"],["Financial Times","UCoUxsWakJucWg46KW5RsvPw"]]
+};
 function vhReels(){
  var t=VH_TEMAS.filter(function(x){return x.k===VH_TEMA})[0]||VH_TEMAS[0];
- /* La incrustacion por busqueda de YouTube no necesita clave. Se piden varias
-    con matices distintos para que no salga seis veces el mismo video. */
- var consultas=[t.q, t.q+" today", t.q+" explained", t.q+" analysis"];
- $("vh-reels").innerHTML=consultas.map(function(q,i){
+ var cs=VH_CANALES[VH_TEMA]||VH_CANALES.defensa;
+ $("vh-reels").innerHTML=cs.map(function(c){
+  var lista="UU"+c[1].slice(2);   // lista de subidas del canal
   return "<div class='reel'><div class='marco'>"+
-   "<iframe loading='lazy' allow='encrypted-media' referrerpolicy='no-referrer' "+
-   "src='https://www.youtube.com/embed?listType=search&list="+encodeURIComponent(q)+"'></iframe>"+
-   "</div><div class='pie'>"+esc(q)+"<div class='fuente'>YouTube</div></div></div>"}).join("");
+   "<iframe loading='lazy' allow='accelerometer; encrypted-media; picture-in-picture' "+
+   "allowfullscreen referrerpolicy='strict-origin-when-cross-origin' "+
+   "src='https://www.youtube-nocookie.com/embed/videoseries?list="+lista+"&rel=0'></iframe>"+
+   "</div><div class='pie'>"+esc(c[0])+
+   "<div class='fuente'>"+T("últimos vídeos","latest videos")+"</div></div></div>"}).join("");
  vhRedes();
 }
 function vhTemas(){

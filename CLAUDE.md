@@ -765,3 +765,38 @@ vistas fuera del contenedor, pintándose unas encima de otras.
 **Comprobación obligatoria tras tocar el marcado:** el balance de `<div>` y
 `</div>` dentro de `<main>` tiene que dar exactamente 0, y
 `document.querySelectorAll('body > .view')` tiene que estar vacío.
+
+## Por qué no iban las noticias (3 de septiembre de 2026)
+
+**Google News bloquea a los centros de datos.** Su canal responde sin problema
+desde un ordenador normal, pero un Worker de Cloudflare *es* un centro de datos.
+Funcionaba al probarlo desde el navegador y fallaba en producción: la clase de
+fallo que solo se ve probando desde donde corre el código.
+
+Y el respaldo tampoco servía: **rss2json pasó a exigir clave de pago** para el
+parámetro `count`, así que devolvía error en vez de noticias.
+
+Sustituido por canales comprobados uno a uno que **sí** aceptan peticiones desde
+un centro de datos, con varios por región para que la caída de uno no vacíe la
+pantalla. Las nueve regiones devuelven 40 titulares.
+
+**Trampa del orden:** ordenando solo por fecha, la BBC copaba las nueve regiones
+con los mismos titulares. Ahora se ordena primero por cercanía a la región (el
+primer canal de cada lista es el medio local) y dentro de cada fuente por fecha.
+Rusia abre con Moscow Times, Oceanía con ABC Australia, Sudamérica con Buenos
+Aires Times.
+
+## El reproductor de vídeo
+
+El incrustado por **búsqueda** de YouTube (`listType=search`) está retirado desde
+2020: devuelve HTTP 200 pero el reproductor muestra "vídeo no disponible", así
+que parecía funcionar en las comprobaciones automáticas. Sustituido por la lista
+de **subidas** de canales reales, que sí funciona sin clave: el identificador de
+la lista es el del canal cambiando `UC` por `UU`.
+
+## El bloque de VHLA quedaba fuera de toda vista
+
+`document.querySelectorAll('#vh-arts')[0].closest('.view')` devolvía `null`: el
+bloque estaba entre dos vistas, así que no se mostraba nunca. **Comprobación
+útil tras insertar marcado:** todo panel nuevo tiene que devolver una vista con
+`closest('.view')`.

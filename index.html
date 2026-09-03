@@ -624,6 +624,41 @@ body:not(.claro) .art:hover{border-color:var(--nAm);box-shadow:0 0 16px -8px rgb
  border-radius:6px;padding:8px 12px;color:var(--dim);text-decoration:none;font-size:11.5px}
 .enlaces-red a:hover{border-color:var(--am);color:var(--txt)}
 @media(max-width:560px){.reels{grid-template-columns:repeat(2,1fr)}.arts{grid-template-columns:1fr}}
+
+/* ===================== ASISTENTE =====================
+   Se distingue por el LADO y por el color de borde, no por el tamaño: así se
+   lee de un vistazo quién habla sin que las burbujas griten. */
+#iap{border-radius:12px;overflow:hidden;box-shadow:0 24px 60px -24px rgba(0,0,0,.85)}
+body:not(.claro) #iap{border:1px solid var(--nVi);
+ box-shadow:0 24px 60px -24px rgba(0,0,0,.9), 0 0 30px -18px rgba(176,140,255,.6)}
+#iap>div:first-child{padding:11px 14px;border-bottom:1px solid var(--line2);
+ display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.08em;font-weight:700}
+#iam{padding:12px 13px;display:flex;flex-direction:column;gap:9px}
+.iab{max-width:88%;padding:10px 13px;border-radius:12px;font-size:12.5px;line-height:1.55;
+ word-break:break-word;animation:iaEntra .22s ease-out}
+@keyframes iaEntra{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+/* Tú: a la derecha, sólido. El asistente: a la izquierda, con filo de color. */
+.iab.tu{align-self:flex-end;background:var(--fondo2);border:1px solid var(--line);
+ border-bottom-right-radius:4px}
+.iab.ia{align-self:flex-start;background:var(--pane2);border:1px solid var(--line);
+ border-left:2px solid var(--vi);border-bottom-left-radius:4px}
+body:not(.claro) .iab.ia{box-shadow:0 0 14px -10px rgba(176,140,255,.7)}
+.iab.err{border-left-color:var(--rd);color:var(--rd)}
+.iab .dsc{margin-top:6px;font-size:10px;color:var(--dim2)}
+/* Zona de escritura: más aire y el botón con peso. */
+#iap .chips{padding:10px 12px;border-top:1px solid var(--line2);gap:7px}
+#iaq{flex:1;min-height:40px;border-radius:8px;padding:10px 12px;font-size:13px}
+#iag{min-height:40px;padding:0 16px;border-radius:8px;font-weight:600}
+body:not(.claro) #iag{border-color:var(--nVi);color:var(--nVi)}
+body:not(.claro) #iag:hover{background:rgba(176,140,255,.12);
+ box-shadow:0 0 14px -6px rgba(176,140,255,.7)}
+#iamic{min-height:40px;min-width:44px;border-radius:8px;font-size:16px}
+/* Cuando está pensando, que se note sin bloquear nada. */
+.iab.pensando{color:var(--dim);font-style:italic}
+.iab.pensando::after{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;
+ background:var(--vi);margin-left:7px;animation:iaLate 1s ease-in-out infinite}
+@keyframes iaLate{0%,100%{opacity:1}50%{opacity:.2}}
+@media(max-width:900px){.iab{max-width:94%}#iam{padding:10px}}
 </style>
 </head>
 <body>
@@ -797,9 +832,6 @@ body:not(.claro) .art:hover{border-color:var(--nAm);box-shadow:0 0 16px -8px rgb
     <div class="st" id="n-st"></div>
     <div class="bd" id="n-rows"></div>
   </div>
-</div>
-
-
   <div class="p" style="margin-top:9px">
     <h3>VHLA MEDIA <span id="vh-cnt"></span>
       <span class="st" style="font-weight:400;text-transform:none">— vhlamedia.com</span></h3>
@@ -814,7 +846,10 @@ body:not(.claro) .art:hover{border-color:var(--nAm);box-shadow:0 0 16px -8px rgb
     <div class="bd"><div class="reels" id="vh-reels"></div></div>
     <div class="st">Se incrusta la búsqueda de YouTube, que no necesita clave. X, TikTok, Instagram y LinkedIn exigen clave de API o bloquean el incrustado, así que van como búsquedas preparadas abajo: un recuadro vacío con su logo no sería integrarse con ellos.</div>
     <div class="enlaces-red" id="vh-redes"></div>
-  </div>
+</div>
+
+
+</div>
 <div class="view" id="v-quant">
   <div class="grid g4 escena" style="margin-bottom:8px">
     <div class="kpi"><div class="k">COBERTURA DE PRECIOS</div><div class="v" id="q1">—</div><div class="s" id="q1s">series descargadas</div></div>
@@ -4525,12 +4560,14 @@ function iaPreguntar(q){
   if(h0){var e0=iaMsg("▸ "+h0,"ia");e0.style.borderLeftColor="var(--cy)";e0.style.background="rgba(34,211,238,.07)"}
   IABUSY=false; return;
  }
- var esp=iaMsg("Consultando tus datos…","ia");
+ var esp=iaMsg(T("Consultando tus datos…","Checking your data…"),"ia");
+ esp.classList.add("pensando");
  api("/api/chat?q="+encodeURIComponent(q)+"&estado="+encodeURIComponent(iaEstado())+
      "&hist="+encodeURIComponent(IAHIST.map(function(x){return x[0]+"|"+x[1]}).join("||")),{cache:"no-store"})
   .then(function(r){return r.json()})
   .then(function(j){
    if(j.error){esp.className="iab err";esp.textContent=j.error;return}
+   esp.classList.remove("pensando");
    esp.textContent=j.respuesta;
    decir(j.respuesta);
    IAHIST.push(["tu",q],["ia",String(j.respuesta).slice(0,300)]);
@@ -5179,16 +5216,35 @@ function vhRedes(){
  $("vh-redes").innerHTML=R.map(function(r){
   return "<a href='"+r[1]+"' target='_blank' rel='noopener'>"+esc(r[0])+" \u2197</a>"}).join("");
 }
+/* Canales reales. El incrustado por BUSQUEDA de YouTube esta retirado desde
+   2020 -devuelve 200 pero el reproductor dice "vídeo no disponible"-, así que
+   se usa la lista de SUBIDAS de cada canal, que sí funciona sin clave: su
+   identificador es el del canal cambiando UC por UU. */
+var VH_CANALES={
+ defensa:[["Breaking Defense","UCXn5Hbmm-rHOJmTRAPCFdSg"],["Defense News","UCbNIrvOKHQFbGO3aTb2vT0g"],
+          ["Task & Purpose","UCKAlHmPzGh6RvGhWkTUAOZQ"],["Sandboxx","UCcyDlRVfNZWDbPfLLGWKUMg"]],
+ pentagono:[["War Dept","UCJqIwzn1Y-2SBHQ5N-U1_LQ"],["Defense News","UCbNIrvOKHQFbGO3aTb2vT0g"],
+            ["Breaking Defense","UCXn5Hbmm-rHOJmTRAPCFdSg"],["CSIS","UCoQ0KrfjRXaZBd8LrJvyBHg"]],
+ prediccion:[["Bloomberg TV","UCIALMKvObZNtJ6AmdCLP7Lg"],["CNBC","UCvJJ_dzjViJCoLf5uKUTwoA"],
+             ["Yahoo Finance","UCEAZeUIeJs0IjQiqTCdVSIg"],["Reuters","UChqUTb7kYRX8-EiaN3XFrSQ"]],
+ macro:[["Bloomberg TV","UCIALMKvObZNtJ6AmdCLP7Lg"],["CNBC","UCvJJ_dzjViJCoLf5uKUTwoA"],
+        ["Yahoo Finance","UCEAZeUIeJs0IjQiqTCdVSIg"],["Financial Times","UCoUxsWakJucWg46KW5RsvPw"]],
+ cripto:[["Coin Bureau","UCqK_GSMbpiV8spgD3ZGloSw"],["Bloomberg TV","UCIALMKvObZNtJ6AmdCLP7Lg"],
+         ["CNBC","UCvJJ_dzjViJCoLf5uKUTwoA"],["Yahoo Finance","UCEAZeUIeJs0IjQiqTCdVSIg"]],
+ vhla:[["Bloomberg TV","UCIALMKvObZNtJ6AmdCLP7Lg"],["CNBC","UCvJJ_dzjViJCoLf5uKUTwoA"],
+       ["Reuters","UChqUTb7kYRX8-EiaN3XFrSQ"],["Financial Times","UCoUxsWakJucWg46KW5RsvPw"]]
+};
 function vhReels(){
  var t=VH_TEMAS.filter(function(x){return x.k===VH_TEMA})[0]||VH_TEMAS[0];
- /* La incrustacion por busqueda de YouTube no necesita clave. Se piden varias
-    con matices distintos para que no salga seis veces el mismo video. */
- var consultas=[t.q, t.q+" today", t.q+" explained", t.q+" analysis"];
- $("vh-reels").innerHTML=consultas.map(function(q,i){
+ var cs=VH_CANALES[VH_TEMA]||VH_CANALES.defensa;
+ $("vh-reels").innerHTML=cs.map(function(c){
+  var lista="UU"+c[1].slice(2);   // lista de subidas del canal
   return "<div class='reel'><div class='marco'>"+
-   "<iframe loading='lazy' allow='encrypted-media' referrerpolicy='no-referrer' "+
-   "src='https://www.youtube.com/embed?listType=search&list="+encodeURIComponent(q)+"'></iframe>"+
-   "</div><div class='pie'>"+esc(q)+"<div class='fuente'>YouTube</div></div></div>"}).join("");
+   "<iframe loading='lazy' allow='accelerometer; encrypted-media; picture-in-picture' "+
+   "allowfullscreen referrerpolicy='strict-origin-when-cross-origin' "+
+   "src='https://www.youtube-nocookie.com/embed/videoseries?list="+lista+"&rel=0'></iframe>"+
+   "</div><div class='pie'>"+esc(c[0])+
+   "<div class='fuente'>"+T("últimos vídeos","latest videos")+"</div></div></div>"}).join("");
  vhRedes();
 }
 function vhTemas(){
