@@ -396,3 +396,41 @@ las otras cuatro se pasan solas y no valen.
 lo cual es falso (lo real son 0,01%–0,04%). EDGE supone precios negociados y las
 barras de divisas de Yahoo son cotizaciones indicativas. **No usar el coste de
 EDGE para divisas**; en acciones sí es válido.
+
+## Divisas: por qué no hay señales de compra, y qué hay en su lugar
+
+Se auditaron **las tres** señales direccionales de divisas. Ninguna sobrevive:
+
+| Señal | Yahoo | BCE oficial |
+|---|---|---|
+| Momentum (+1%) | p=0,953 | p=0,694 |
+| Reversión (−1%) | p=0,011 → **0,135** con desfase | p=0,245 |
+| Reversión fuerte (−3%) | p=0,006 → **0,027** con desfase | **p=0,408** |
+| Cointegración de pares | 60% aciertos, +0,308% | **50% aciertos, −0,018%** |
+
+La cointegración acierta exactamente 50% en datos oficiales: cara o cruz.
+
+**En su lugar hay cinco herramientas que no predicen dirección** (panel
+"DIVISAS · ESTRUCTURA Y RIESGO", `fxQuantRender`). Validadas contra casos de
+respuesta conocida antes de fiarse de ellas:
+
+1. **Componentes principales**. Un factor explica el 31% de todo. Validación en
+   datos reales: los pares XXX/USD cargan positivo y los USD/XXX negativo, que
+   es el factor dólar con el signo invertido por la convención de cotización.
+   Ojo al interpretar: **carga negativa no es independencia**, es que el dólar
+   está en el otro lado de la fracción. El listón es 1/√k (carga uniforme), no
+   un umbral fijo.
+2. **Razón de varianzas de Lo y MacKinlay** con error típico robusto. Validada:
+   paseo aleatorio z=−1,0, tendencia impuesta z=+11,7, reversión impuesta
+   z=−5,5. En datos reales, **15 de 18 pares son paseo aleatorio**.
+3. **Cono de volatilidad**. Validado: mediana 15,8% frente a 15,9% teórico.
+4. **VaR y pérdida esperada**, histórico y Cornish-Fisher. Aquí está el mayor
+   valor práctico: AUD/USD tiene curtosis 16,2 y asimetría −1,31, así que el VaR
+   histórico dice −1,25% y el corregido por colas **−3,92%**. Tres veces más.
+   AUD/JPY igual: −1,69% frente a −4,54%.
+5. **Número efectivo de apuestas** (inverso de Herfindahl sobre los valores
+   propios): **3,9 apuestas independientes entre 18 pares**.
+
+Si alguien vuelve a proponer una señal direccional de divisas, las dos pruebas
+que hay que pasar son el **desfase temporal común** (respeta la correlación entre
+pares) y la **réplica en `/api/bce`**. Las otras comprobaciones se pasan solas.

@@ -2657,6 +2657,34 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
       <div class="bd" style="overflow:auto"><table><thead><tr><th>Cruce</th><th>Cotizado</th><th>Implícito</th><th>Desvío</th><th>Lectura</th></tr></thead><tbody id="fx-tri"></tbody></table></div>
       <div class="st">Con cierres diarios los desvíos de unos pocos puntos básicos son ruido de horario (cada par cierra en un instante distinto), no arbitraje. Es un control de calidad del dato; un desvío grande señala un precio malo.</div>
     </div>
+
+    <div class="p" style="margin-top:8px">
+      <h3>DIVISAS · ESTRUCTURA Y RIESGO
+        <span class="st" style="font-weight:400;text-transform:none">— ninguna de estas herramientas predice dirección, y es a propósito</span></h3>
+      <div class="chips"><button id="fq-run">⟳ Calcular</button><span class="st" id="fq-st">Necesita las divisas cargadas arriba.</span></div>
+      <div class="expl" style="border:1px solid var(--line);border-left:3px solid var(--rd);border-radius:6px;padding:9px 12px;margin:8px 0;font-size:12px;color:var(--dim)">
+        <b style="color:var(--txt)">Por qué no hay señales de compra aquí.</b> Momentum, reversión y cointegración se probaron con 4.000 millones de operaciones simuladas. En datos de Yahoo la reversión parecía funcionar (p=0,006), pero al respetar que las divisas se mueven juntas cayó a p=0,135, y en los tipos oficiales del Banco Central Europeo no replica: p=0,408. La cointegración acierta el 60% en Yahoo y el 50% exacto en el BCE. Nada predice la dirección. Lo que sigue sí tiene información: cuánto riesgo hay, de dónde viene y cuántas apuestas distintas tienes de verdad.
+      </div>
+      <div class="grid g4" style="margin:8px 0">
+        <div class="kpi c2"><div class="k">FACTOR COMÚN</div><div class="v" id="fq1">—</div><div class="s" id="fq1s">—</div></div>
+        <div class="kpi"><div class="k">APUESTAS REALES</div><div class="v" id="fq2">—</div><div class="s" id="fq2s">—</div></div>
+        <div class="kpi c3"><div class="k">SEGUNDO FACTOR</div><div class="v" id="fq3">—</div><div class="s" id="fq3s">—</div></div>
+        <div class="kpi c4"><div class="k">PASEO ALEATORIO</div><div class="v" id="fq4">—</div><div class="s" id="fq4s">—</div></div>
+      </div>
+      <div class="grid g2">
+        <div class="p"><h3>DE QUÉ DEPENDE CADA PAR <span class="st" style="font-weight:400;text-transform:none">— componente principal</span></h3>
+          <div class="bd" style="max-height:280px;overflow:auto"><table><thead><tr><th>Par</th><th>Carga</th><th style="width:34%">Peso</th><th>Lectura</th></tr></thead><tbody id="fq-pca"></tbody></table></div></div>
+        <div class="p"><h3>¿ES UN PASEO ALEATORIO? <span class="st" style="font-weight:400;text-transform:none">— razón de varianzas (Lo y MacKinlay)</span></h3>
+          <div class="bd" style="max-height:280px;overflow:auto"><table><thead><tr><th>Par</th><th>2 días</th><th>5 días</th><th>10 días</th><th>Lectura</th></tr></thead><tbody id="fq-vr"></tbody></table></div></div>
+      </div>
+      <div class="p" style="margin-top:8px"><h3>RIESGO REAL DE CADA PAR</h3>
+        <div class="bd" style="overflow:auto"><table><thead><tr>
+          <th>Par</th><th>Volatilidad hoy</th><th>Su rango histórico</th><th>Percentil</th>
+          <th>Peor día de 100</th><th>Ídem, con colas gruesas</th><th>Si pasa, cuánto</th><th class="mates">Asim. / Curt.</th>
+        </tr></thead><tbody id="fq-riesgo"></tbody></table></div>
+        <div class="st">Volatilidad anualizada de 21 sesiones. <b>Peor día de 100</b> es el valor en riesgo al 99% (histórico), y la columna siguiente lo corrige por asimetría y colas gruesas (Cornish-Fisher), que en divisas se quedan cortas justo cuando importa. <b>Si pasa, cuánto</b> es la pérdida esperada en la cola. Informativo, no es recomendación.</div>
+      </div>
+    </div>
     <div class="st">Régimen = vol. 20 sesiones / vol. 100 sesiones. Hurst (R/S) &gt;0,55 tendencial, &lt;0,45 reversión. Z mom. = media de los z transversales de 1M/3M/6M. Kelly continuo = μ/σ² diario, teórico y sin costes. Informativo, no es recomendación.</div>
   </div>
 </div>
@@ -6254,6 +6282,219 @@ function renderVer(){
 }
 (function(){ $("ver-calc").onclick=function(){loadPx();loadBrain(true);fxLoad();renderVer()}; })();
 
+
+/* ---------- Algebra minima: correlacion y componentes principales ---------- */
+function fxMatrizCorr(series){
+ var k=series.length, L=Math.min.apply(null,series.map(function(x){return x.length}));
+ var R=series.map(function(c){var r=[];for(var i=c.length-L+1;i<c.length;i++)r.push(Math.log(c[i]/c[i-1]));return r});
+ var mu=R.map(mean), sg=R.map(sd);
+ var C=[];
+ for(var i=0;i<k;i++){C.push([]);
+  for(var j=0;j<k;j++){
+   var t=0,nn=Math.min(R[i].length,R[j].length);
+   for(var q=0;q<nn;q++)t+=(R[i][q]-mu[i])*(R[j][q]-mu[j]);
+   C[i].push((sg[i]>0&&sg[j]>0)?t/((nn-1)*sg[i]*sg[j]):0);
+  }}
+ return {C:C,R:R};
+}
+/* Componente principal por iteracion de potencia: no hace falta invertir nada.
+   Se deflacta para sacar el segundo. */
+function fxPCA(C,cuantos){
+ var k=C.length, comps=[], M=C.map(function(f){return f.slice()});
+ for(var c=0;c<(cuantos||2);c++){
+  var v=[]; for(var i=0;i<k;i++)v.push(1/Math.sqrt(k));
+  var lam=0;
+  for(var it=0;it<300;it++){
+   var w=[];
+   for(var i=0;i<k;i++){var t=0;for(var j=0;j<k;j++)t+=M[i][j]*v[j];w.push(t)}
+   var nrm=Math.sqrt(w.reduce(function(a,b){return a+b*b},0));
+   if(!(nrm>0))break;
+   for(var i=0;i<k;i++)w[i]/=nrm;
+   var dif=0;for(var i=0;i<k;i++)dif+=Math.abs(w[i]-v[i]);
+   v=w; lam=nrm;
+   if(dif<1e-10)break;
+  }
+  comps.push({lam:lam,v:v.slice()});
+  // Deflacion: se resta lo que explica este componente.
+  for(var i=0;i<k;i++)for(var j=0;j<k;j++)M[i][j]-=lam*v[i]*v[j];
+ }
+ return comps;
+}
+
+/* ---------- Razon de varianzas de Lo y MacKinlay ----------
+   VR(q) = Var(retorno a q dias) / (q * Var(retorno a 1 dia)). Bajo paseo
+   aleatorio vale 1. El estadistico z usa la varianza robusta a
+   heterocedasticidad, que es la version que hay que usar en mercados. */
+function fxVarianceRatio(c,q){
+ var r=[]; for(var i=1;i<c.length;i++)r.push(Math.log(c[i]/c[i-1]));
+ var T=r.length; if(T<q*4)return null;
+ var mu=mean(r);
+ var v1=0; for(var i=0;i<T;i++)v1+=(r[i]-mu)*(r[i]-mu); v1/=(T-1);
+ if(!(v1>0))return null;
+ // Varianza de los retornos solapados a q dias, con la correccion de sesgo.
+ var vq=0,m=0;
+ for(var i=q-1;i<T;i++){
+  var sum=0; for(var j=0;j<q;j++)sum+=r[i-j];
+  var d=sum-q*mu; vq+=d*d; m++;
+ }
+ vq/=(m*q)*(1-q/T);
+ var VR=vq/v1;
+ // Error tipico robusto: suma ponderada de las autocovarianzas al cuadrado.
+ var theta=0;
+ for(var j=1;j<q;j++){
+  var num=0,den=0;
+  for(var i=j;i<T;i++)num+=Math.pow(r[i]-mu,2)*Math.pow(r[i-j]-mu,2);
+  for(var i=0;i<T;i++)den+=Math.pow(r[i]-mu,2);
+  den=den*den/T;
+  var dj=den>0?num/den:0;
+  theta+=Math.pow(2*(q-j)/q,2)*dj;
+ }
+ var z=theta>0?(VR-1)/Math.sqrt(theta/T):0;
+ return {VR:VR,z:z,q:q};
+}
+
+/* ---------- Valor en riesgo y pérdida esperada ----------
+   Historico: el percentil de las perdidas observadas. Cornish-Fisher: ajusta el
+   cuantil normal por asimetria y curtosis, que en divisas son grandes y hacen
+   que el VaR normal se quede corto justo cuando importa. */
+function fxRiesgo(c,conf){
+ var r=[]; for(var i=1;i<c.length;i++)r.push(Math.log(c[i]/c[i-1]));
+ if(r.length<40)return null;
+ var mu=mean(r), sg=sd(r);
+ var ord=r.slice().sort(function(a,b){return a-b});
+ var k=Math.max(0,Math.floor((1-conf)*ord.length));
+ var varHist=ord[k];
+ var cola=ord.slice(0,Math.max(1,k+1));
+ var es=mean(cola);
+ // Asimetria y curtosis muestrales.
+ var m3=0,m4=0;
+ for(var i=0;i<r.length;i++){var d=(r[i]-mu)/sg;m3+=d*d*d;m4+=d*d*d*d}
+ m3/=r.length; m4=m4/r.length-3;
+ var z=nPpfCliente(1-conf);
+ var zcf=z+(z*z-1)*m3/6+(z*z*z-3*z)*m4/24-(2*z*z*z-5*z)*m3*m3/36;
+ return {varHist:varHist,es:es,varCF:mu+zcf*sg,asim:m3,curt:m4,sigma:sg};
+}
+/* Inversa de la normal, aproximacion de Acklam. */
+function nPpfCliente(p){
+ if(p<=0)return -8; if(p>=1)return 8;
+ var a=[-39.69683028665376,220.9460984245205,-275.9285104469687,138.3577518672690,-30.66479806614716,2.506628277459239];
+ var b=[-54.47609879822406,161.5858368580409,-155.6989798598866,66.80131188771972,-13.28068155288572];
+ var c=[-0.007784894002430293,-0.3223964580411365,-2.400758277161838,-2.549732539343734,4.374664141464968,2.938163982698783];
+ var d=[0.007784695709041462,0.3224671290700398,2.445134137142996,3.754408661907416];
+ var pl=0.02425,q,r2;
+ if(p<pl){q=Math.sqrt(-2*Math.log(p));
+  return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
+ if(p>1-pl){q=Math.sqrt(-2*Math.log(1-p));
+  return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
+ q=p-0.5;r2=q*q;
+ return (((((a[0]*r2+a[1])*r2+a[2])*r2+a[3])*r2+a[4])*r2+a[5])*q/(((((b[0]*r2+b[1])*r2+b[2])*r2+b[3])*r2+b[4])*r2+1);
+}
+
+/* ---------- Cono de volatilidad ---------- */
+function fxCono(c,plazos){
+ var r=[]; for(var i=1;i<c.length;i++)r.push(Math.log(c[i]/c[i-1]));
+ return (plazos||[5,10,21,63]).map(function(w){
+  if(r.length<w*3)return null;
+  var vs=[];
+  for(var i=w;i<=r.length;i++)vs.push(sd(r.slice(i-w,i))*Math.sqrt(252));
+  var ord=vs.slice().sort(function(a,b){return a-b});
+  var hoy=vs[vs.length-1];
+  var pct=0; for(var i=0;i<ord.length;i++)if(ord[i]<=hoy)pct++;
+  var q=function(f){return ord[Math.min(ord.length-1,Math.floor(f*ord.length))]};
+  return {w:w,hoy:hoy,pct:pct/ord.length,min:ord[0],p25:q(0.25),med:q(0.5),p75:q(0.75),max:ord[ord.length-1]};
+ }).filter(Boolean);
+}
+
+/* ---------- Render ---------- */
+function fxQuantRender(){
+ if(!FXQ.length){$("fq-st").textContent=T("Carga antes las divisas.","Load currencies first.");return}
+ var noms=FXQ.map(function(x){return x.n}), series=FXQ.map(function(x){return x.c});
+
+ // --- 1. factor dólar ---
+ var M=fxMatrizCorr(series), comps=fxPCA(M.C,2);
+ var totalVar=M.C.length;              // traza de la correlación = nº de series
+ var pc1=comps[0], pc2=comps[1];
+ var exp1=pc1.lam/totalVar, exp2=pc2?pc2.lam/totalVar:0;
+ // El signo del componente es arbitrario: se fija para que el dólar quede positivo.
+ var iUSD=-1; for(var i=0;i<noms.length;i++)if(/dólar|dolar|USD\\/|\\/USD/i.test(noms[i])){iUSD=i;break}
+ var signo=(iUSD>=0&&pc1.v[iUSD]<0)?-1:1;
+ var cargas=noms.map(function(nm,i){return {n:nm,c:signo*pc1.v[i]}})
+   .sort(function(a,b){return Math.abs(b.c)-Math.abs(a.c)});
+ $("fq1").textContent=(exp1*100).toFixed(0)+"%";
+ $("fq1s").textContent=T("del movimiento de todas las divisas lo explica un solo factor",
+                         "of all currency moves explained by one factor");
+ /* Si todas las series pesaran igual, cada carga valdria 1/raiz(k). Ese es el
+    liston natural, y no un 0,35 inventado que ademas cambiaria de sentido al
+    anadir o quitar pares. */
+ var uniforme=1/Math.sqrt(noms.length);
+ $("fq-pca").innerHTML=cargas.map(function(x){
+  var a=Math.abs(x.c), w=Math.min(100,a/uniforme*50);
+  /* La carga al cuadrado es la parte de la varianza del factor que se lleva
+     este par. El SIGNO no dice independencia: dice si el par cotiza al derecho
+     o al reves. USD/CHF baja cuando EUR/USD sube porque el dolar esta en el
+     otro lado de la fraccion, no porque sea otro mercado. */
+  var lect = a>uniforme*1.25 ? T("muy pegado al factor","strongly on the factor")
+           : a>uniforme*0.75 ? T("normal","average")
+           : T("va bastante por su cuenta","fairly independent");
+  var dir = x.c>=0 ? T("en el mismo sentido","same direction")
+                   : T("al revés: el dólar está en el otro lado del par","inverted: the dollar is on the other side");
+  return "<tr data-fx='"+esc(x.n)+"' style='cursor:pointer'><td>"+esc(x.n)+"</td>"+
+   "<td class='"+(x.c>=0?"up":"dn")+"'>"+(x.c>=0?"+":"")+x.c.toFixed(3)+
+    "<div class='dsc'>"+(x.c*x.c*100).toFixed(0)+"% "+T("de su riesgo","of its risk")+"</div></td>"+
+   "<td><div class='tr' style='height:6px'><i style='width:"+w.toFixed(0)+"%;background:"+(x.c>=0?"var(--gr)":"var(--rd)")+"'></i></div></td>"+
+   "<td class='dim'>"+lect+" · "+dir+"</td></tr>"}).join("");
+
+ // --- 2. razón de varianzas ---
+ $("fq-vr").innerHTML=FXQ.map(function(x){
+  var v2=fxVarianceRatio(x.c,2), v5=fxVarianceRatio(x.c,5), v10=fxVarianceRatio(x.c,10);
+  if(!v10)return "";
+  var cel=function(v){ if(!v)return "<td>—</td>";
+   var sig=Math.abs(v.z)>1.96;
+   return "<td class='"+(sig?(v.VR>1?"up":"dn"):"")+"'>"+v.VR.toFixed(2)+
+    "<div class='dsc'>z "+v.z.toFixed(2)+"</div></td>"};
+  var lect;
+  if(Math.abs(v10.z)<1.96)lect=[T("paseo aleatorio","random walk"),""];
+  else if(v10.VR>1)lect=[T("tiende a seguir","trending"),"t3"];
+  else lect=[T("tiende a volver","mean-reverting"),"t5"];
+  return "<tr data-fx='"+esc(x.n)+"' style='cursor:pointer'><td><b>"+esc(x.n)+"</b></td>"+
+   cel(v2)+cel(v5)+cel(v10)+"<td><span class='"+lect[1]+"'>"+lect[0]+"</span></td></tr>"}).join("");
+
+ // --- 3. cono de volatilidad + 4. riesgo ---
+ $("fq-riesgo").innerHTML=FXQ.map(function(x){
+  var co=fxCono(x.c,[21]), rg=fxRiesgo(x.c,0.99);
+  if(!co.length||!rg)return "";
+  var c1=co[0];
+  var pos=c1.pct<0.2?[T("muy barata","very cheap"),"up"]:(c1.pct>0.8?[T("muy cara","very rich"),"dn"]:[T("normal","normal"),""]);
+  return "<tr data-fx='"+esc(x.n)+"' style='cursor:pointer'><td><b>"+esc(x.n)+"</b></td>"+
+   "<td>"+(c1.hoy*100).toFixed(1)+"%</td>"+
+   "<td class='dim'>"+(c1.min*100).toFixed(1)+"–"+(c1.max*100).toFixed(1)+"%</td>"+
+   "<td><span class='"+pos[1]+"'>"+(c1.pct*100).toFixed(0)+"%</span> <span class='dsc'>"+pos[0]+"</span></td>"+
+   "<td class='dn'>"+(rg.varHist*100).toFixed(2)+"%</td>"+
+   "<td class='dn'>"+(rg.varCF*100).toFixed(2)+"%</td>"+
+   "<td class='dn'>"+(rg.es*100).toFixed(2)+"%</td>"+
+   "<td class='mates'>"+rg.asim.toFixed(2)+" / "+rg.curt.toFixed(1)+"</td></tr>"}).join("");
+
+ // --- 5. concentración ---
+ var val=fxPCA(M.C,Math.min(6,M.C.length)).map(function(c){return c.lam});
+ var suma=val.reduce(function(a,b){return a+b},0);
+ var props=val.map(function(v){return v/suma});
+ // Número efectivo de apuestas independientes: inverso de Herfindahl.
+ var hh=props.reduce(function(a,p){return a+p*p},0);
+ var efectivas=hh>0?1/hh:0;
+ $("fq2").textContent=efectivas.toFixed(1);
+ $("fq2s").textContent=T("apuestas independientes de verdad entre "+FXQ.length+" pares",
+                         "truly independent bets among "+FXQ.length+" pairs");
+ $("fq3").textContent=(exp2*100).toFixed(0)+"%";
+ $("fq3s").textContent=T("lo explica el segundo factor (normalmente el riesgo/refugio)",
+                         "explained by the second factor (usually risk-on/risk-off)");
+ var aleat=FXQ.filter(function(x){var v=fxVarianceRatio(x.c,10);return v&&Math.abs(v.z)<1.96}).length;
+ $("fq4").textContent=aleat+"/"+FXQ.length;
+ $("fq4s").textContent=T("pares que son paseo aleatorio: ahí no hay patrón que buscar",
+                         "pairs that are a random walk: no pattern to find there");
+ $("fq-st").textContent=T("Calculado sobre "+series[0].length+" sesiones. Nada de esto predice dirección, y es a propósito.",
+                          "Computed over "+series[0].length+" sessions. None of this predicts direction, by design.");
+}
+
 /* ===================== DIVISAS · QUANT ===================== */
 var FXQ=[],FXQLOAD=false,FXSEL=null;
 var FXQP=[["EURUSD=X","EUR/USD"],["GBPUSD=X","GBP/USD"],["USDJPY=X","USD/JPY"],["AUDUSD=X","AUD/USD"],
@@ -6335,7 +6576,7 @@ function fxLoad(){
   $("fx-st").textContent=out.length+T(" pares · ",": pairs · ")+T("calculado en tu navegador","computed in your browser");
  })
  .catch(function(e){$("fx-st").textContent="Error: "+(e.message||e)})
- .then(function(){FXQLOAD=false;fxRender();if(VIEW==="ver")renderVer()});
+ .then(function(){FXQLOAD=false;fxRender();try{if(FXQ.length)fxQuantRender()}catch(e){};if(VIEW==="ver")renderVer()});
 }
 
 function fxRender(){
@@ -6395,6 +6636,7 @@ function fxChart(x){
 }
 (function(){
  $("fxload").onclick=fxLoad;
+ $("fq-run").onclick=fxQuantRender;
  $("fx-rows").onclick=function(ev){
   var tr=ev.target.closest?ev.target.closest("tr[data-fx]"):null; if(!tr)return;
   for(var i=0;i<FXQ.length;i++)if(FXQ[i].n===tr.dataset.fx){fxChart(FXQ[i]);break}
