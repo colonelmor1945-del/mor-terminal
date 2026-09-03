@@ -706,3 +706,31 @@ de pestañas y trece pantallas, eso desorienta. Ahora hay una línea con grupo y
 vista, cada parte pulsable, más el nivel de la ficha abierta. El botón de volver
 **solo aparece cuando hay a dónde volver**: un botón que no hace nada es peor que
 ninguno.
+
+## Volumen, fondo e interactividad (3 de septiembre de 2026)
+
+**3D con CSS y SVG, sin librerías.** WebGL costaría cientos de kilobytes y
+dejaría fuera equipos modestos para algo que se mira, no se juega. Regla: el
+relieve solo entra donde **añade información**.
+
+- Las cifras se levantan al pasar el ratón, lo que dice que son pulsables.
+- El reparto del gasto pasa a ser un anillo con grosor real (`donut3d`): 24 capas
+  de elipse simulan volumen. Un círculo plano solo muestra la proporción.
+- El mapa de calor se convierte en relieve: la altura acompaña al color.
+
+**Fondo con profundidad.** El relieve topográfico se desplaza unos píxeles con el
+ratón. Se mueve el **lienzo ya dibujado** con una transformación, nunca
+repintándolo: redibujar miles de curvas a cada movimiento quemaría la batería de
+un portátil para nada. Se desactiva por debajo de 900 px y con
+`prefers-reduced-motion`.
+
+**Cruceta en los gráficos de área.** `areaChart` usaba `<title>`, que solo sale
+tras un segundo largo y en una caja del sistema. Ahora hay lectura del punto al
+pasar, igual que en el gráfico de precio.
+
+**Trampa que costó encontrar:** al añadir la capa de degradado del fondo
+(`body::after`, posicionada con `z-index:0`), el rastro de navegación quedó
+**invisible**: era `position:static` sin `z-index`, y en ese caso los elementos
+posicionados con z-index 0 pintan por encima. La lista de elementos que suben al
+plano 1 (`.hdr,.nav,.nav2,.navwrap,.tape,#rastro,main,.ftr,#dt,#fe`) hay que
+mantenerla al día si se añade cualquier capa de fondo nueva.

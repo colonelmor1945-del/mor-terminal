@@ -22,7 +22,7 @@
 /* Fondo topografico generado por codigo: sin archivos externos, se redibuja al
    cambiar de tamano y queda detras de todo.                                     */
 #topo{position:fixed;inset:0;z-index:0;pointer-events:none}
-.hdr,.nav,main,.ftr,#dt,#fe{position:relative;z-index:1}
+.hdr,.nav,.nav2,.navwrap,.tape,#rastro,main,.ftr,#dt,#fe{position:relative;z-index:1}
 html,body{height:100%}
 body{background:var(--bg);color:var(--txt);font:13px/1.5 var(--ui);overflow:hidden;
  -webkit-font-smoothing:antialiased}
@@ -529,14 +529,14 @@ body:not(.claro) .brand{text-shadow:0 0 16px rgba(255,184,77,.4)}
  body:not(.claro) main::before{display:none}}
 
 /* --- rastro de navegación --- */
-#rastro{display:flex;align-items:center;gap:7px;padding:7px 15px;font-size:11px;
+#rastro{display:flex;align-items:center;gap:8px;padding:8px 15px;font-size:12px;
  color:var(--dim2);border-bottom:1px solid var(--line2);background:var(--fondo0);
  flex:0 0 auto;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
 #rastro::-webkit-scrollbar{display:none}
-#rastro a{color:var(--dim);cursor:pointer;text-decoration:none}
+#rastro a{color:var(--cy);cursor:pointer;text-decoration:none;font-weight:500}
 #rastro a:hover{color:var(--am)}
 #rastro .aqui{color:var(--txt);font-weight:600}
-#rastro .sep{opacity:.45}
+#rastro .sep{opacity:.6;color:var(--dim2)}
 #rastro .atras{border:1px solid var(--line);border-radius:5px;padding:3px 9px;
  color:var(--dim);cursor:pointer;background:none;font:inherit;margin-right:4px}
 #rastro .atras:hover{border-color:var(--am);color:var(--txt)}
@@ -545,6 +545,59 @@ body:not(.claro) .brand{text-shadow:0 0 16px rgba(255,184,77,.4)}
  border-radius:3px;padding:1px 5px;font-size:9px;margin:0 2px}
 body:not(.claro) #rastro .aqui{text-shadow:0 0 10px rgba(255,184,77,.25)}
 @media(max-width:900px){#rastro .pista{display:none}#rastro{padding:6px 10px}}
+
+/* ===================== VOLUMEN =====================
+   Con transformaciones de CSS, sin librerías: WebGL costaría cientos de
+   kilobytes y dejaría fuera equipos modestos para algo que se mira, no se
+   juega. El relieve solo entra donde AÑADE información. */
+.escena{perspective:1100px;perspective-origin:50% 30%}
+
+/* --- las cifras se levantan: dice que son pulsables --- */
+.kpi{transform-style:preserve-3d;transition:transform .22s cubic-bezier(.2,.7,.3,1),box-shadow .22s}
+.kpi:hover{transform:translateZ(16px) rotateX(2.2deg)}
+body:not(.claro) .kpi:hover{box-shadow:0 18px 40px -22px rgba(0,0,0,.95),
+ 0 0 26px -14px rgba(79,216,255,.55)}
+body.claro .kpi:hover{box-shadow:0 14px 30px -18px rgba(22,32,43,.32)}
+.kpi .v{transform:translateZ(12px)}
+.kpi .k,.kpi .s{transform:translateZ(5px)}
+
+/* --- paneles: se elevan un poco al trabajar en ellos --- */
+.p{transition:transform .2s,box-shadow .2s}
+.p:hover{transform:translateY(-1px)}
+
+/* --- el mapa de calor pasa a ser un relieve --- */
+.heat{perspective:900px;perspective-origin:50% 20%}
+.hc{transition:transform .18s,box-shadow .18s;transform-style:preserve-3d;position:relative}
+.hc:hover{transform:translateZ(22px) scale(1.03);z-index:5}
+body:not(.claro) .hc:hover{box-shadow:0 14px 28px -16px rgba(0,0,0,.9),0 0 18px -8px currentColor}
+/* La barra lateral da el grosor: la altura es la probabilidad. */
+.hc::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;
+ background:currentColor;opacity:.5}
+
+/* --- barras del reparto: relieve, no rectángulos planos --- */
+.hb .tr{position:relative;overflow:visible}
+.hb .tr i{position:relative}
+body:not(.claro) .hb .tr i::after{content:"";position:absolute;left:0;right:0;top:0;height:40%;
+ background:linear-gradient(180deg,rgba(255,255,255,.22),transparent);border-radius:inherit}
+
+/* --- el botón del asistente flota --- */
+#iabtn{transition:transform .2s,box-shadow .2s}
+#iabtn:hover{transform:translateY(-3px) scale(1.02)}
+
+@media(prefers-reduced-motion:reduce){
+ .kpi:hover,.hc:hover,.p:hover,#iabtn:hover{transform:none}}
+@media(max-width:900px){.kpi:hover,.hc:hover{transform:none}}
+
+/* --- profundidad del fondo ---
+   El relieve se desplaza un poco con el ratón, como si estuviera detrás del
+   cristal. Se mueve el lienzo YA dibujado con una transformación, nunca
+   repintándolo: redibujar miles de curvas a cada movimiento quemaría la
+   batería de un portátil para nada. */
+#topo{transition:transform .5s cubic-bezier(.2,.7,.3,1);will-change:transform}
+body:not(.claro)::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+ background:radial-gradient(ellipse 120% 80% at 50% -10%,rgba(79,216,255,.055),transparent 60%),
+  radial-gradient(ellipse 90% 60% at 100% 100%,rgba(176,140,255,.045),transparent 55%)}
+@media(prefers-reduced-motion:reduce){#topo{transition:none}}
 </style>
 </head>
 <body>
@@ -617,7 +670,7 @@ body:not(.claro) #rastro .aqui{text-shadow:0 0 10px rgba(255,184,77,.25)}
 <main>
 
 <div class="view on" id="v-dash">
-  <div class="grid g4" style="margin-bottom:8px">
+  <div class="grid g4 escena" style="margin-bottom:8px">
     <div class="kpi"><div class="k">DoD 30D · VALOR</div><div class="v" id="k1">—</div><div class="s" id="k1s">cargando…</div><div class="spark" id="k1sp"></div></div>
     <div class="kpi c2"><div class="k">FUERA DE GIGANTES</div><div class="v" id="k2">—</div><div class="s" id="k2s">—</div><div class="spark" id="k2sp"></div></div>
     <div class="kpi c3"><div class="k">POLYMARKET VOL 24H</div><div class="v" id="k3">—</div><div class="s" id="k3s">—</div><div class="spark" id="k3sp"></div></div>
@@ -720,7 +773,7 @@ body:not(.claro) #rastro .aqui{text-shadow:0 0 10px rgba(255,184,77,.25)}
 </div>
 
 <div class="view" id="v-quant">
-  <div class="grid g4" style="margin-bottom:8px">
+  <div class="grid g4 escena" style="margin-bottom:8px">
     <div class="kpi"><div class="k">COBERTURA DE PRECIOS</div><div class="v" id="q1">—</div><div class="s" id="q1s">series descargadas</div></div>
     <div class="kpi c2"><div class="k">MEJOR MOMENTUM 6M</div><div class="v" id="q2">—</div><div class="s" id="q2s">—</div></div>
     <div class="kpi c3"><div class="k">MEDIA VOL. ANUAL</div><div class="v" id="q3">—</div><div class="s" id="q3s">riesgo del universo</div></div>
@@ -745,7 +798,7 @@ body:not(.claro) #rastro .aqui{text-shadow:0 0 10px rgba(255,184,77,.25)}
   <div class="p" style="margin-top:8px">
     <h3>DIVISAS · QUANT <span id="fx-cnt"></span> <span class="st" style="font-weight:400;text-transform:none">— clic en un par para su gráfico</span></h3>
     <div class="chips"><button id="fxload">⟳ Cargar divisas</button><span class="st" id="fx-st">18 pares: mayores, cruces y emergentes. Pasan por tu Worker (Yahoo Finance).</span></div>
-    <div class="grid g4" style="margin:8px 0">
+    <div class="grid g4 escena" style="margin:8px 0">
       <div class="kpi"><div class="k">PARES CARGADOS</div><div class="v" id="fx1">…</div><div class="s" id="fx1s">cargando al entrar en esta pantalla</div></div>
       <div class="kpi c2"><div class="k">MEJOR MOMENTUM</div><div class="v" id="fx2">—</div><div class="s" id="fx2s">—</div></div>
       <div class="kpi c3"><div class="k">EN TENSIÓN</div><div class="v" id="fx3">—</div><div class="s" id="fx3s">volatilidad reciente por encima de la normal</div></div>
@@ -778,7 +831,7 @@ body:not(.claro) #rastro .aqui{text-shadow:0 0 10px rgba(255,184,77,.25)}
         Se usan retornos <b>semanales</b> a propósito: Tel Aviv, Seúl, São Paulo y Nueva York no cierran a la vez, y con datos diarios las correlaciones entre husos salen falseadas.
       </div>
       <div class="chips"><button id="es-run">⟳ Calcular</button><span class="st" id="es-st">Necesita los precios cargados arriba.</span></div>
-      <div class="grid g4" style="margin:8px 0">
+      <div class="grid g4 escena" style="margin:8px 0">
         <div class="kpi c3"><div class="k">FACTORES REALES</div><div class="v" id="es1">—</div><div class="s" id="es1s">—</div></div>
         <div class="kpi"><div class="k">EL MAYOR EXPLICA</div><div class="v" id="es2">—</div><div class="s" id="es2s">—</div></div>
         <div class="kpi c2"><div class="k">APUESTAS REALES</div><div class="v" id="es3">—</div><div class="s" id="es3s">—</div></div>
@@ -799,7 +852,7 @@ body:not(.claro) #rastro .aqui{text-shadow:0 0 10px rgba(255,184,77,.25)}
       <div class="expl" style="border:1px solid var(--line);border-left:3px solid var(--rd);border-radius:6px;padding:9px 12px;margin:8px 0;font-size:12px;color:var(--dim)">
         <b style="color:var(--txt)">Por qué no hay señales de compra aquí.</b> Momentum, reversión y cointegración se probaron con 4.000 millones de operaciones simuladas. En datos de Yahoo la reversión parecía funcionar (p=0,006), pero al respetar que las divisas se mueven juntas cayó a p=0,135, y en los tipos oficiales del Banco Central Europeo no replica: p=0,408. La cointegración acierta el 60% en Yahoo y el 50% exacto en el BCE. Nada predice la dirección. Lo que sigue sí tiene información: cuánto riesgo hay, de dónde viene y cuántas apuestas distintas tienes de verdad.
       </div>
-      <div class="grid g4" style="margin:8px 0">
+      <div class="grid g4 escena" style="margin:8px 0">
         <div class="kpi c2"><div class="k">FACTOR COMÚN</div><div class="v" id="fq1">—</div><div class="s" id="fq1s">—</div></div>
         <div class="kpi"><div class="k">APUESTAS REALES</div><div class="v" id="fq2">—</div><div class="s" id="fq2s">—</div></div>
         <div class="kpi c3"><div class="k">SEGUNDO FACTOR</div><div class="v" id="fq3">—</div><div class="s" id="fq3s">—</div></div>
@@ -828,7 +881,7 @@ body:not(.claro) #rastro .aqui{text-shadow:0 0 10px rgba(255,184,77,.25)}
   <div class="ayuda-fija" style="border:1px solid var(--line);border-left:3px solid var(--am);border-radius:6px;padding:9px 12px;margin-bottom:8px;font-size:12px;color:var(--dim)">
    <b style="color:var(--txt)">Lectura del terminal con los datos de ahora mismo.</b> Posición alcista = comprar; bajista = vender o no entrar. El <b>stop</b> es donde el terminal admite que se equivocó (dos veces el movimiento típico de 14 sesiones) y el <b>objetivo</b> el doble de esa distancia, para que la operación sea 2:1. <b>Cuánto</b> es medio Kelly, entre el 1% y el 10% del capital. <b>Neto tras coste</b> descuenta el spread efectivo real estimado del propio precio (método EDGE de Ardia, Guidotti y Kroencke): si sale en rojo, la idea no paga ni el peaje de entrar y salir. <b>Hasta cuándo</b> es el plazo que hace falta, con la volatilidad de esta serie, para recorrer la distancia al objetivo; sal igualmente si se cumple la condición que invalida la idea. No es consejo: <b>tú decides</b>.
   </div>
-  <div class="grid g4" style="margin-bottom:8px">
+  <div class="grid g4 escena" style="margin-bottom:8px">
     <div class="kpi c2"><div class="k">ALCISTAS</div><div class="v" id="ve1">—</div><div class="s" id="ve1s">empresas y divisas para comprar</div></div>
     <div class="kpi c4"><div class="k">BAJISTAS</div><div class="v" id="ve2">—</div><div class="s" id="ve2s">para vender o no entrar</div></div>
     <div class="kpi c3"><div class="k">APUESTAS CON VENTAJA</div><div class="v" id="ve3">—</div><div class="s" id="ve3s">precio lejos de lo justo</div></div>
@@ -850,7 +903,7 @@ body:not(.claro) #rastro .aqui{text-shadow:0 0 10px rgba(255,184,77,.25)}
 </div>
 
 <div class="view" id="v-brain">
-  <div class="grid g4" style="margin-bottom:8px">
+  <div class="grid g4 escena" style="margin-bottom:8px">
     <div class="kpi"><div class="k">MERCADOS ANALIZADOS</div><div class="v" id="b1">—</div><div class="s" id="b1s">de eventos activos</div></div>
     <div class="kpi c2"><div class="k">GRUPOS CON VENTAJA</div><div class="v" id="b2">—</div><div class="s" id="b2s">neta tras costes</div></div>
     <div class="kpi c3"><div class="k">MEJOR VENTAJA NETA</div><div class="v" id="b3">—</div><div class="s" id="b3s">—</div></div>
@@ -904,7 +957,7 @@ body:not(.claro) #rastro .aqui{text-shadow:0 0 10px rgba(255,184,77,.25)}
 </div>
 
 <div class="view" id="v-sim">
-  <div class="grid g4" style="margin-bottom:8px">
+  <div class="grid g4 escena" style="margin-bottom:8px">
     <div class="kpi"><div class="k">MERCADOS RESUELTOS</div><div class="v" id="s1" style="font-size:15px">sin ejecutar</div><div class="s" id="s1s">pulsa ▶ abajo · tarda 1–3 min</div></div>
     <div class="kpi c2"><div class="k">BRIER SCORE</div><div class="v" id="s2" style="font-size:15px">sin ejecutar</div><div class="s" id="s2s">0 = perfecto · 0,25 = moneda</div></div>
     <div class="kpi c3"><div class="k">λ EMPÍRICA</div><div class="v" id="s3" style="font-size:15px">sin ejecutar</div><div class="s" id="s3s">sesgo medido, no teórico</div></div>
@@ -1023,7 +1076,7 @@ body:not(.claro) #rastro .aqui{text-shadow:0 0 10px rgba(255,184,77,.25)}
       <span class="st" style="font-weight:400;text-transform:none">— de su propio historial, no de la teoría</span></h3>
     <div class="chips"><button id="ap-load">⟳ Ver aprendizaje</button>
       <span class="st" id="ap-st">Cada día se anotan las señales y se liquidan las que resuelven. De ahí sale todo esto.</span></div>
-    <div class="grid g4" style="margin:8px 0">
+    <div class="grid g4 escena" style="margin:8px 0">
       <div class="kpi"><div class="k">CASOS LIQUIDADOS</div><div class="v" id="ap1">—</div><div class="s" id="ap1s">señales con resultado conocido</div></div>
       <div class="kpi c2"><div class="k">λ QUE USA HOY</div><div class="v" id="ap2">—</div><div class="s" id="ap2s">mezcla de literatura y experiencia propia</div></div>
       <div class="kpi c3"><div class="k">¿ESTÁ CALIBRADO?</div><div class="v" id="ap3">—</div><div class="s" id="ap3s">fiabilidad: 0 es perfecto</div></div>
@@ -1048,7 +1101,7 @@ body:not(.claro) #rastro .aqui{text-shadow:0 0 10px rgba(255,184,77,.25)}
   </div>
 </div>
 <div class="view" id="v-cart">
-  <div class="grid g4" style="margin-bottom:8px">
+  <div class="grid g4 escena" style="margin-bottom:8px">
     <div class="kpi"><div class="k">CAPITAL COMPROMETIDO</div><div class="v" id="c1">—</div><div class="s" id="c1s">de tu capital</div></div>
     <div class="kpi c2"><div class="k">VALOR ESPERADO</div><div class="v" id="c2">—</div><div class="s" id="c2s">según TUS probabilidades</div></div>
     <div class="kpi c3"><div class="k">PEOR CASO</div><div class="v" id="c3">—</div><div class="s" id="c3s">si fallan todas</div></div>
@@ -1214,7 +1267,7 @@ body:not(.claro) #rastro .aqui{text-shadow:0 0 10px rgba(255,184,77,.25)}
     <div class="chips"><button id="co-run">▶ Buscar incoherencias</button>
       <label class="st"><input type="checkbox" id="co-ia"> incluir relaciones del modelo (pueden fallar)</label>
       <span class="st" id="co-st">Tarda unos segundos: enumera todos los mundos posibles de cada grupo de mercados ligados.</span></div>
-    <div class="grid g4" style="margin:8px 0">
+    <div class="grid g4 escena" style="margin:8px 0">
       <div class="kpi c3"><div class="k">RELACIONES</div><div class="v" id="co1">—</div><div class="s" id="co1s">restricciones lógicas encontradas</div></div>
       <div class="kpi"><div class="k">MUNDOS EXAMINADOS</div><div class="v" id="co2">—</div><div class="s" id="co2s">combinaciones lógicamente posibles</div></div>
       <div class="kpi c2"><div class="k">INCOHERENCIAS</div><div class="v" id="co3">—</div><div class="s" id="co3s">precios que se contradicen</div></div>
@@ -1227,7 +1280,7 @@ body:not(.claro) #rastro .aqui{text-shadow:0 0 10px rgba(255,184,77,.25)}
   </div>
 </div>
 <div class="view" id="v-lib">
-  <div class="grid g4" style="margin-bottom:8px">
+  <div class="grid g4 escena" style="margin-bottom:8px">
     <div class="kpi"><div class="k">IMPLEMENTADO</div><div class="v" id="l1">—</div><div class="s">métodos en producción</div></div>
     <div class="kpi c2"><div class="k">EN COLA</div><div class="v" id="l2">—</div><div class="s">por orden de prioridad</div></div>
     <div class="kpi c3"><div class="k">DESCARTADO</div><div class="v" id="l3">—</div><div class="s">no aplica a binarios</div></div>
@@ -1517,7 +1570,10 @@ function areaChart(el,pts,col,fmtY){
  "<polyline points='"+ml+","+(mt+ih)+" "+line+" "+(ml+(pts.length-1)*step).toFixed(1)+","+(mt+ih)+"' fill='"+col+"' opacity='.10'/>"+
  "<polyline points='"+line+"' fill='none' stroke='"+col+"' stroke-width='1.6' vector-effect='non-scaling-stroke'/>"+
  xy.map(function(a,i){return "<circle cx='"+a[0].toFixed(1)+"' cy='"+a[1].toFixed(1)+"' r='2' fill='"+col+"'><title>"+pts[i].k+" · "+fmtY(pts[i].v)+"</title></circle>"}).join("")+
- lab+"</svg>"}
+ lab+"</svg>";
+ // Cruceta: leer un punto concreto sin esperar al globo del sistema.
+ try{ cruzarArea(el,pts,fmtY) }catch(e){}
+}
 
 function donut(el,parts){
  var tot=parts.reduce(function(a,p){return a+p.v},0)||1,R=64,r=53,cx=90,cy=90,ang=-Math.PI/2,seg="";
@@ -1671,7 +1727,7 @@ function render(){
   areaChart($("d-flow"),pts,"var(--am)",f$);
   var cum=0,cp=pts.map(function(p){cum+=p.v;return{k:p.k,v:cum}});
   areaChart($("c-cum"),cp,"var(--gr)",f$);
-  donut($("d-donut"),[{k:T("Gigantes","Primes"),v:tot-rtot,c:"var(--line)"},{k:T("Resto (tu terreno)","Rest (your ground)"),v:rtot,c:"var(--am)"}]);
+  donut3d($("d-donut"),[{k:T("Gigantes","Primes"),v:tot-rtot,c:"var(--dim2)"},{k:T("Resto (tu terreno)","Rest (your ground)"),v:rtot,c:"var(--am)"}]);
  }else{var m0=ERR.con?emp("⚠","USAspending no responde.<br>Pulsa ⟳ REFRESH."):sk(5);
   $("d-flow").innerHTML=m0;$("c-cum").innerHTML=m0;$("d-donut").innerHTML=m0}
 
@@ -4815,6 +4871,97 @@ function wass1(a,b){
 }
 
 
+
+
+
+/* ---------- profundidad del fondo con el ratón ----------
+   Solo se mueve el lienzo ya pintado. Se limita a unos pocos píxeles: más que
+   eso marea y deja de parecer profundidad para parecer un fallo. */
+(function(){
+ var cv=null, pend=false, x=0, y=0;
+ function mover(){
+  pend=false;
+  if(!cv)cv=$("topo");
+  if(!cv)return;
+  var dx=(x/innerWidth-0.5)*14, dy=(y/innerHeight-0.5)*10;
+  cv.style.transform="translate3d("+dx.toFixed(1)+"px,"+dy.toFixed(1)+"px,0) scale(1.03)";
+ }
+ if(!matchMedia("(prefers-reduced-motion: reduce)").matches && innerWidth>900){
+  addEventListener("mousemove",function(e){
+   x=e.clientX; y=e.clientY;
+   if(!pend){ pend=true; requestAnimationFrame(mover) }
+  },{passive:true});
+ }
+})();
+
+/* ---------- lectura al pasar el ratón por los gráficos de área ----------
+   areaChart pintaba puntos con <title>, que solo sale tras un segundo largo y
+   en una caja del sistema. Se sustituye por una cruceta con el valor, igual
+   que en el gráfico de precio, para poder leer un día concreto de un vistazo. */
+function cruzarArea(el, pts, fmtY){
+ var svg=el.querySelector("svg"); if(!svg||!pts.length)return;
+ var W=760,ml=52,mr=8,iw=W-ml-mr;
+ var g=document.createElementNS("http://www.w3.org/2000/svg","g");
+ svg.appendChild(g);
+ svg.addEventListener("mousemove",function(ev){
+  var r=svg.getBoundingClientRect();
+  var i=Math.round(((ev.clientX-r.left)/r.width*W-ml)/(iw||1)*(pts.length-1));
+  if(i<0||i>=pts.length){g.innerHTML="";return}
+  var step=pts.length>1?iw/(pts.length-1):iw;
+  var px=ml+i*step;
+  var izq=px>W*0.62;
+  g.innerHTML="<line x1='"+px.toFixed(1)+"' y1='6' x2='"+px.toFixed(1)+"' y2='168' "+
+   "stroke='var(--txt)' stroke-width='.7' opacity='.4'/>"+
+   "<text x='"+(izq?px-7:px+7).toFixed(1)+"' y='20' fill='var(--txt)' font-size='11' font-weight='700' "+
+   "text-anchor='"+(izq?"end":"start")+"'>"+fmtY(pts[i].v)+"</text>"+
+   "<text x='"+(izq?px-7:px+7).toFixed(1)+"' y='33' fill='var(--dim)' font-size='9' "+
+   "text-anchor='"+(izq?"end":"start")+"'>"+esc(String(pts[i].k))+"</text>";
+ });
+ svg.addEventListener("mouseleave",function(){g.innerHTML=""});
+}
+
+/* ---------- anillo con grosor ----------
+   Un círculo plano solo puede mostrar la proporción. Levantando cada trozo una
+   altura proporcional a su peso se ven dos cosas a la vez: cuánto se lleva y
+   cuánto destaca. Se dibuja en SVG con una elipse por capa, que es la forma
+   barata de simular volumen sin motor 3D. */
+function donut3d(el, partes){
+ if(!el)return;
+ var tot=partes.reduce(function(a,p){return a+p.v},0)||1;
+ var W=230,H=170,cx=115,cy=92,rx=76,ry=34,alto=22;
+ var ang=-Math.PI/2;
+ var trozos=partes.map(function(p){
+  var a0=ang, a1=ang+2*Math.PI*(p.v/tot); ang=a1;
+  return {p:p,a0:a0,a1:a1,frac:p.v/tot};
+ });
+ var pt=function(a,r,dy){return [cx+Math.cos(a)*rx*r, cy+Math.sin(a)*ry*r+(dy||0)]};
+ var sector=function(a0,a1,dy,rin){
+  var A=pt(a0,1,dy),B=pt(a1,1,dy),C=pt(a1,rin,dy),D=pt(a0,rin,dy);
+  var g=(a1-a0)>Math.PI?1:0;
+  return "M"+A[0].toFixed(1)+","+A[1].toFixed(1)+
+   " A"+rx+","+ry+" 0 "+g+" 1 "+B[0].toFixed(1)+","+B[1].toFixed(1)+
+   " L"+C[0].toFixed(1)+","+C[1].toFixed(1)+
+   " A"+(rx*rin)+","+(ry*rin)+" 0 "+g+" 0 "+D[0].toFixed(1)+","+D[1].toFixed(1)+" Z";
+ };
+ var g="";
+ // Cara lateral: se pinta primero, por debajo.
+ trozos.forEach(function(t){
+  for(var d=alto;d>0;d-=2){
+   g+="<path d='"+sector(t.a0,t.a1,d,0.55)+"' fill='"+t.p.c+"' opacity='"+(0.16+0.1*(1-d/alto)).toFixed(2)+"'/>";
+  }
+ });
+ // Cara superior.
+ trozos.forEach(function(t){
+  g+="<path d='"+sector(t.a0,t.a1,0,0.55)+"' fill='"+t.p.c+"' opacity='.95'>"+
+     "<title>"+esc(t.p.k)+" · "+(t.frac*100).toFixed(1)+"%</title></path>";
+ });
+ el.innerHTML="<svg viewBox='0 0 "+W+" "+H+"' style='width:100%;height:100%'>"+g+
+  "<text x='"+cx+"' y='"+(cy-4)+"' text-anchor='middle' fill='var(--dim2)' font-size='9' letter-spacing='1'>TOTAL</text>"+
+  "<text x='"+cx+"' y='"+(cy+11)+"' text-anchor='middle' fill='var(--txt)' font-size='14' font-weight='600'>"+
+   f$(tot)+"</text></svg>"+
+  "<div class='lg' style='justify-content:center'>"+partes.map(function(p){
+   return "<span><i style='background:"+p.c+"'></i>"+esc(p.k)+" "+(p.v/tot*100).toFixed(0)+"%</span>"}).join("")+"</div>";
+}
 
 /* ---------- versión clara u oscura ----------
    Se guarda en el navegador y se aplica antes de pintar nada para que no haya
