@@ -656,6 +656,8 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
         <option value="100000">100 mil</option>
         <option value="1000000" selected>1 millón</option>
         <option value="10000000">10 millones</option>
+        <option value="ops:1e9">mil millones de operaciones</option>
+        <option value="ops:4e9">4.000 millones de operaciones</option>
       </select></label>
       <button id="mc-run">▶ Ejecutar prueba de choque</button>
       <span class="st" id="mc-st">Necesita la simulación ejecutada arriba. Regenera los desenlaces bajo la hipótesis de mercado perfectamente valorado.</span>
@@ -2131,6 +2133,50 @@ function mcTotal(p,o,lado,n){
  else{for(var j=0;j<n;j++)t+=((1-o[j])-(1-p[j]))/(1-p[j])}
  return t}
 
+
+/* Codigo que corre dentro del hilo aparte. Va como texto porque el terminal es
+   un unico archivo; se convierte en Worker con un Blob. */
+var MC_WORKER_SRC = [
+"function rng32(s){var x=s>>>0;return function(){x^=x<<13;x>>>=0;x^=x>>>17;x^=x<<5;x>>>=0;return x/4294967296}}",
+"self.onmessage=function(ev){",
+" var d=ev.data, ss=d.ss, obs=d.obs, iters=d.iters;",
+" var K=ss.length, rnd=rng32(d.seed);",
+" var acum=[]; for(var k=0;k<K;k++)acum.push({suma:0,suma2:0,ge:0,muestras:new Float64Array(Math.min(iters,20000)),k:0});",
+" var aviso=Math.max(1,Math.floor(iters/100));",
+" for(var it=0;it<iters;it++){",
+"  for(var k=0;k<K;k++){",
+"   var s=ss[k], a=acum[k], t=0, p=s.p, nn=s.n, i;",
+"   /* Hipotesis nula: el desenlace se sortea con la probabilidad que marca el",
+"      precio. Si el precio ya es correcto, no hay ventaja que sacar. */",
+"   if(s.lado===1){ for(i=0;i<nn;i++){ t += ((rnd()<p[i]?1:0)-p[i])/p[i] } }",
+"   else          { for(i=0;i<nn;i++){ var o=rnd()<p[i]?1:0; t += ((1-o)-(1-p[i]))/(1-p[i]) } }",
+"   a.suma+=t; a.suma2+=t*t;",
+"   if(t>=obs[k])a.ge++;",
+"   if(a.k<a.muestras.length)a.muestras[a.k++]=t;",
+"  }",
+"  if(it%aviso===0)self.postMessage({tipo:'prog',hecho:it});",
+" }",
+" self.postMessage({tipo:'fin',acum:acum.map(function(a){",
+"  return {suma:a.suma,suma2:a.suma2,ge:a.ge,muestras:Array.prototype.slice.call(a.muestras.subarray(0,a.k))}})});",
+"}"].join("\n");
+
+var MCW=null;
+function mcLanzarWorker(ss,obs,iters,cbProg,cbFin,cbError){
+ try{
+  if(MCW){MCW.terminate();MCW=null}
+  var url=URL.createObjectURL(new Blob([MC_WORKER_SRC],{type:"application/javascript"}));
+  MCW=new Worker(url);
+  URL.revokeObjectURL(url);
+  MCW.onmessage=function(ev){
+   if(ev.data.tipo==="prog")cbProg(ev.data.hecho);
+   else if(ev.data.tipo==="fin"){cbFin(ev.data.acum);MCW.terminate();MCW=null}
+  };
+  MCW.onerror=function(e){ if(MCW){MCW.terminate();MCW=null} cbError(e.message||"error en el hilo") };
+  MCW.postMessage({ss:ss,obs:obs,iters:iters,seed:20260901});
+  return true;
+ }catch(e){ return false }
+}
+
 function mcRun(){
  if(MCRUN)return;
  if(!BT||!BT.S||BT.S.length<20){$("mc-st").textContent="Ejecuta antes la simulación de arriba: hace falta la muestra real.";return}
@@ -2139,10 +2185,50 @@ function mcRun(){
     cosa: sin este corte, la prueba corria sobre NaN y devolvia una fila basura. */
  if(BT.fx){MC=null;$("mc-st").textContent="Esta prueba solo vale para mercados de predicción: necesita un desenlace de sí o no. En divisas no hay tal cosa.";render();return}
  MCRUN=true;
- var iters=+$("mc-n").value,S=BT.S,ss=mcStrats(S);
+ var S=BT.S,ss=mcStrats(S);
  if(!ss.length){MCRUN=false;$("mc-st").textContent="Muestra insuficiente por estrategia.";return}
 
  var obs=ss.map(function(s){return mcTotal(s.p,s.o,s.lado,s.n)});
+ var opsIter=ss.reduce(function(a,s){return a+s.n},0);
+ /* El selector admite repeticiones o un objetivo en OPERACIONES. Lo segundo es
+    lo que se entiende: "4.000 millones de operaciones" dice algo, "7.407.408
+    repeticiones" no dice nada. */
+ var sel=$("mc-n").value, iters;
+ if(String(sel).indexOf("ops:")===0){
+  iters=Math.ceil(Number(String(sel).slice(4))/Math.max(1,opsIter));
+ } else iters=+sel;
+
+ // Camino rapido: hilo aparte. Si el navegador no lo permite, se sigue abajo.
+ var t0w=Date.now();
+ var lanzado=mcLanzarWorker(
+  ss.map(function(s){return {n:s.n,lado:s.lado,p:Array.prototype.slice.call(s.p)}}),
+  obs, iters,
+  function(hecho){
+   $("mc-st").textContent=T("Simulando en segundo plano… ","Simulating in background… ")+
+    (hecho/iters*100).toFixed(0)+"% · "+(hecho*opsIter/1e6).toFixed(0)+
+    T(" M operaciones"," M operations");
+  },
+  function(acum){
+   MC={iters:iters,ops:iters*opsIter,seg:(Date.now()-t0w)/1000,
+    filas:ss.map(function(s,k){
+     var a=acum[k],mu=a.suma/iters,va=a.suma2/iters-mu*mu;
+     var m=a.muestras.slice().sort(function(x,y){return x-y});
+     var q=function(f){return m.length?m[Math.min(m.length-1,Math.floor(f*m.length))]:0};
+     return {nombre:s.nombre,n:s.n,obs:obs[k],mu:mu,sd:Math.sqrt(Math.max(0,va)),
+             lo:q(0.025),hi:q(0.975),p:a.ge/iters}})};
+   MCRUN=false;
+   /* render() reescribe el estado con el texto por defecto, asi que el resumen
+      va DESPUES o no se ve. */
+   render();
+   $("mc-st").textContent=MC.iters.toLocaleString("es-ES")+T(" repeticiones · ","reps · ")+
+    (MC.ops/1e6).toFixed(0)+T(" millones de operaciones simuladas · "," M simulated operations · ")+
+    MC.seg.toFixed(1)+" s";
+  },
+  function(msg){ MCRUN=false; $("mc-st").textContent="Error en el hilo: "+msg; }
+ );
+ if(lanzado)return;
+ $("mc-st").textContent=T("Sin hilos disponibles: se ejecuta en primer plano y la página puede ir lenta.",
+                          "No worker available: running in foreground, the page may stutter.");
  var acum=ss.map(function(s){return {suma:0,suma2:0,ge:0,muestras:new Float64Array(Math.min(iters,20000)),k:0}});
  var rnd=rng32(20260901);
  var hecho=0,lote=Math.max(2000,Math.floor(iters/200));

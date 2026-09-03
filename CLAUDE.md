@@ -320,3 +320,33 @@ vuelve a tocar `spaTest`, el contraste es contra `iRef`, nunca contra cero.
 
 Los retornos por operación se guardan en `btStats` como `rs`: sin ellos no hay
 con qué remuestrear.
+
+## Run de 4.000 millones de operaciones (3 de septiembre de 2026)
+
+Ejecutado dos veces con la misma lógica y resultados coincidentes: fuera del
+navegador sobre 165 mercados resueltos (44 s) y dentro del navegador sobre los
+107 de la app (45,1 s). El Monte Carlo vive ahora en un **Web Worker** creado
+desde un Blob, porque en el hilo principal la página se quedaba pillada; la
+interfaz sigue respondiendo mientras calcula, verificado cambiando de vista a
+mitad del cálculo.
+
+Hipótesis nula: el precio ya es la probabilidad correcta. Muestra de 165:
+
+| Estrategia | n | Total | p |
+|---|---|---|---|
+| Comprar todo (referencia) | 165 | +105,6u | 0,111 |
+| Comprar longshots (p≤10%) | 83 | +89,1u | 0,137 |
+| Zona media 10–90% | 72 | +15,9u | 0,096 |
+| Momentum alcista | 55 | +23,0u | 0,146 |
+| Favoritos (p≥80%) | 17 | +1,7u | 0,197 |
+| Momentum bajista | 65 | −2,4u | 0,777 |
+| Vender longshots | 83 | −5,0u | 0,997 |
+
+**Ninguna baja de p=0,05.** Control de sesgo: la media del azar sale 0,000
+(mayor desvío 0,005u). Con 4.000 millones de tiradas el error de muestreo del
+propio Monte Carlo es despreciable, así que estos valores p son los verdaderos:
+el problema no es falta de simulaciones, es que no hay ventaja que encontrar.
+
+El selector admite ahora objetivos en operaciones (`ops:1e9`, `ops:4e9`) además
+de repeticiones, porque "4.000 millones de operaciones" se entiende y "7.407.408
+repeticiones" no.
