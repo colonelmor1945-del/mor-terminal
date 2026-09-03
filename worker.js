@@ -274,6 +274,42 @@ async function fetchIntra(sym) {
   throw new Error("sin datos intradía para " + clean);
 }
 
+/* TIPOS OFICIALES DEL BANCO CENTRAL EUROPEO. Segunda fuente, independiente de
+   Yahoo, gratis y sin clave: una fijacion diaria en dias habiles, solo cruces
+   contra el euro. Sirve para lo que Yahoo no puede servir: comprobar si un
+   hallazgo es real o es un artefacto de la fuente. Ya salvo de creerse una
+   reversion que en Yahoo daba p=0,027 y aqui p=0,408. */
+async function fetchBCE(monedas, desde, hasta) {
+  const m = String(monedas || "USD,GBP,JPY,CHF,AUD,NZD,CAD,SEK,PLN,NOK")
+    .toUpperCase().replace(/[^A-Z,]/g, "").slice(0, 120);
+  const hoy = new Date().toISOString().slice(0, 10);
+  const ini = /^\d{4}-\d{2}-\d{2}$/.test(desde || "") ? desde
+            : new Date(Date.now() - 730 * 86400000).toISOString().slice(0, 10);
+  const fin = /^\d{4}-\d{2}-\d{2}$/.test(hasta || "") ? hasta : hoy;
+  const r = await fetch("https://api.frankfurter.dev/v1/" + ini + ".." + fin +
+    "?base=EUR&symbols=" + m, { redirect: "follow" });
+  if (!r.ok) throw new Error("BCE HTTP " + r.status);
+  const j = await r.json();
+  const fechas = Object.keys(j.rates || {}).sort();
+  if (!fechas.length) throw new Error("el BCE no devolvió fijaciones");
+  const series = {};
+  for (const mon of m.split(",").filter(Boolean)) {
+    const c = [], d = [];
+    for (const f of fechas) {
+      const v = j.rates[f][mon];
+      if (typeof v === "number" && isFinite(v) && v > 0) { c.push(v); d.push(f) }
+    }
+    if (c.length > 30) series["EUR/" + mon] = { d, c };
+  }
+  return {
+    fuente: "Banco Central Europeo (fijación diaria de referencia)",
+    desde: fechas[0], hasta: fechas[fechas.length - 1], nFijaciones: fechas.length,
+    nota: "Una fijación al día (14:15 CET), días hábiles, solo cruces contra el euro. " +
+          "Independiente de Yahoo: sirve para comprobar si un hallazgo es real o es de la fuente.",
+    series
+  };
+}
+
 async function fetchPx(sym) {
   const clean = String(sym).trim().toUpperCase().replace(/[^A-Z0-9.\-=^]/g, "");
   if (!clean) throw new Error("Símbolo vacío");
@@ -6771,7 +6807,7 @@ setInterval(function(){loadPM()},120000);
    con ADMIN_TOKEN, que se pone como variable secreta en Cloudflare.              */
 
 const PLANES = {
-  libre: { cuota: 50,   endpoints: ["pmq", "px", "intra", "pm", "contracts", "news", "history"] },
+  libre: { cuota: 50,   endpoints: ["pmq", "px", "intra", "bce", "pm", "contracts", "news", "history"] },
   pro:   { cuota: 5000, endpoints: "*" }
 };
 
@@ -6881,6 +6917,8 @@ export default {
       if (p === "/api/pm") return json(await fetchPM(), cab);
       if (p === "/api/px") return json(await fetchPx(url.searchParams.get("s") || "ONDS"), cab);
       if (p === "/api/intra") return json(await fetchIntra(url.searchParams.get("s") || "ONDS"), cab);
+      if (p === "/api/bce") return json(await fetchBCE(url.searchParams.get("m"),
+        url.searchParams.get("desde"), url.searchParams.get("hasta")), cab);
       if (p === "/api/news") return json(await fetchNews(url.searchParams.get("region") || "Pentágono"), cab);
       if (p === "/api/pmq") return json(await fetchPMQ(Number(url.searchParams.get("pages")) || 3), cab);
       if (p === "/api/pmh") return json(await fetchPMHist(url.searchParams.get("t"), url.searchParams.get("i")), cab);

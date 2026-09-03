@@ -350,3 +350,49 @@ el problema no es falta de simulaciones, es que no hay ventaja que encontrar.
 El selector admite ahora objetivos en operaciones (`ops:1e9`, `ops:4e9`) además
 de repeticiones, porque "4.000 millones de operaciones" se entiende y "7.407.408
 repeticiones" no.
+
+## Divisas: 4.000 millones de operaciones y por qué el hallazgo no era real
+
+Ejecutado el 3 de septiembre de 2026 sobre 18 pares de Yahoo, 666 ventanas sin
+solapar (señal 20 días, mantener 10). 4.000M de operaciones en 103 s.
+
+**La prueba de Polymarket no vale aquí.** Allí la nula es "el precio es la
+probabilidad" y necesita un desenlace de sí o no; una divisa no resuelve. La
+nula correcta es **la señal no lleva información**: si elegir n ventanas por
+momentum rinde lo mismo que elegir n al azar del mismo par, la señal no predice.
+Contrastar contra cero solo diría que el mercado subió.
+
+Resultado con permutación dentro de cada par:
+
+| Estrategia | n | Media real | Media al azar | p |
+|---|---|---|---|---|
+| Reversión fuerte (−3%) | 22 | +0,736% | +0,015% | 0,006 |
+| Reversión (−1%) | 129 | +0,290% | +0,056% | 0,011 |
+| Momentum (+1%) | 245 | +0,134% | +0,237% | 0,953 |
+
+Parecía un hallazgo. Sobrevivió a las cuatro comprobaciones obvias: repartido en
+17 pares (máximo 11%), aguanta quitar cualquier par, sobrevive a Bonferroni con
+7 estrategias, y a costes de hasta 0,20%.
+
+**Pero se cae en las dos que importan:**
+
+1. **Desfase temporal común a todos los pares.** La permutación por par rompe la
+   correlación *entre* pares: cuando el dólar se mueve, medio mercado cae a la
+   vez, así que la estrategia real elige ventanas correlacionadas y el azar no.
+   Eso hace la nula demasiado estrecha. Desplazando la señal respecto al
+   resultado con el mismo desfase en todos los pares, la reversión de −1% pasa de
+   p=0,011 a **p=0,135**.
+
+2. **No replica en datos independientes.** Los tipos oficiales del BCE
+   (`/api/bce`, vía frankfurter.dev, gratis y sin clave) dan sobre 15 cruces del
+   euro y 735 ventanas: reversión fuerte **p=0,408**, reversión **p=0,245**,
+   momentum **p=0,694**. El efecto cae de +0,736% a +0,226%.
+
+**Conclusión: nada predice en divisas.** Si alguien vuelve a encontrar algo aquí,
+las dos pruebas que hay que pasar son el desfase común y la réplica en el BCE;
+las otras cuatro se pasan solas y no valen.
+
+**Aviso sobre EDGE en divisas:** estima 0,36%–0,97% de spread en pares mayores,
+lo cual es falso (lo real son 0,01%–0,04%). EDGE supone precios negociados y las
+barras de divisas de Yahoo son cotizaciones indicativas. **No usar el coste de
+EDGE para divisas**; en acciones sí es válido.
