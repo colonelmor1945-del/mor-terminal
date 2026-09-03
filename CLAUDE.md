@@ -734,3 +734,34 @@ pasar, igual que en el gráfico de precio.
 posicionados con z-index 0 pintan por encima. La lista de elementos que suben al
 plano 1 (`.hdr,.nav,.nav2,.navwrap,.tape,#rastro,main,.ftr,#dt,#fe`) hay que
 mantenerla al día si se añade cualquier capa de fondo nueva.
+
+## Redes, VHLA Media y vídeo corto (3 de septiembre de 2026)
+
+**Qué se puede integrar sin claves de API, que es la condición del proyecto:**
+
+- **VHLA Media** (`/api/vhla`): no publica canal RSS, así que se lee su página de
+  artículos. Una petición para diez artículos en vez de 233. Tres trampas de
+  raspado que costaron encontrar: el titular salía del atributo `class` (se
+  arregla saltando los atributos con `[^>]*>`); la imagen está **antes** del
+  enlace, porque el enlace es una capa que cubre la tarjeta; y Webflow sirve en
+  diferido, así que hay que mirar `src`, `data-src` y `srcset`, descartando
+  logotipos. Resultado: 10 de 10 con imagen.
+- **YouTube**: admite incrustar por búsqueda sin clave, así que los canales
+  temáticos de vídeo corto funcionan de verdad.
+- **X, TikTok, Instagram y LinkedIn**: exigen clave o bloquean el incrustado. Van
+  como **búsquedas preparadas**, no como paneles vacíos con su logo. Fingir una
+  integración que no existe es peor que no tenerla.
+
+Enlaces propios del usuario, los primeros de la lista: **Stratton Capital**
+(`stratton-capital-9n5.pages.dev`) e **Instagram @blackdelta5**.
+
+## Trampa recurrente: `</div>` de más
+
+Han aparecido **tres veces** al insertar vistas nuevas con `rep()` sobre el
+marcador `<div class="view" id="v-xxx">`: cada inserción añadía un cierre que
+sobraba, `<main>` se cerraba antes de tiempo y el navegador sacaba las últimas
+vistas fuera del contenedor, pintándose unas encima de otras.
+
+**Comprobación obligatoria tras tocar el marcado:** el balance de `<div>` y
+`</div>` dentro de `<main>` tiene que dar exactamente 0, y
+`document.querySelectorAll('body > .view')` tiene que estar vacío.

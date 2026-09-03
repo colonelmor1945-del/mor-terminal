@@ -2703,6 +2703,10 @@ async function vhla(seccion) {
   while ((m = re.exec(html)) !== null && salida.length < 14) {
     const url = base + m[1];
     if (vistos[url]) continue;
+    /* La imagen de la tarjeta va ANTES del enlace en esta plantilla: el enlace
+       es una capa que cubre la tarjeta entera. Asi que se mira tambien hacia
+       atras desde donde empieza el enlace. */
+    const atras = html.slice(Math.max(0, m.index - 1800), m.index);
     const bloque = m[2];
     /* Titular: el trozo de texto mas largo del bloque. Se descartan los que
        parecen fecha, etiqueta o boton. */
@@ -2718,7 +2722,22 @@ async function vhla(seccion) {
     if (/^class=|^w-|^\s*$/.test(titulo)) {
       titulo = m[1].split("/").pop().replace(/-/g, " ").replace(/^./, c => c.toUpperCase());
     }
-    const img = (bloque.match(/src="(https:\/\/[^"]+?\.(?:jpg|jpeg|png|webp)[^"]*)"/) || [])[1] || null;
+    /* Webflow carga las imagenes en diferido, asi que muchas veces el src real
+       no esta en src sino en srcset o en data-src. Se prueban los tres, y del
+       srcset se toma la primera direccion, que es la de menor resolucion y
+       basta para una tarjeta. */
+    /* La imagen de la tarjeta esta ANTES del enlace: el enlace es una capa que
+       cubre la tarjeta entera. Se busca en el bloque anterior, y se toma la
+       ULTIMA coincidencia, que es la mas cercana a este enlace. Ademas Webflow
+       sirve en diferido, asi que hay que mirar src, data-src y srcset. */
+    let img = null;
+    const zona = atras + bloque;
+    const cand = zona.match(/https:\/\/[^"'\s]+?\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s]*)?/g) || [];
+    for (let z = cand.length - 1; z >= 0; z--) {
+      // Se descartan logotipos y adornos: no representan el articulo.
+      if (/logo|icon|favicon|avatar|placeholder/i.test(cand[z])) continue;
+      img = cand[z]; break;
+    }
     /* Fecha: se busca un formato reconocible dentro del bloque. Si no aparece,
        se deja vacia en vez de inventar una. */
     const fm = bloque.match(/\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4})\b/);
@@ -3469,6 +3488,32 @@ body:not(.claro)::after{content:"";position:fixed;inset:0;pointer-events:none;z-
  background:radial-gradient(ellipse 120% 80% at 50% -10%,rgba(79,216,255,.055),transparent 60%),
   radial-gradient(ellipse 90% 60% at 100% 100%,rgba(176,140,255,.045),transparent 55%)}
 @media(prefers-reduced-motion:reduce){#topo{transition:none}}
+
+/* --- bloque de redes y formato corto --- */
+.reels{display:grid;gap:11px;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));padding:11px}
+.reel{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--pane2);
+ display:flex;flex-direction:column;transition:transform .2s,box-shadow .2s}
+.reel:hover{transform:translateY(-3px)}
+body:not(.claro) .reel:hover{box-shadow:0 14px 30px -18px rgba(0,0,0,.9),0 0 16px -8px rgba(79,216,255,.5);
+ border-color:var(--nCy)}
+.reel .marco{position:relative;width:100%;aspect-ratio:9/16;background:var(--fondo0);overflow:hidden}
+.reel .marco iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.reel .pie{padding:9px 11px;font-size:11.5px;line-height:1.4;color:var(--txt)}
+.reel .fuente{font-size:10px;color:var(--dim2);margin-top:4px;text-transform:uppercase;letter-spacing:.06em}
+/* Las tarjetas de artículo llevan imagen apaisada, no vertical. */
+.arts{display:grid;gap:11px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));padding:11px}
+.art{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--pane2);
+ text-decoration:none;color:inherit;display:flex;flex-direction:column;transition:transform .2s,box-shadow .2s}
+.art:hover{transform:translateY(-3px)}
+body:not(.claro) .art:hover{border-color:var(--nAm);box-shadow:0 0 16px -8px rgba(255,184,77,.55)}
+.art img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:var(--fondo0)}
+.art .tit{padding:10px 12px;font-size:12.5px;line-height:1.4;font-weight:500}
+.art .met{padding:0 12px 10px;font-size:10px;color:var(--dim2);text-transform:uppercase;letter-spacing:.06em}
+.enlaces-red{display:flex;flex-wrap:wrap;gap:7px;padding:11px}
+.enlaces-red a{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);
+ border-radius:6px;padding:8px 12px;color:var(--dim);text-decoration:none;font-size:11.5px}
+.enlaces-red a:hover{border-color:var(--am);color:var(--txt)}
+@media(max-width:560px){.reels{grid-template-columns:repeat(2,1fr)}.arts{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -3644,6 +3689,22 @@ body:not(.claro)::after{content:"";position:fixed;inset:0;pointer-events:none;z-
   </div>
 </div>
 
+
+  <div class="p" style="margin-top:9px">
+    <h3>VHLA MEDIA <span id="vh-cnt"></span>
+      <span class="st" style="font-weight:400;text-transform:none">— vhlamedia.com</span></h3>
+    <div class="chips"><button id="vh-run">⟳ Cargar artículos</button>
+      <a href="https://www.vhlamedia.com" target="_blank" rel="noopener" class="st">abrir el sitio ↗</a>
+      <span class="st" id="vh-st">No publica canal RSS: se lee su página de artículos.</span></div>
+    <div class="bd"><div class="arts" id="vh-arts"></div></div>
+  </div>
+  <div class="p" style="margin-top:9px">
+    <h3>VÍDEO CORTO <span class="st" style="font-weight:400;text-transform:none">— canales temáticos, sin salir del terminal</span></h3>
+    <div class="chips" id="vh-temas"></div>
+    <div class="bd"><div class="reels" id="vh-reels"></div></div>
+    <div class="st">Se incrusta la búsqueda de YouTube, que no necesita clave. X, TikTok, Instagram y LinkedIn exigen clave de API o bloquean el incrustado, así que van como búsquedas preparadas abajo: un recuadro vacío con su logo no sería integrarse con ellos.</div>
+    <div class="enlaces-red" id="vh-redes"></div>
+  </div>
 <div class="view" id="v-quant">
   <div class="grid g4 escena" style="margin-bottom:8px">
     <div class="kpi"><div class="k">COBERTURA DE PRECIOS</div><div class="v" id="q1">—</div><div class="s" id="q1s">series descargadas</div></div>
@@ -7545,7 +7606,7 @@ function go(v,sinApilar){
  try{ if(!sinApilar&&anterior&&anterior!==v){ HIST.push({v:anterior}); if(HIST.length>12)HIST.shift() } }catch(e){}
  try{ pintarRastro() }catch(e){}
  if(typeof GACT!=="undefined"&&grupoDe(v)!==GACT){GACT=grupoDe(v);pintarNav()}
- if(v==="news")loadNews(NR);
+ if(v==="news"){ loadNews(NR); if(!$("vh-arts").innerHTML)vhArticulos() }
  if(v==="con"&&!EDG&&!EDGL)loadEdgar();
  if(v==="ini"){if(!EDG&&!EDGL)loadEdgar(); if(!BQ&&!BLOAD)loadBrain();}
  if(v==="quant"){
@@ -7975,6 +8036,83 @@ function vivoAplicar(){
 })();
 
 
+
+
+/* ===================== REDES Y VÍDEO CORTO ===================== */
+var VH_TEMAS=[
+ {k:"defensa", q:"defense stocks news", t:"Defensa"},
+ {k:"pentagono", q:"pentagon contract award", t:"Pentágono"},
+ {k:"prediccion", q:"polymarket prediction markets", t:"Predicción"},
+ {k:"macro", q:"fed interest rate decision", t:"Macro"},
+ {k:"cripto", q:"bitcoin price analysis", t:"Cripto"},
+ {k:"vhla", q:"VHLA Media finance", t:"VHLA"}
+];
+var VH_TEMA="defensa";
+function vhRedes(){
+ /* Enlaces de busqueda ya preparados. No se finge integracion: estas
+    plataformas exigen clave o bloquean el incrustado. */
+ var t=VH_TEMAS.filter(function(x){return x.k===VH_TEMA})[0]||VH_TEMAS[0];
+ var q=encodeURIComponent(t.q);
+ /* Primero lo propio, que es lo que de verdad interesa tener a mano, y
+    despues las busquedas preparadas de cada plataforma. */
+ var R=[
+  ["Stratton Capital", "https://stratton-capital-9n5.pages.dev/"],
+  ["@blackdelta5", "https://www.instagram.com/blackdelta5/"],
+  ["VHLA Media", "https://www.vhlamedia.com"],
+  ["X", "https://x.com/search?q="+q+"&f=live"],
+  ["TikTok", "https://www.tiktok.com/search?q="+q],
+  ["Instagram", "https://www.instagram.com/explore/tags/"+encodeURIComponent(t.q.split(" ")[0])+"/"],
+  ["LinkedIn", "https://www.linkedin.com/search/results/content/?keywords="+q],
+  ["YouTube", "https://www.youtube.com/results?search_query="+q+"&sp=EgIYAQ%253D%253D"],
+  ["TradingView", "https://www.tradingview.com/ideas/?sort=recent"]
+ ];
+ $("vh-redes").innerHTML=R.map(function(r){
+  return "<a href='"+r[1]+"' target='_blank' rel='noopener'>"+esc(r[0])+" \\u2197</a>"}).join("");
+}
+function vhReels(){
+ var t=VH_TEMAS.filter(function(x){return x.k===VH_TEMA})[0]||VH_TEMAS[0];
+ /* La incrustacion por busqueda de YouTube no necesita clave. Se piden varias
+    con matices distintos para que no salga seis veces el mismo video. */
+ var consultas=[t.q, t.q+" today", t.q+" explained", t.q+" analysis"];
+ $("vh-reels").innerHTML=consultas.map(function(q,i){
+  return "<div class='reel'><div class='marco'>"+
+   "<iframe loading='lazy' allow='encrypted-media' referrerpolicy='no-referrer' "+
+   "src='https://www.youtube.com/embed?listType=search&list="+encodeURIComponent(q)+"'></iframe>"+
+   "</div><div class='pie'>"+esc(q)+"<div class='fuente'>YouTube</div></div></div>"}).join("");
+ vhRedes();
+}
+function vhTemas(){
+ $("vh-temas").innerHTML=VH_TEMAS.map(function(t){
+  return "<button data-tema='"+t.k+"'"+(t.k===VH_TEMA?" class='on'":"")+">"+esc(t.t)+"</button>"}).join("");
+}
+function vhArticulos(){
+ $("vh-st").textContent=T("Leyendo vhlamedia.com…","Reading vhlamedia.com…");
+ api("/api/vhla",{cache:"no-store"})
+  .then(function(r){return r.json()})
+  .then(function(j){
+   if(j.error)throw new Error(j.error);
+   var it=j.items||[];
+   $("vh-cnt").textContent=it.length?"("+it.length+")":"";
+   $("vh-arts").innerHTML=it.length?it.map(function(x){
+    return "<a class='art' href='"+esc(x.url)+"' target='_blank' rel='noopener'>"+
+     (x.img?"<img loading='lazy' src='"+esc(x.img)+"' alt=''>":"<div style='aspect-ratio:16/9;background:var(--fondo0)'></div>")+
+     "<div class='tit'>"+esc(x.titulo)+"</div>"+
+     "<div class='met'>VHLA Media"+(x.fecha?" · "+esc(x.fecha):"")+"</div></a>"}).join("")
+    :emp("\\uD83D\\uDCF0",T("No se ha reconocido ningún artículo. Puede que el sitio haya cambiado de plantilla.",
+                            "No article recognised. The site may have changed template."));
+   $("vh-st").textContent=T("Actualizado "+new Date(j.ts).toLocaleTimeString(),"Updated "+new Date(j.ts).toLocaleTimeString());
+  })
+  .catch(function(e){ $("vh-st").textContent="Error: "+(e.message||e) });
+}
+(function(){
+ $("vh-run").onclick=vhArticulos;
+ $("vh-temas").onclick=function(ev){
+  var b=ev.target.closest?ev.target.closest("[data-tema]"):null;
+  if(!b)return;
+  VH_TEMA=b.dataset.tema; vhTemas(); vhReels();
+ };
+ vhTemas(); vhReels();
+})();
 
 /* ===================== NUNCA VISTO EN FINANZAS ===================== */
 var NVF=null, NVFLOAD=false;
