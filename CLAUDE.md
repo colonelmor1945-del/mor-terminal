@@ -508,3 +508,39 @@ mercado está descuidado, no dinero.
 El agente de relaciones había clasificado "Hormuz normal antes del 31 de
 diciembre" y "antes del 30 de septiembre" como SIN RELACIÓN, que es un error
 claro. Hoy la regla extrae 22 implicaciones, 21 coherentes y 1 violada.
+
+## Traducción al inglés: el método estaba mal (3 de septiembre de 2026)
+
+El diccionario se aplicaba **palabra a palabra dentro de las frases**, y sin
+parar tras la primera coincidencia. El resultado eran frases mutantes, peores
+que no traducir:
+
+- "Cargando los datos del **day**…"
+- "**Amount** que el Pentágono adjudica a una empresa"
+
+**Método nuevo**, en `traducir()`, por orden: coincidencia de frase completa;
+si no, del texto original (en modo sencillo el primer diccionario ya lo cambió);
+si no, prefijo con clave de 7+ caracteres **y** separador detrás; si no encaja
+nada, **se deja en castellano**. Una frase en el idioma equivocado es mejor que
+una inventada.
+
+**Tres guardas que hubo que añadir, las tres del mismo tipo — reescribir el
+`innerHTML` de un padre destruye a sus hijos:**
+
+1. Elementos con `select`/`input`/`button` dentro: traducirlos borraba el
+   control y luego todo lo que lo buscaba encontraba `null`.
+2. Elementos con hijos **con identificador**: los títulos llevan contadores
+   (`<h3>TABLA QUANT <span id="q-cnt"></span></h3>`) y al traducir el título
+   desaparecía el contador y el repintado moría.
+3. Elementos con hijos **traducibles** (`.st`, `.k`, `.s`): al reescribir el
+   padre se recreaban los hijos, que quedaban huérfanos, y la lista de nodos ya
+   estaba capturada. Por eso los sufijos "— cointegración" seguían en castellano
+   aunque estuvieran en el diccionario.
+
+En todos esos casos se traduce **solo el primer nodo de texto** y se deja que
+los hijos se traduzcan por su cuenta.
+
+Resultado medido: **de 273 cadenas en castellano a 10**, cero errores de
+JavaScript, controles intactos y el castellano vuelve intacto al cambiar de
+idioma. Lo que queda son dos párrafos largos y algunas etiquetas con contador.
+**Los nombres de mercados de Polymarket NO se traducen** y no deben: son datos.

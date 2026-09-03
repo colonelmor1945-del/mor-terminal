@@ -5804,10 +5804,306 @@ var AYUDA={
  dash:"Vista general de todo a la vez: contratos del Pentágono, tus empresas, apuestas y noticias."
 };
 
+
+/* Diccionario de frases COMPLETAS. La clave es el texto tal cual aparece.
+   No se sustituyen palabras sueltas dentro de una frase: eso producia
+   "Cargando los datos del day". */
+var EN2={
+ // --- navegacion y cabecera ---
+ "F1 INICIO":"F1 HOME","F2 DASH":"F2 OVERVIEW","F2 RESUMEN":"F2 OVERVIEW",
+ "F3 CONTRATOS":"F3 CONTRACTS","F4 EMPRESAS":"F4 COMPANIES","F5 APUESTAS":"F5 MARKETS",
+ "F6 NOTICIAS":"F6 NEWS","F7 QUANT":"F7 QUANT","F7 ANÁLISIS DE EMPRESAS":"F7 STOCK ANALYSIS",
+ "F8 CEREBRO":"F8 EDGE","F8 OPORTUNIDADES":"F8 OPPORTUNITIES","F9 SIMULADOR":"F9 SIMULATOR",
+ "F9 ¿ESTO FUNCIONA?":"F9 DOES THIS WORK?","F10 CARTERA":"F10 SIZING",
+ "F10 CUÁNTO APOSTAR":"F10 HOW MUCH","F11 INVESTIGACIÓN":"F11 RESEARCH",
+ "F12 BIBLIOTECA":"F12 LIBRARY","VEREDICTO":"VERDICT","COMPRAR O VENDER":"BUY OR SELL",
+ "Inicio":"Home","Mercado":"Markets","Análisis":"Analysis","Herramientas":"Tools","Investigación":"Research",
+ "MODO SENCILLO":"SIMPLE MODE","MODO COMPLETO":"FULL MODE","EN VIVO":"LIVE","apagado":"off",
+ "2 s · lo más rápido posible":"2 s · as fast as possible","Buscar…":"Search…",
+ // --- cabeceras de panel ---
+ "MAPA DE CALOR":"HEAT MAP","UNIVERSO POR REGIÓN":"UNIVERSE BY REGION",
+ "ÚLTIMO DEL PENTÁGONO":"LATEST FROM THE PENTAGON","DISTRIBUCIÓN DE PROBABILIDADES":"PROBABILITY DISTRIBUTION",
+ "DISTRIBUCIÓN · TOP 12":"BREAKDOWN · TOP 12","FLUJO DIARIO DE ADJUDICACIONES · 30D":"DAILY AWARD FLOW · 30D",
+ "ADJUDICATARIOS · TOP 30D":"TOP RECIPIENTS · 30D","⚡ CRUCES DETECTADOS":"⚡ MATCHES FOUND",
+ "POLYMARKET · VOLUMEN vs PROBABILIDAD":"POLYMARKET · VOLUME vs PROBABILITY",
+ "MAYORES MOVIMIENTOS 24H":"BIGGEST 24H MOVERS","⭐ WATCHLIST":"⭐ WATCHLIST",
+ "RANKING POR MOMENTUM COMPUESTO (Z-SCORE)":"COMPOSITE MOMENTUM RANKING (Z-SCORE)",
+ "RIESGO vs RETORNO · 6 MESES":"RISK vs RETURN · 6 MONTHS",
+ "TABLA QUANT · SMALL CAPS DEFENSA":"QUANT TABLE · DEFENCE SMALL CAPS",
+ "CONTRATOS DEPARTMENT OF DEFENSE · 30 DÍAS":"DEPARTMENT OF DEFENSE CONTRACTS · 30 DAYS",
+ "CURVA DE CAPITAL · MEJOR ESTRATEGIA":"EQUITY CURVE · BEST STRATEGY",
+ "CALIBRACIÓN · LO QUE EL MERCADO DICE vs LO QUE PASA":"CALIBRATION · WHAT THE MARKET SAYS vs WHAT HAPPENS",
+ "DISTORSIÓN DE WANG · PRECIO vs PROBABILIDAD REAL":"WANG DISTORTION · PRICE vs REAL PROBABILITY",
+ "PRUEBA DE CHOQUE · MONTE CARLO CONTRA EL AZAR":"STRESS TEST · MONTE CARLO AGAINST CHANCE",
+ "CALCULADORA DE VENTAJA Y KELLY":"EDGE AND KELLY CALCULATOR",
+ "BIBLIOTECA QUANT · ESTADO EN EL PROYECTO":"QUANT LIBRARY · STATUS IN THIS PROJECT",
+ "CARTERAS CON PAGO GARANTIZADO":"PORTFOLIOS WITH GUARANTEED PAYOFF",
+ "INCOHERENCIAS DE PRECIO":"PRICE INCOHERENCES","RIESGO REAL DE CADA PAR":"REAL RISK OF EACH PAIR",
+ "CONFIGURACIÓN DEL BACKTEST":"BACKTEST SETTINGS","CONFIGURACIÓN · DIVISAS":"SETTINGS · CURRENCIES",
+ "QUÉ ESTÁS SIMULANDO":"WHAT YOU ARE SIMULATING","PARÁMETROS":"SETTINGS",
+ "LO QUE MERECE UN VISTAZO HOY":"WORTH A LOOK TODAY",
+ "SI TE PREGUNTAS QUÉ SIGNIFICA CADA COSA":"IF YOU WONDER WHAT EACH TERM MEANS",
+ "POR QUÉ LA MITAD NO PORTA":"WHY HALF OF IT DOES NOT TRANSFER",
+ "MEMECOINS · POR QUÉ AQUÍ NO HAY BOTÓN DE BACKTEST":"MEMECOINS · WHY THERE IS NO BACKTEST BUTTON HERE",
+ "GRÁFICO":"CHART","Métricas":"Metrics","Lo esencial":"Key figures",
+ "Precio · último año":"Price · last year","Avisos oficiales a la SEC (8-K)":"Official SEC filings (8-K)",
+ "Pleitos en tribunales":"Court cases","Noticias":"News",
+ "Contratos del Pentágono que podrían ser suyos":"Pentagon contracts that might be theirs",
+ "Todas las probabilidades del grupo":"All probabilities in the group",
+ "Histórico y niveles de Fibonacci":"History and Fibonacci levels",
+ "Matrix · profundidad del libro":"Matrix · order book depth",
+ "Delta · flujo de órdenes (CVD)":"Delta · order flow (CVD)",
+ // --- KPI ---
+ "FUERA DE GIGANTES":"OUTSIDE THE PRIMES","⚡ CRUCES":"⚡ MATCHES",
+ "COBERTURA DE PRECIOS":"PRICE COVERAGE","SEÑALES ACTIVAS":"ACTIVE SIGNALS",
+ "MEDIA VOL. ANUAL":"AVG ANNUAL VOL","MEJOR MOMENTUM 6M":"BEST 6M MOMENTUM",
+ "PARES CARGADOS":"PAIRS LOADED","MEJOR MOMENTUM":"BEST MOMENTUM","EN TENSIÓN":"UNDER STRESS",
+ "PARES ESTIRADOS":"STRETCHED PAIRS","MERCADOS ANALIZADOS":"MARKETS ANALYSED",
+ "GRUPOS CON VENTAJA":"GROUPS WITH EDGE","MEJOR VENTAJA NETA":"BEST NET EDGE",
+ "SESGO FAVORITO-LONGSHOT":"FAVOURITE-LONGSHOT BIAS","MERCADOS RESUELTOS":"RESOLVED MARKETS",
+ "λ EMPÍRICA":"EMPIRICAL λ","MEJOR ESTRATEGIA":"BEST STRATEGY",
+ "CAPITAL COMPROMETIDO":"CAPITAL AT RISK","VALOR ESPERADO":"EXPECTED VALUE",
+ "PEOR CASO":"WORST CASE","ARBITRAJE DISPONIBLE":"ARBITRAGE AVAILABLE",
+ "IMPLEMENTADO":"LIVE","EN COLA":"QUEUED","DESCARTADO":"DISCARDED","CUELLO DE BOTELLA":"BOTTLENECK",
+ "ALCISTAS":"LONG","BAJISTAS":"SHORT","APUESTAS CON VENTAJA":"MARKETS WITH EDGE","ARBITRAJES":"ARBITRAGE",
+ "FACTOR COMÚN":"COMMON FACTOR","APUESTAS REALES":"REAL BETS","SEGUNDO FACTOR":"SECOND FACTOR",
+ "PASEO ALEATORIO":"RANDOM WALK","CASOS LIQUIDADOS":"SETTLED CASES","λ QUE USA HOY":"λ IN USE TODAY",
+ "¿ESTÁ CALIBRADO?":"CALIBRATED?","¿ES PREDECIBLE?":"PREDICTABLE?","RELACIONES":"RELATIONS",
+ "MUNDOS EXAMINADOS":"WORLDS EXAMINED","INCOHERENCIAS":"INCOHERENCES","COBRABLES":"COLLECTABLE",
+ // --- subtitulos de KPI ---
+ "de eventos activos":"of active events","neta tras costes":"net of costs",
+ "series descargadas":"series downloaded","momentum + tendencia":"momentum + trend",
+ "riesgo del universo":"risk of the universe","muestra del backtest":"backtest sample",
+ "sesgo medido, no teórico":"measured bias, not theoretical","de tu capital":"of your capital",
+ "según TUS probabilidades":"per YOUR probabilities","empresas y divisas para comprar":"companies and currencies to buy",
+ "para vender o no entrar":"to sell or stay out","precio lejos de lo justo":"price far from fair",
+ "cuentas que no cuadran":"maths that does not add up","métodos en producción":"methods in production",
+ "por orden de prioridad":"by priority","no faltan métodos, falta evidencia":"no shortage of methods, shortage of evidence",
+ "series de 400 sesiones":"series of 400 sessions","cargando al entrar en esta pantalla":"loading on entering this screen",
+ "volatilidad reciente por encima de la normal":"recent volatility above normal",
+ "diferencias que suelen volver a su sitio":"gaps that usually revert",
+ "señales con resultado conocido":"signals with a known outcome",
+ "mezcla de literatura y experiencia propia":"blend of literature and own experience",
+ "fiabilidad: 0 es perfecto":"reliability: 0 is perfect","resolución: cuanto más alta, mejor":"resolution: higher is better",
+ "restricciones lógicas encontradas":"logical constraints found",
+ "combinaciones lógicamente posibles":"logically possible combinations",
+ "precios que se contradicen":"prices that contradict each other",
+ "tras pagar la horquilla":"after paying the spread","descarga históricos reales del CLOB":"downloads real CLOB history",
+ "pulsa ▶ abajo · tarda 1–3 min":"press ▶ below · takes 1–3 min","sin ejecutar":"not run",
+ "0 = perfecto · 0,25 = moneda":"0 = perfect · 0.25 = coin flip",
+ "contrato ↔ small cap":"contract ↔ small cap","de tu lista":"from your list",
+ // --- cabeceras de tabla ---
+ "Tamaño":"Size","Último":"Last","Desvío":"Deviation","Cuánto":"How much","Acción":"Action",
+ "Señales":"Señales","Régimen":"Regime","Por qué":"Why","Títulos":"Shares","Posición":"Position",
+ "Rotación":"Turnover","Implícito":"Implied","Qué hacer":"What to do","Por unidad":"Per unit",
+ "Depende de":"Depends on","Descripción":"Description","Tipo de señal":"Signal type",
+ "Hasta cuándo":"Until when","Factor común":"Common factor","Esto implica…":"This implies…",
+ "…esto":"…this","Exceso":"Excess","Origen":"Source","Lectura":"Reading","Mundos":"Worlds",
+ "Peor día de 100":"Worst day in 100","Si pasa, cuánto":"If it happens, how much",
+ "Ídem, con colas gruesas":"Same, with fat tails","Su rango histórico":"Its historical range",
+ "¿Significativo?":"Significant?","Exceso sobre referencia":"Excess over benchmark",
+ "Volatilidad hoy":"Volatility today","Percentil":"Percentile","Vida media":"Half-life",
+ "Cuánto pesa lo vivido":"Weight of experience","Acierto crudo":"Raw hit rate",
+ "Acierto corregido":"Corrected hit rate","Retorno medio":"Average return","Casos":"Cases",
+ "Entrada":"Entry","Objetivo":"Target","Salir si":"Exit if","Neto tras coste":"Net after cost",
+ "Estrategia":"Strategy","Par A":"Pair A","Par B":"Pair B","Cruce":"Cross","Cotizado":"Quoted",
+ "Empresa":"Company","Mercado":"Market","Grupo":"Group","Par":"Pair","Aleatorio":"Random",
+ "Qué se usa / usaría":"What is / would be used","Familia":"Family","Estado":"Status",
+ // --- botones ---
+ "⟳ Cargar divisas":"⟳ Load currencies","⟳ Recalcular todo":"⟳ Recalculate all",
+ "⟳ Cargar / actualizar precios":"⟳ Load / refresh prices","⟳ Cargar / actualizar cerebro":"⟳ Load / refresh engine",
+ "▶ Ejecutar simulación":"▶ Run simulation","▶ Ejecutar sobre divisas":"▶ Run on currencies",
+ "▶ Ejecutar prueba de choque":"▶ Run stress test","✎ Anotar señales de hoy":"✎ Log today's signals",
+ "✎ Anotar el universo de hoy":"✎ Log today's universe","✓ Liquidar resueltas":"✓ Settle resolved",
+ "⟳ Ver aprendizaje":"⟳ View learning","▶ Buscar incoherencias":"▶ Find incoherences",
+ "▶ Ejecutar":"▶ Run","Buscar contradicciones":"Find contradictions","+ Añadir":"+ Add",
+ "Vaciar":"Clear","Guardar":"Save","Clave de acceso":"Access key","⟳ REFRESH":"⟳ REFRESH",
+ // --- filtros ---
+ "⚡ Con señal":"⚡ With signal","🟢 Solo fiables":"🟢 Reliable only","⭐ SOLO WATCHLIST":"⭐ WATCHLIST ONLY",
+ "⚡ SIN GIGANTES":"⚡ EXCLUDE PRIMES","Todos":"All","Todas":"All",
+ "Polymarket · predicción":"Polymarket · prediction","Forex · divisas":"Forex · currencies",
+ // --- regiones y datos ---
+ "Norteamérica":"North America","Sudamérica":"South America","Europa":"Europe",
+ "Asia Sur":"South Asia","Asia Este":"East Asia","Oceanía":"Oceania","África":"Africa",
+ "España":"Spain","Pentágono":"Pentagon","Geopolítica":"Geopolitics","Política":"Politics",
+ "Economía":"Economy","Tecnología":"Technology","Deportes":"Sports","Cripto":"Crypto",
+ // --- estados vacios y avisos ---
+ "Sin datos todavía.":"No data yet.","Necesita las divisas cargadas arriba.":"Needs the currencies loaded above.",
+ "📈Elige un par en la tabla.":"📈Pick a pair in the table.",
+ "🎓Pulsa ⟳ Ver aprendizaje.":"🎓Press ⟳ View learning.",
+ "🎲Pulsa «Ejecutar prueba de choque».":"🎲Press «Run stress test».",
+ "🎯Pulsa ▶ Ejecutar tras una simulación.":"🎯Press ▶ Run after a simulation.",
+ "➕Añade un mercado y pon tu probabilidad.":"➕Add a market and set your probability.",
+ "⭐Marca ☆ en SMALL CAPS<br>para seguirlas aquí.":"⭐Star ☆ in SMALL CAPS<br>to follow them here.",
+ "Se guarda con el motor de papel y se sigue solo.":"Saved with the paper engine and tracked automatically.",
+ "Se guarda solo en este navegador y viaja cifrada en la cabecera, nunca en la dirección.":
+   "Stored only in this browser and sent encrypted in the header, never in the URL.",
+ "¿Ya pagaste? Pega la firma":"Already paid? Paste the signature",
+ "responde solo con tus datos":"answers only from your data",
+ "leer en voz alta":"read answers aloud","chat de voz continuo":"continuous voice chat",
+ "Necesita los endpoints /api/pmq y /api/pmh en tu Worker.":"Needs /api/pmq and /api/pmh on your Worker.",
+ "10 pares, 400 sesiones cada uno, desde Yahoo vía tu Worker.":"10 pairs, 400 sessions each, from Yahoo via your Worker.",
+ // --- etiquetas con selector detras: se traduce solo el principio ---
+
+
+ // --- etiquetas del modo sencillo que faltaban ---
+ "LA MEJOR DE HOY":"BEST TODAY","¿ESTÁN CAROS LOS IMPROBABLES?":"ARE LONGSHOTS EXPENSIVE?",
+ "DONDE LAS CUENTAS NO CUADRAN":"WHERE THE MATHS DOES NOT ADD UP",
+ "Qué mide":"What it measures","Qué harías":"What you would do","Qué es":"What it is",
+ // --- opciones de desplegable ---
+ "7 días":"7 days","30 días":"30 days","60 días":"60 days","5 días":"5 days",
+ "10 días":"10 days","20 días":"20 days","1 día":"1 day","2 días":"2 days",
+ "100 mil":"100k","10 mil":"10k","1 millón":"1 million","10 millones":"10 million",
+ "¼ (prudente)":"¼ (cautious)","completo":"full","mil millones de operaciones":"one billion operations",
+ "4.000 millones de operaciones":"4 billion operations","estricto":"strict","amplio":"broad",
+ "días con actividad":"days with activity","vía war.gov":"via war.gov","de 33":"of 33",
+ // --- parrafos explicativos ---
+ "La firma es el identificador largo que te da Phantom al enviar. Cada pago genera una sola clave.":
+   "The signature is the long identifier Phantom gives you when you send. Each payment generates one key.",
+ "Busca 8-K citando al Departamento de Defensa y los cruza con tu universo.":
+   "Searches 8-K filings citing the Department of Defense and crosses them with your universe.",
+ "18 pares: mayores, cruces y emergentes. Pasan por tu Worker (Yahoo Finance).":
+   "18 pairs: majors, crosses and emerging. They go through your Worker (Yahoo Finance).",
+ "Descargando precios de 32 empresas…Tarda unos segundos.":
+   "Downloading prices for 32 companies… Takes a few seconds.",
+ "Los precios pasan por tu Worker (Yahoo Finance; el navegador no puede por CORS).":
+   "Prices go through your Worker (Yahoo Finance; the browser cannot, because of CORS).",
+
+"Europa Este":"Eastern Europe","Europa Oeste":"Western Europe",
+ "Cuánto se mueve":"How much it moves","Oriente Medio":"Middle East","Global":"Global",
+ // --- parrafos de la portada ---
+ "Este terminal vigila tres cosas a la vez y busca dónde se cruzan: los contratos que reparte el Pentágono, unas 33 empresas de defensa pequeñas y poco seguidas por todo el mundo, y los mercados donde se apuesta sobre acontecimientos reales.La idea es sencilla: a los grandes no les compensa cubrir una empresa coreana o polaca de 200 millones. Ahí no hay competencia porque el premio les parece pequeño. Para ti sí es suficiente.":
+  "This terminal watches three things at once and looks for where they <b>cross</b>: the contracts the Pentagon hands out, some 33 small defence companies that almost nobody follows, and the markets where people bet on real events.<br><br>The idea is simple: covering a Korean or Polish company worth 200 million is not worth the big players' time. There is no competition there because the prize looks small to them. <b>For you it is enough.</b>",
+ "Lo que este terminal NO hace: no te dice dónde invertir ni predice precios. Probamos las estrategias con 4.010 millones de operaciones simuladas y ninguna superó al azar. Lo que sí hace es enseñarte información pública antes de que la mire nadie más, y marcar cuando las cuentas de un mercado no cuadran. Nada de esto es recomendación de inversión.":
+  "<b style=\\"color:var(--rd)\\">What this terminal does NOT do:</b> it does not tell you where to invest and it does not predict prices. We tested the strategies with 4,010 million simulated trades and <b style=\\"color:var(--txt)\\">none beat chance</b>. What it does do is show you public information before anyone else looks at it, and flag when a market's maths does not add up. None of this is investment advice.",
+ // --- sufijos que cuelgan de las cabeceras ---
+ "— clic en una empresa para su ficha completa":"— click a company for its full profile",
+ "— clic en cualquier fila para el desglose completo":"— click any row for the full breakdown",
+ "— clic en una fila para el desglose completo":"— click a row for the full breakdown",
+ "— clic en un par para su gráfico":"— click a pair for its chart",
+ "— clic para la ficha":"— click for the profile","— clic para el mercado":"— click for the market",
+ "— el instante en que la información privada se vuelve pública":"— the moment private information becomes public",
+ "— apuestas de eventos distintos que se contradicen entre sí":"— markets from different events that contradict each other",
+ "— cointegración":"— cointegration","— componente principal":"— principal component",
+ "— razón de varianzas (Lo y MacKinlay)":"— variance ratio (Lo and MacKinlay)",
+ "— aritmética, no predicción":"— arithmetic, not prediction",
+ "— test SPA de Hansen con remuestreo por bloques":"— Hansen SPA test with block resampling",
+ "— de su propio historial, no de la teoría":"— from its own record, not from theory",
+ "— ninguna de estas herramientas predice dirección, y es a propósito":
+   "— none of these tools predicts direction, and that is deliberate",
+ "— aquí no hay señal de compra, y está explicado":"— no buy signal here, and it is explained",
+ "— no todas se pueden cobrar, y se dice cuáles":"— not all can be collected, and it says which",
+ "— matemática de 1937 sobre un grafo que hasta 2023 no se podía construir":
+   "— 1937 mathematics on a graph that could not be built until 2023",
+ "— EUR/USD × USD/JPY debería dar EUR/JPY":"— EUR/USD × USD/JPY should give EUR/JPY",
+ "vía war.gov":"via war.gov","días con actividad":"days with activity",
+ "de 33":"of 33","con actividad":"with activity",
+ // --- cabeceras que faltaban ---
+ "AVISOS OFICIALES DE EMPRESAS":"OFFICIAL COMPANY FILINGS",
+ "UNIVERSO SMALL CAP DEFENSA · GLOBAL":"DEFENCE SMALL CAP UNIVERSE · GLOBAL",
+ "COHERENCIA TRIANGULAR":"TRIANGULAR COHERENCE",
+ "PARES QUE SE MUEVEN JUNTOS":"PAIRS THAT MOVE TOGETHER",
+ "DIVISAS · QUANT":"CURRENCIES · QUANT","DIVISAS · RIESGO":"CURRENCIES · RISK",
+ "DIVISAS · ESTRUCTURA Y RIESGO":"CURRENCIES · STRUCTURE AND RISK",
+ "¿ES UN PASEO ALEATORIO?":"IS IT A RANDOM WALK?",
+ "DE QUÉ DEPENDE CADA PAR":"WHAT EACH PAIR DEPENDS ON",
+ "LO QUE EL TERMINAL HA APRENDIDO":"WHAT THE TERMINAL HAS LEARNED",
+ "PRUEBA CONTRA EL AUTOENGAÑO":"TEST AGAINST SELF-DECEPTION",
+ "COHERENCIA DE DE FINETTI":"DE FINETTI COHERENCE",
+ "ZONA DE INVESTIGACIÓN":"RESEARCH AREA","EMPRESAS":"COMPANIES","APUESTAS":"MARKETS",
+ // --- etiquetas del modo sencillo, que tambien necesitan ingles ---
+ "EMPRESAS CON PRECIO":"COMPANIES WITH PRICES","LA QUE MÁS SUBIÓ":"BIGGEST RISER",
+ "CUÁNTO SE MUEVEN":"HOW MUCH THEY MOVE","LAS QUE MÁS FUERZA LLEVAN":"STRONGEST MOMENTUM",
+ "APUESTAS MIRADAS":"MARKETS CHECKED","DONDE SOBRA DINERO":"WHERE MONEY IS LEFT OVER",
+ "LO MEJOR DE HOY":"BEST TODAY","¿LO IMPROBABLE ESTÁ CARO?":"IS THE UNLIKELY EXPENSIVE?",
+ "CASOS YA TERMINADOS":"CASES ALREADY FINISHED","ACIERTO DEL MERCADO":"MARKET ACCURACY",
+ "DINERO EN JUEGO":"MONEY AT STAKE","LO QUE ESPERARÍAS GANAR":"WHAT YOU WOULD EXPECT TO WIN",
+ "SI SALE TODO MAL":"IF EVERYTHING GOES WRONG","DINERO SIN ADIVINAR":"MONEY WITHOUT GUESSING",
+ "YA FUNCIONA":"ALREADY WORKING","POR HACER":"TO DO","NO SIRVE":"NOT USEFUL","LO QUE FALTA":"WHAT IS MISSING",
+ "TAMAÑO":"SIZE","REGIÓN":"REGION","ÚLTIMO MES":"LAST MONTH","ÚLTIMOS 6 MESES":"LAST 6 MONTHS",
+ "CUÁNTO SE MUEVE":"HOW MUCH IT MOVES","PEOR CAÍDA":"WORST DROP","FUERZA":"STRENGTH",
+ "EN TU LISTA":"IN YOUR LIST","SÍMBOLO":"SYMBOL","PRECIO":"PRICE","CAPITALIZACIÓN":"MARKET CAP",
+ "Peor caída":"Worst drop","peor caída":"worst drop","precio":"price",
+ "media 50":"50-day avg","media 200":"200-day avg",
+ // --- estados de carga y vacios ---
+ "⏳Esperando a que carguen las divisas.":"⏳Waiting for the currencies to load.",
+ "💱Pulsa ⟳ Cargar divisas.":"💱Press ⟳ Load currencies.",
+ "⭐Marca ☆ en SMALL CAPSpara seguirlas aquí.":"⭐Star ☆ in SMALL CAPS to follow them here.",
+ "⚠USAspending no responde.Pulsa ⟳ REFRESH.":"⚠USAspending is not responding. Press ⟳ REFRESH.",
+ "fuente caída":"source down","verifícalos a mano":"verify them by hand",
+ "Descargando precios de 32 empresas…":"Downloading prices for 32 companies…",
+ "Tarda unos segundos.":"Takes a few seconds.",
+ // --- glosario ---
+ "Contrato de defensa":"Defence contract","Mercado de predicción":"Prediction market",
+ "Market de predicción":"Prediction market","Gigante del sector":"Sector giant",
+ "Small cap":"Small cap","Arbitraje":"Arbitrage","Cruce":"Match","8-K":"8-K",
+ "¿Hay que verificar?":"Should you verify?",
+ "Ventana":"Window","Señal a":"Signal over","Mantener":"Hold","Entrada a":"Entry at",
+ "Volumen mínimo":"Minimum volume","Repeticiones":"Repetitions","Capital":"Capital",
+ "Tope por posición":"Cap per position","Tope total":"Total cap","Fracción Kelly":"Kelly fraction",
+ "Tu probabilidad":"Your probability","Mercados":"Markets","Amplitud":"Breadth","Por pasada":"Per pass",
+ "del cierre":"before close","días":"days","día":"day"
+};
+var EN2K=Object.keys(EN2).sort(function(a,b){return b.length-a.length});
+/* Parrafos largos. Se guardan aparte porque son los que explican el metodo y
+   una traduccion descuidada aqui hace mas dano que dejarlos en castellano. */
+var EN3={
+ "Fuerza = media de los z de los retornos 1M/3M/6M (momentum compuesto transversal). Cuánto se mueve = desviación típica de retornos diarios × √252. Peor caída = mayor caída desde máximo. Informativo, no es recomendación.":
+  "Strength = average of the z-scores of 1M/3M/6M returns (cross-sectional composite momentum). How much it moves = standard deviation of daily returns × √252. Worst drop = largest fall from a peak. Informational, not a recommendation.",
+ "Z-score = media de los z de los retornos 1M/3M/6M (momentum compuesto transversal). Vol. anual = desviación típica de retornos diarios × √252. Max DD = mayor caída desde máximo. Informativo, no es recomendación.":
+  "Z-score = average of the z-scores of 1M/3M/6M returns (cross-sectional composite momentum). Annual vol = standard deviation of daily returns × √252. Max DD = largest fall from a peak. Informational, not a recommendation.",
+ "Con cierres diarios los desvíos de unos pocos puntos básicos son ruido de horario (cada par cierra en un instante distinto), no arbitraje. Es un control de calidad del dato; un desvío grande señala un precio malo.":
+  "With daily closes, deviations of a few basis points are timing noise (each pair closes at a different instant), not arbitrage. This is a data quality check; a large deviation flags a bad price.",
+ "Volatilidad anualizada de 21 sesiones. Peor día de 100 es el valor en riesgo al 99% (histórico), y la columna siguiente lo corrige por asimetría y colas gruesas (Cornish-Fisher), que en divisas se quedan cortas justo cuando importa. Si pasa, cuánto es la pérdida esperada en la cola. Informativo, no es recomendación.":
+  "Annualised volatility over 21 sessions. Worst day in 100 is the 99% value at risk (historical), and the next column corrects it for skew and fat tails (Cornish-Fisher), which fall short in currencies exactly when it matters. If it happens, how much is the expected loss in the tail. Informational, not a recommendation.",
+ "Régimen = vol. 20 sesiones / vol. 100 sesiones. Hurst (R/S) >0,55 tendencial, <0,45 reversión. Z mom. = media de los z transversales de 1M/3M/6M. Kelly continuo = μ/σ² diario, teórico y sin costes. Informativo, no es recomendación.":
+  "Regime = 20-session vol / 100-session vol. Hurst (R/S) >0.55 trending, <0.45 mean-reverting. Momentum z = average of the cross-sectional z-scores of 1M/3M/6M. Continuous Kelly = daily μ/σ², theoretical and before costs. Informational, not a recommendation.",
+ "La partida 1.01 es «acuerdo material definitivo»: es la que suele traer el contrato firmado.":
+  "Item 1.01 is a definitive material agreement: that is the one that usually carries the signed contract.",
+ "Σ excluyente: las patas de un grupo mutuamente excluyente deben sumar 1. Monotonía: si A implica B, p(A) ≤ p(B) siempre — «BTC cae a 15.000» implica «BTC cae a 20.000».":
+  "Exclusive Σ: the legs of a mutually exclusive group must sum to 1. Monotonicity: if A implies B then p(A) ≤ p(B) always — «BTC falls to 15,000» implies «BTC falls to 20,000».",
+ "Se guarda solo en este navegador y viaja cifrada en la cabecera, nunca en la dirección.":
+  "Stored only in this browser and sent encrypted in the header, never in the URL."
+};
+for(var _k in EN3)EN2[_k]=EN3[_k];
+EN2K=Object.keys(EN2).sort(function(a,b){return b.length-a.length});
+
+
 function traducir(){
  var simple=MODO==="simple";
  var en=IDIOMA==="en";
- [].forEach.call(document.querySelectorAll("#nav button[data-v], th, h3, .kpi .k, .kpi .s, .tarj .t, .tarj .x, .tarj .y, .st, .ayuda, .expl, .gloss .k, .gloss .v, .emp, .dp>h4, .chips label, .chips button"),function(el){
+ [].forEach.call(document.querySelectorAll("#nav button[data-v], #nav2 button, th, h3, h4, .kpi .k, .kpi .s, .tarj .t, .tarj .x, .tarj .y, .st, .ayuda, .expl, .gloss .k, .gloss .v, .emp, .dp>h4, .chips label, .chips button, .chips option, select option, .p>h3, label"),function(el){
+  /* Si el elemento contiene un control -tipico en las etiquetas que llevan un
+     desplegable dentro- NO se puede reescribir su innerHTML: se borraria el
+     control y a partir de ahi todo lo que lo busque encuentra null. En esos
+     casos se traduce SOLO el primer trozo de texto, dejando el control intacto. */
+  /* Generalizado: tampoco se puede reescribir el innerHTML de un elemento que
+     contenga hijos CON IDENTIFICADOR. Muchos titulos llevan dentro un contador
+     -<h3>TABLA QUANT <span id="q-cnt"></span></h3>- y al traducir el titulo
+     entero desaparecia el span, de modo que todo lo que despues buscaba ese
+     identificador encontraba null y el repintado moria. */
+  /* Tercera ampliacion de la misma guarda. Al reescribir el innerHTML de un
+     titulo se RECREAN sus hijos, y el hijo original queda huerfano: la lista de
+     elementos ya estaba capturada, asi que traducir el hijo despues no tocaba
+     nada del documento. Por eso los sufijos "— cointegracion" seguian en
+     castellano aunque estuviesen en el diccionario.
+     Regla: si el elemento contiene algo que tambien hay que traducir, se toca
+     solo su primer trozo de texto y se deja que los hijos se traduzcan solos. */
+  if(el.querySelector("select,input,textarea,button,[id],.st,.k,.s,.v,.dsc,h3,h4")){
+   var tn=null;
+   for(var q=0;q<el.childNodes.length;q++){
+    var nd=el.childNodes[q];
+    if(nd.nodeType===3&&nd.nodeValue.trim().length>1){tn=nd;break}
+   }
+   if(tn){
+    if(el.dataset.oTxt===undefined)el.dataset.oTxt=tn.nodeValue;
+    var etq=el.dataset.oTxt.trim();
+    if(!simple&&!en){tn.nodeValue=el.dataset.oTxt}
+    else if(en&&EN2[etq]!==undefined){tn.nodeValue=" "+EN2[etq]+" "}
+    else if(simple&&TRAD[etq]!==undefined){tn.nodeValue=" "+TRAD[etq]+" "}
+   }
+   return;
+  }
   if(el.dataset.oTxt===undefined)el.dataset.oTxt=el.innerHTML;
   var o=el.dataset.oTxt;
   if(!simple&&!en){el.innerHTML=o;return}
@@ -5818,11 +6114,38 @@ function traducir(){
   if(simple){for(var i=0;i<TRADK.length;i++){
    var k=TRADK[i];
    if(out.indexOf(k)>=0){out=out.split(k).join(TRAD[k]);break}}}
-  // El ingles se aplica DESPUES: asi traduce tambien las etiquetas del modo
-  // sencillo, que ya han pasado por el primer diccionario.
-  if(en){for(var j=0;j<ENK.length;j++){
-   var e=ENK[j];
-   if(out.indexOf(e)>=0){out=out.split(e).join(EN[e])}}}
+  /* El ingles se aplica DESPUES, y por FRASE COMPLETA. El metodo anterior
+     sustituia palabras sueltas dentro de las frases y sin parar, produciendo
+     mutantes como "Cargando los datos del day" o "Amount que el Pentagono
+     adjudica". Ahora: 1) coincidencia exacta, 2) prefijo para los titulos que
+     llevan un contador detras, 3) si no encaja, se deja en castellano, que es
+     preferible a inventar. */
+  if(en){
+   var plano=out.replace(/<[^>]*>/g,"").replace(/\\s+/g," ").trim();
+   /* Tambien se prueba con el texto ORIGINAL: en modo sencillo el primer
+      diccionario ya ha cambiado la frase, asi que la clave en castellano no
+      casaria con lo que hay ahora. */
+   var planoOrig=o.replace(/<[^>]*>/g,"").replace(/\\s+/g," ").trim();
+   if(EN2[plano]!==undefined) out=EN2[plano];
+   else if(EN2[out]!==undefined) out=EN2[out];
+   else if(EN2[planoOrig]!==undefined) out=EN2[planoOrig];
+   else {
+    /* Prefijo, solo para titulos con un contador detras. Se exige una clave
+       LARGA y que lo que siga sea un separador: con claves cortas salia
+       "Market Will Sarah Huckabee Sanders win...", que es justo el tipo de
+       frase mutante que se queria eliminar. */
+    for(var j=0;j<EN2K.length;j++){
+     var k2=EN2K[j];
+     /* Umbral 7: las etiquetas de filtro llevan el contador pegado
+        ("Politica 75", "Europa Este 4") y con 12 no entraban. La guarda del
+        separador sigue impidiendo los mutantes. */
+     if(k2.length<7||out.indexOf(k2)!==0)continue;
+     var sig=out.charAt(k2.length);
+     if(sig===""||sig===" "||sig==="<"||sig==="·"||sig==="—"||sig==="("){
+      out=EN2[k2]+out.slice(k2.length); break }
+    }
+   }
+  }
   el.innerHTML=out});
  // ayuda por vista
  for(var v in AYUDA){
