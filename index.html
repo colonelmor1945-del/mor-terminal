@@ -263,6 +263,19 @@ kbd{border:1px solid var(--line);padding:0 4px;color:var(--dim);font-size:9px}
 svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
 .lg{display:flex;gap:12px;padding:4px 10px;font-size:9.5px;color:var(--dim);flex-wrap:wrap}
 .lg i{display:inline-block;width:8px;height:8px;margin-right:4px}
+/* --- modo en vivo --- */
+@keyframes destSube{0%{background:rgba(63,185,80,.42)}100%{background:transparent}}
+@keyframes destBaja{0%{background:rgba(240,96,93,.42)}100%{background:transparent}}
+.sube{animation:destSube 1.1s ease-out}
+.baja{animation:destBaja 1.1s ease-out}
+#vivo{display:flex;align-items:center;gap:6px;background:var(--pane2);border:1px solid var(--line);
+ border-radius:6px;padding:4px 9px;margin-left:8px;font-size:11px;color:var(--dim);cursor:pointer}
+#vivo.on{border-color:var(--gr);color:var(--txt)}
+#vivo .pt{width:7px;height:7px;border-radius:50%;background:var(--dim2);flex:none}
+#vivo.on .pt{background:var(--gr);animation:latido 1.6s ease-in-out infinite}
+@keyframes latido{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
+#vivo select{background:transparent;border:0;color:inherit;font:inherit;cursor:pointer;outline:none}
+#vivo-t{font-variant-numeric:tabular-nums;color:var(--dim2)}
 /* --- inclinacion del terminal --- */
 .sug{grid-column:1/-1;border:1px solid var(--line);border-left:3px solid var(--am);border-radius:6px;padding:8px 12px;margin-bottom:6px;background:rgba(227,164,74,.05)}
 .sug .v{font-size:15px;font-weight:700;letter-spacing:.02em;margin:2px 0}
@@ -319,6 +332,15 @@ svg text{font:9px "SF Mono",Consolas,monospace;fill:var(--dim)}
     <div class="lt ld" id="L1"><b></b><span>DOD</span></div>
     <div class="lt ld" id="L2"><b></b><span>PM</span></div>
     <div class="lt ld" id="L3"><b></b><span>NEWS</span></div>
+  </div>
+  <div id="vivo" title="Refresca los mercados de Polymarket automáticamente">
+    <span class="pt"></span><span id="vivo-e">EN VIVO</span>
+    <select id="vivo-n" onclick="event.stopPropagation()">
+      <option value="0">apagado</option>
+      <option value="10">10 s</option>
+      <option value="30" selected>30 s</option>
+      <option value="60">60 s</option>
+    </select><span id="vivo-t"></span>
   </div>
   <div id="buscar" title="Buscar en todo el terminal"><span>⌕</span><span id="buscar-t">Buscar…</span><kbd>Ctrl K</kbd></div>
   <button class="rl" id="rel">⟳ REFRESH</button>
@@ -4083,6 +4105,92 @@ function wass1(a,b){
  }
  return t/N;
 }
+
+
+/* ===================== MODO EN VIVO ===================== */
+var VIVO=false, VIVO_INT=null, VIVO_TS=null, VIVO_REL=null, PM_ANT={};
+
+/* Guarda el precio anterior de cada mercado para poder encender lo que cambie. */
+function vivoRecordar(){
+ PM_ANT={};
+ for(var i=0;i<PM.length;i++)PM_ANT[PM[i].q]=PM[i].price;
+}
+/* Enciende un instante las celdas cuyo mercado se ha movido. Se busca por el
+   titulo porque la lista ligera de Polymarket no trae identificador. */
+function vivoDestacar(){
+ var movidos={};
+ for(var i=0;i<PM.length;i++){
+  var a=PM_ANT[PM[i].q];
+  if(a!==undefined&&Math.abs(PM[i].price-a)>1e-9)movidos[PM[i].q]=PM[i].price>a?"sube":"baja";
+ }
+ var nMov=0;
+ [].forEach.call(document.querySelectorAll("#p-rows tr, #d-mov tr, #d-heat .hc"),function(el){
+  var t=(el.getAttribute("data-q")||el.getAttribute("title")||el.textContent||"");
+  for(var q in movidos){
+   if(t.indexOf(q.slice(0,28))>=0){
+    var c=movidos[q];
+    el.classList.remove("sube","baja");
+    void el.offsetWidth;            // reinicia la animacion
+    el.classList.add(c); nMov++;
+    break;
+   }
+  }
+ });
+ return nMov;
+}
+
+function vivoTic(){
+ if(!VIVO)return;
+ vivoRecordar();
+ var pt=document.querySelector("#vivo .pt");
+ if(pt)pt.style.background="var(--am)";
+ loadPM();
+ // loadPM es asincrono; se destaca cuando ya ha repintado.
+ setTimeout(function(){
+  VIVO_TS=Date.now();
+  var nm=vivoDestacar();
+  if(pt)pt.style.background="";
+  $("vivo-e").textContent=nm?T(nm+" SE MUEVEN",nm+" MOVING"):T("EN VIVO","LIVE");
+ },1400);
+}
+
+function vivoActualizarReloj(){
+ if(!VIVO_TS){$("vivo-t").textContent="";return}
+ var s=Math.round((Date.now()-VIVO_TS)/1000);
+ $("vivo-t").textContent=s<60?("· "+s+"s"):("· "+Math.round(s/60)+"m");
+}
+
+function vivoAplicar(){
+ var seg=+$("vivo-n").value;
+ if(VIVO_INT){clearInterval(VIVO_INT);VIVO_INT=null}
+ VIVO=seg>0;
+ $("vivo").classList.toggle("on",VIVO);
+ $("vivo-e").textContent=VIVO?T("EN VIVO","LIVE"):T("EN VIVO","LIVE");
+ try{localStorage.setItem("mor_vivo",String(seg))}catch(e){}
+ if(VIVO){
+  VIVO_INT=setInterval(vivoTic,seg*1000);
+  vivoTic();
+ } else { VIVO_TS=null; vivoActualizarReloj() }
+}
+
+(function(){
+ var g=null; try{g=localStorage.getItem("mor_vivo")}catch(e){}
+ if(g!==null)$("vivo-n").value=g;
+ $("vivo-n").onchange=vivoAplicar;
+ $("vivo").onclick=function(){
+  // Pulsar la caja alterna entre apagado y el ultimo intervalo elegido.
+  if(VIVO){$("vivo-n").value="0"}
+  else if($("vivo-n").value==="0"){$("vivo-n").value="30"}
+  vivoAplicar();
+ };
+ if(!VIVO_REL)VIVO_REL=setInterval(vivoActualizarReloj,1000);
+ /* Cuando la pestana no se ve, no tiene sentido gastar peticiones. */
+ document.addEventListener("visibilitychange",function(){
+  if(document.hidden){ if(VIVO_INT){clearInterval(VIVO_INT);VIVO_INT=null} }
+  else if(VIVO&&!VIVO_INT){ VIVO_INT=setInterval(vivoTic,(+$("vivo-n").value||30)*1000); vivoTic() }
+ });
+ if(g&&+g>0)setTimeout(vivoAplicar,3000);
+})();
 
 /* ===================== VEREDICTO ===================== */
 /* Movimiento tipico de una sesion: media del cambio absoluto de cierre a cierre
